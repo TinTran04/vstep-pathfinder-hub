@@ -11,7 +11,9 @@ import QuizTake from "./pages/QuizTake";
 import ListeningQuiz from "./pages/ListeningQuiz";
 import ReadingQuiz from "./pages/ReadingQuiz";
 import WritingQuiz from "./pages/WritingQuiz";
+import SpeakingQuiz from "./pages/SpeakingQuiz";
 import VstepRegistration from "./pages/VstepRegistration";
+import Admin from "./pages/Admin";
 import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
 
