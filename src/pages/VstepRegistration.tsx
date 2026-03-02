@@ -26,7 +26,11 @@ const VstepRegistration = () => {
   const [qrExam, setQrExam] = useState<typeof examSchedule[0] | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
-  // Simple fake auth check (no real auth - just check localStorage)
+  // Auto-set logged in for testing payment flow
+  useState(() => {
+    localStorage.setItem("vstep_logged_in", "true");
+  });
+
   const isLoggedIn = () => {
     return localStorage.getItem("vstep_logged_in") === "true";
   };
