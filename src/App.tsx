@@ -15,6 +15,7 @@ import SpeakingQuiz from "./pages/SpeakingQuiz";
 import VstepRegistration from "./pages/VstepRegistration";
 import Admin from "./pages/Admin";
 import Results from "./pages/Results";
+import WritingSamples from "./pages/WritingSamples";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/vstep-registration" element={<VstepRegistration />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/writing-samples" element={<WritingSamples />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
