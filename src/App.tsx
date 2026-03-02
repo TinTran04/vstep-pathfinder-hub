@@ -8,6 +8,8 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Quiz from "./pages/Quiz";
 import QuizTake from "./pages/QuizTake";
+import VstepRegistration from "./pages/VstepRegistration";
+import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
