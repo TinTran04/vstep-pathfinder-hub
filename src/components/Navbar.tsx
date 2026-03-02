@@ -10,7 +10,7 @@ const navLinks = [
   { label: "Lộ trình học", href: "#journey" },
   { label: "Bảng giá", href: "#pricing" },
   { label: "Kết quả học viên", href: "/results", isRoute: true },
-  { label: "Đăng ký thi", href: "/vstep-registration", isRoute: true },
+  { label: "Lịch thi", href: "/vstep-registration", isRoute: true },
 ];
 
 const Navbar = () => {

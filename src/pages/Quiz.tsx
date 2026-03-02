@@ -136,7 +136,7 @@ const Quiz = () => {
                     listening: "/quiz/listening/take",
                     reading: "/quiz/reading/take",
                     writing: "/quiz/writing/take",
-                    speaking: `/quiz/speaking/${q.id}`,
+                    speaking: "/quiz/speaking/take",
                   };
                   navigate(skillRoutes[selectedSkill]);
                 }}>
