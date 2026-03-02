@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Clock, CheckCircle2, RotateCcw, FileText, Type } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock, CheckCircle2, RotateCcw, FileText, Type, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface WritingTask {
   id: number;
@@ -56,7 +57,47 @@ const tasks: WritingTask[] = [
   },
 ];
 
-const TOTAL_TIME = 60 * 60; // 60 minutes
+const sampleEssays = {
+  1: {
+    level: "B2 (8.5/10)",
+    content: `Dear Tom,
+
+I hope this letter finds you well! I'm writing to share some exciting news about my new life in Da Nang.
+
+I moved here three weeks ago for a marketing position at a tech startup. The company culture is fantastic — my colleagues are supportive, and the work is challenging yet rewarding. I'm particularly enjoying the creative freedom I have in developing campaigns for Vietnamese and international markets.
+
+Da Nang has been a wonderful surprise. The beaches are absolutely stunning, especially My Khe Beach, which is just a 10-minute drive from my apartment. The food scene is incredible too — I've been eating bun cha ca almost every day! The cost of living is significantly lower than Ho Chi Minh City, which means I can save more while enjoying a higher quality of life.
+
+However, there are a few things I'm still adjusting to. The city is quieter than what I'm used to, and the nightlife options are somewhat limited. Also, the summer heat can be quite intense, reaching up to 38°C some days.
+
+I would absolutely love it if you could come visit me! There's so much to explore here — the Marble Mountains, Ba Na Hills, and the ancient town of Hoi An is just 30 minutes away. You're welcome to stay at my place anytime.
+
+Looking forward to hearing from you soon!
+
+Warm regards,
+Minh
+
+(Word count: 208)`,
+  },
+  2: {
+    level: "B2 (8.0/10)",
+    content: `Technology: A Double-Edged Sword in Modern Life
+
+The rapid advancement of technology has sparked a heated debate about whether it simplifies or complicates our daily existence. While some argue that technological innovations have introduced unnecessary complexity, others maintain that they have streamlined our lives in unprecedented ways. This essay will examine both perspectives before presenting my own viewpoint.
+
+On one hand, technology has undeniably made certain aspects of life more complicated. The constant connectivity through smartphones and social media has blurred the boundaries between work and personal life, leading to increased stress and burnout. Furthermore, the overwhelming amount of information available online can cause decision fatigue and anxiety. Cybersecurity threats, privacy concerns, and the need to constantly update skills to keep pace with technological changes add further layers of complexity to modern life.
+
+On the other hand, proponents of technology highlight its remarkable contributions to convenience and efficiency. Online banking, e-commerce, and digital communication have eliminated geographical barriers and saved countless hours previously spent on mundane tasks. In healthcare, technological innovations such as telemedicine and AI-assisted diagnostics have improved access to medical services, particularly in remote areas. Moreover, educational technology has democratized learning, making quality education accessible to millions worldwide through platforms like Coursera and Khan Academy.
+
+In my opinion, while technology does introduce certain challenges, its benefits far outweigh the drawbacks. The key lies in developing digital literacy and maintaining a healthy relationship with technology. By setting boundaries for screen time, staying informed about online security, and embracing lifelong learning, individuals can harness the power of technology while minimizing its negative effects.
+
+In conclusion, technology is a powerful tool that, when used wisely, significantly enhances our quality of life. Rather than viewing it as a source of complication, we should focus on cultivating the skills needed to navigate the digital landscape effectively.
+
+(Word count: 280)`,
+  },
+};
+
+const TOTAL_TIME = 60 * 60;
 
 const WritingQuiz = () => {
   const navigate = useNavigate();
@@ -64,6 +105,12 @@ const WritingQuiz = () => {
   const [writings, setWritings] = useState<Record<number, string>>({ 1: "", 2: "" });
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
+  const [showSample, setShowSample] = useState(false);
+
+  // AI Feedback
+  const [showAIFeedback, setShowAIFeedback] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<Record<number, { taskAchievement: string; coherence: string; lexical: string; grammar: string; score: string; tips: string[] }>>({});
 
   useEffect(() => {
     if (submitted) return;
@@ -80,42 +127,135 @@ const WritingQuiz = () => {
   const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
   const meetsMinimum = wordCount >= task.minWords;
 
-  const reset = () => { setWritings({ 1: "", 2: "" }); setCurrentTask(0); setSubmitted(false); setTimeLeft(TOTAL_TIME); };
+  const reset = () => { setWritings({ 1: "", 2: "" }); setCurrentTask(0); setSubmitted(false); setTimeLeft(TOTAL_TIME); setShowAIFeedback(false); setAiFeedback({}); };
+
+  const generateAIFeedback = () => {
+    setAiLoading(true);
+    setTimeout(() => {
+      const feedback: Record<number, any> = {};
+      tasks.forEach(t => {
+        const text = writings[t.id] || "";
+        const wc = text.trim() ? text.trim().split(/\s+/).length : 0;
+        if (wc < 20) {
+          feedback[t.id] = {
+            taskAchievement: "N/A – Bài viết quá ngắn để đánh giá",
+            coherence: "N/A",
+            lexical: "N/A",
+            grammar: "N/A",
+            score: "0/10",
+            tips: ["Viết tối thiểu " + t.minWords + " từ để được đánh giá"],
+          };
+        } else {
+          feedback[t.id] = t.id === 1 ? {
+            taskAchievement: "7.5/10 – Hoàn thành đủ 3 ý trong đề bài. Phần mời bạn đến thăm có thể mở rộng thêm chi tiết cụ thể.",
+            coherence: "7.0/10 – Bài viết có cấu trúc rõ ràng (mở – thân – kết). Tuy nhiên cần sử dụng thêm từ nối giữa các đoạn.",
+            lexical: "7.0/10 – Vốn từ đa dạng ở mức trung bình. Nên dùng thêm collocations và tránh lặp từ.",
+            grammar: "7.5/10 – Sử dụng đúng thì và cấu trúc câu cơ bản. Cần cải thiện câu phức và mệnh đề quan hệ.",
+            score: "7.3/10",
+            tips: [
+              "Luyện viết email theo template: Greeting → Reason → Details → Closing",
+              "Học thêm formal/informal expressions phù hợp với từng loại thư",
+              "Đọc mẫu email chuẩn VSTEP B2 để nắm cấu trúc",
+              "Thực hành viết 1 email/ngày trong 15 phút",
+            ],
+          } : {
+            taskAchievement: "7.0/10 – Đã trình bày cả 2 quan điểm và đưa ra ý kiến cá nhân. Cần thêm ví dụ cụ thể để minh họa.",
+            coherence: "7.5/10 – Cấu trúc bài luận tốt với mở bài, thân bài, kết luận rõ ràng. Sử dụng từ nối hợp lý.",
+            lexical: "6.5/10 – Vốn từ còn hạn chế, hay lặp từ. Nên sử dụng synonyms và academic vocabulary.",
+            grammar: "7.0/10 – Có một số lỗi về sự hòa hợp chủ-vị và mạo từ. Câu phức cần chính xác hơn.",
+            score: "7.0/10",
+            tips: [
+              "Học cấu trúc bài luận: Introduction → Body 1 (View A) → Body 2 (View B) → Opinion → Conclusion",
+              "Mỗi body paragraph nên có: Topic sentence → Explanation → Example → Link",
+              "Tích lũy Academic Word List (AWL) để nâng band từ vựng",
+              "Viết ít nhất 2 bài luận/tuần và tự chấm theo 4 tiêu chí",
+              "Đọc essays mẫu band 8+ để học cách diễn đạt",
+            ],
+          };
+        }
+      });
+      setAiFeedback(feedback);
+      setAiLoading(false);
+      setShowAIFeedback(true);
+    }, 2500);
+  };
 
   if (submitted) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <Card className="w-full max-w-2xl border-border">
+        <Card className="w-full max-w-3xl border-border">
           <CardContent className="p-8 space-y-6">
             <div className="text-center">
               <div className="w-20 h-20 rounded-full mx-auto flex items-center justify-center bg-emerald-100 mb-4">
                 <CheckCircle2 size={40} className="text-emerald-600" />
               </div>
-              <h2 className="text-2xl font-bold text-foreground">Bài viết đã được nộp!</h2>
-              <p className="text-muted-foreground mt-2">Trong phiên bản thực tế, bài viết sẽ được chấm bởi giáo viên hoặc AI.</p>
+              <h2 className="text-2xl font-bold text-foreground">{showAIFeedback ? "Kết quả chấm điểm AI" : "Bài viết đã được nộp!"}</h2>
+              {!showAIFeedback && <p className="text-muted-foreground mt-2">Nhấn "Chấm điểm AI" để nhận feedback chi tiết theo 4 tiêu chí.</p>}
             </div>
 
-            {tasks.map((t) => {
-              const text = writings[t.id] || "";
-              const wc = text.trim() ? text.trim().split(/\s+/).length : 0;
-              return (
-                <div key={t.id} className="bg-muted/50 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-foreground">{t.title}</h3>
-                    <Badge variant={wc >= t.minWords ? "default" : "destructive"} className={wc >= t.minWords ? "bg-emerald-100 text-emerald-700" : ""}>
-                      {wc} / {t.minWords}+ từ
-                    </Badge>
+            {showAIFeedback ? (
+              tasks.map(t => {
+                const fb = aiFeedback[t.id];
+                if (!fb) return null;
+                return (
+                  <div key={t.id} className="bg-muted/50 rounded-2xl p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-foreground">{t.title}</h3>
+                      <Badge className="gradient-primary text-primary-foreground text-sm">{fb.score}</Badge>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {[
+                        { label: "📋 Task Achievement", value: fb.taskAchievement },
+                        { label: "🔗 Coherence & Cohesion", value: fb.coherence },
+                        { label: "📚 Lexical Resource", value: fb.lexical },
+                        { label: "📝 Grammar Range & Accuracy", value: fb.grammar },
+                      ].map(item => (
+                        <div key={item.label} className="bg-card rounded-xl p-3 border border-border">
+                          <p className="text-sm font-semibold text-foreground mb-1">{item.label}</p>
+                          <p className="text-xs text-muted-foreground">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground mb-2">💡 Cách cải thiện:</p>
+                      <ul className="space-y-1">
+                        {fb.tips.map((tip: string, i: number) => (
+                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-2"><span className="text-primary">•</span>{tip}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                  <div className="bg-card rounded-xl p-4 border border-border max-h-40 overflow-y-auto">
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{text || <span className="text-muted-foreground italic">Chưa viết</span>}</p>
+                );
+              })
+            ) : (
+              tasks.map((t) => {
+                const text = writings[t.id] || "";
+                const wc = text.trim() ? text.trim().split(/\s+/).length : 0;
+                return (
+                  <div key={t.id} className="bg-muted/50 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-foreground">{t.title}</h3>
+                      <Badge variant={wc >= t.minWords ? "default" : "destructive"} className={wc >= t.minWords ? "bg-emerald-100 text-emerald-700" : ""}>
+                        {wc} / {t.minWords}+ từ
+                      </Badge>
+                    </div>
+                    <div className="bg-card rounded-xl p-4 border border-border max-h-40 overflow-y-auto">
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{text || <span className="text-muted-foreground italic">Chưa viết</span>}</p>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
 
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => navigate("/quiz")}><ArrowLeft size={16} /> Quay lại</Button>
-              <Button className="flex-1 gradient-primary text-primary-foreground" onClick={reset}><RotateCcw size={16} /> Làm lại</Button>
+              {!showAIFeedback ? (
+                <Button className="flex-1 gradient-primary text-primary-foreground" onClick={generateAIFeedback} disabled={aiLoading}>
+                  {aiLoading ? <><Loader2 size={16} className="animate-spin" /> Đang chấm...</> : "🤖 Chấm điểm AI"}
+                </Button>
+              ) : (
+                <Button className="flex-1 gradient-primary text-primary-foreground" onClick={reset}><RotateCcw size={16} /> Làm lại</Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -143,11 +283,14 @@ const WritingQuiz = () => {
               ))}
             </div>
           </div>
-          {currentTask === tasks.length - 1 ? (
-            <Button className="gradient-primary text-primary-foreground" size="sm" onClick={() => setSubmitted(true)}>Hoàn thành</Button>
-          ) : (
-            <Button size="sm" onClick={() => setCurrentTask(1)}>Task tiếp <ArrowRight size={16} /></Button>
-          )}
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowSample(true)} className="gap-1"><BookOpen size={14} /> Bài mẫu</Button>
+            {currentTask === tasks.length - 1 ? (
+              <Button className="gradient-primary text-primary-foreground" size="sm" onClick={() => setSubmitted(true)}>Hoàn thành</Button>
+            ) : (
+              <Button size="sm" onClick={() => setCurrentTask(1)}>Task tiếp <ArrowRight size={16} /></Button>
+            )}
+          </div>
         </div>
         <Progress value={((currentTask + 1) / tasks.length) * 100} className="h-1" />
       </header>
@@ -161,12 +304,6 @@ const WritingQuiz = () => {
               <div className="flex items-center gap-2">
                 <FileText size={20} className="text-primary" />
                 <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline" className="text-xs">⏱ {task.duration}</Badge>
-                <Badge variant="outline" className="text-xs">📝 Tối thiểu {task.minWords} từ</Badge>
-                <Badge variant="outline" className="text-xs">📊 {task.scoreWeight}</Badge>
               </div>
 
               {/* Prompt */}
@@ -223,6 +360,24 @@ const WritingQuiz = () => {
           </div>
         </div>
       </div>
+
+      {/* Sample Essay Dialog */}
+      <Dialog open={showSample} onOpenChange={setShowSample}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><BookOpen size={20} /> Bài mẫu tham khảo – {task.title}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-3">
+              <Badge className="bg-emerald-100 text-emerald-700">Mức điểm: {sampleEssays[task.id as 1 | 2].level}</Badge>
+              <div className="bg-muted/50 rounded-xl p-5">
+                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{sampleEssays[task.id as 1 | 2].content}</p>
+              </div>
+              <p className="text-xs text-muted-foreground italic">* Bài mẫu tham khảo ở trình độ B2. Sử dụng để học cấu trúc và cách diễn đạt.</p>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
