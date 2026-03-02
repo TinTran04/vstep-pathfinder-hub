@@ -77,8 +77,8 @@ const Navbar = () => {
             </a>
           ))}
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" size="sm" className="flex-1">Đăng nhập</Button>
-            <Button size="sm" className="flex-1 gradient-primary text-primary-foreground">Bắt đầu học</Button>
+            <Button variant="outline" size="sm" className="flex-1" asChild><Link to="/auth">Đăng nhập</Link></Button>
+            <Button size="sm" className="flex-1 gradient-primary text-primary-foreground" asChild><Link to="/auth">Bắt đầu học</Link></Button>
           </div>
         </div>
       )}
