@@ -8,6 +8,9 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Quiz from "./pages/Quiz";
 import QuizTake from "./pages/QuizTake";
+import ListeningQuiz from "./pages/ListeningQuiz";
+import ReadingQuiz from "./pages/ReadingQuiz";
+import WritingQuiz from "./pages/WritingQuiz";
 import VstepRegistration from "./pages/VstepRegistration";
 import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
@@ -26,6 +29,9 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/quiz" element={<Quiz />} />
           <Route path="/quiz/:skill/:id" element={<QuizTake />} />
+          <Route path="/quiz/listening/take" element={<ListeningQuiz />} />
+          <Route path="/quiz/reading/take" element={<ReadingQuiz />} />
+          <Route path="/quiz/writing/take" element={<WritingQuiz />} />
           <Route path="/vstep-registration" element={<VstepRegistration />} />
           <Route path="/results" element={<Results />} />
           <Route path="*" element={<NotFound />} />

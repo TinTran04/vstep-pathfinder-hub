@@ -131,7 +131,15 @@ const Quiz = () => {
 
             <div className="space-y-3">
               {quizzes[selectedSkill].map((q) => (
-                <Card key={q.id} className="border-border hover:shadow-md transition-shadow cursor-pointer group" onClick={() => navigate(`/quiz/${selectedSkill}/${q.id}`)}>
+                <Card key={q.id} className="border-border hover:shadow-md transition-shadow cursor-pointer group" onClick={() => {
+                  const skillRoutes: Record<Skill, string> = {
+                    listening: "/quiz/listening/take",
+                    reading: "/quiz/reading/take",
+                    writing: "/quiz/writing/take",
+                    speaking: `/quiz/speaking/${q.id}`,
+                  };
+                  navigate(skillRoutes[selectedSkill]);
+                }}>
                   <CardContent className="p-5 flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                       <FileText size={22} />
