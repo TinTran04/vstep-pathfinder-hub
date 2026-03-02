@@ -78,16 +78,27 @@ const Navbar = () => {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="lg:hidden bg-card border-t border-border px-4 pb-4 space-y-2">
-          {navLinks.map((l) => (
-            <a
-              key={l.label}
-              href={l.href}
-              className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
-              onClick={() => setMobileOpen(false)}
-            >
-              {l.label}
-            </a>
-          ))}
+          {navLinks.map((l) =>
+            (l as any).isRoute ? (
+              <Link
+                key={l.label}
+                to={l.href}
+                className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={() => setMobileOpen(false)}
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <a
+                key={l.label}
+                href={l.href}
+                className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={() => setMobileOpen(false)}
+              >
+                {l.label}
+              </a>
+            )
+          )}
           <div className="flex gap-2 pt-2">
             <Button variant="outline" size="sm" className="flex-1" asChild><Link to="/auth">Đăng nhập</Link></Button>
             <Button size="sm" className="flex-1 gradient-primary text-primary-foreground" asChild><Link to="/auth">Bắt đầu học</Link></Button>

@@ -26,6 +26,8 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/quiz" element={<Quiz />} />
           <Route path="/quiz/:skill/:id" element={<QuizTake />} />
+          <Route path="/vstep-registration" element={<VstepRegistration />} />
+          <Route path="/results" element={<Results />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
