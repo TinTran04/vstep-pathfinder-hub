@@ -11,7 +11,9 @@ import QuizTake from "./pages/QuizTake";
 import ListeningQuiz from "./pages/ListeningQuiz";
 import ReadingQuiz from "./pages/ReadingQuiz";
 import WritingQuiz from "./pages/WritingQuiz";
+import SpeakingQuiz from "./pages/SpeakingQuiz";
 import VstepRegistration from "./pages/VstepRegistration";
+import Admin from "./pages/Admin";
 import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
 
@@ -32,7 +34,9 @@ const App = () => (
           <Route path="/quiz/listening/take" element={<ListeningQuiz />} />
           <Route path="/quiz/reading/take" element={<ReadingQuiz />} />
           <Route path="/quiz/writing/take" element={<WritingQuiz />} />
+          <Route path="/quiz/speaking/take" element={<SpeakingQuiz />} />
           <Route path="/vstep-registration" element={<VstepRegistration />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/results" element={<Results />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

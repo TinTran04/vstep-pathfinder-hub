@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, MapPin, Calendar, Phone, Mail, Globe, Clock, Users, FileText } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, Phone, Mail, Globe, Clock, Users, FileText, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,7 @@ const VstepRegistration = () => {
           <Link to="/" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft size={16} /> Về trang chủ
           </Link>
-          <span className="font-bold text-foreground">Đăng ký thi VSTEP</span>
+          <span className="font-bold text-foreground">Lịch thi VSTEP</span>
           <div className="w-20" />
         </div>
       </header>
@@ -55,19 +55,47 @@ const VstepRegistration = () => {
         {/* Hero */}
         <div className="text-center space-y-4">
           <h1 className="text-3xl md:text-4xl font-extrabold text-foreground">
-            Đăng ký thi <span className="text-gradient">VSTEP</span>
+            Lịch thi <span className="text-gradient">VSTEP</span>
           </h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Thông tin lịch thi, địa điểm và hướng dẫn đăng ký thi VSTEP trên toàn quốc. Dữ liệu được cập nhật thường xuyên.
+            Thông tin lịch thi, địa điểm, lệ phí tham khảo và hướng dẫn đăng ký thi VSTEP trên toàn quốc.
           </p>
+        </div>
+
+        {/* Exam fee reference */}
+        <div>
+          <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-2">
+            <DollarSign size={22} className="text-primary" /> Lệ phí thi tham khảo
+          </h2>
+          <div className="grid md:grid-cols-2 gap-5">
+            <Card className="border-border">
+              <CardContent className="p-5 space-y-3">
+                <h3 className="font-bold text-foreground">Viên chức, người lao động & học viên, sinh viên, học sinh thuộc ĐHQG-HCM</h3>
+                <p className="text-2xl font-extrabold text-foreground">1.500.000đ <span className="text-sm font-normal text-muted-foreground">/ hồ sơ</span></p>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2"><span className="text-primary">•</span>Giảm thêm <strong>10%</strong> lệ phí cho nhóm đăng ký từ 3 người trở lên</li>
+                  <li className="flex items-start gap-2"><span className="text-primary">•</span>Đối với nhóm sinh viên USSH: giảm <strong>15%</strong> lệ phí cho nhóm từ 3 người trở lên</li>
+                </ul>
+              </CardContent>
+            </Card>
+            <Card className="border-border">
+              <CardContent className="p-5 space-y-3">
+                <h3 className="font-bold text-foreground">Học viên, sinh viên, học sinh ngoài ĐHQG-HCM</h3>
+                <p className="text-2xl font-extrabold text-foreground">1.600.000đ <span className="text-sm font-normal text-muted-foreground">/ hồ sơ</span></p>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2"><span className="text-primary">•</span>Giảm thêm <strong>10%</strong> lệ phí cho nhóm đăng ký từ 3 người trở lên</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Exam info cards */}
         <div className="grid sm:grid-cols-3 gap-4">
           {[
-            { icon: FileText, label: "Lệ phí thi", value: "1.800.000 VNĐ", desc: "Cho 4 kỹ năng" },
             { icon: Clock, label: "Thời gian thi", value: "~172 phút", desc: "Listening + Reading + Writing + Speaking" },
             { icon: Users, label: "Giá trị chứng chỉ", value: "2 năm", desc: "Kể từ ngày cấp" },
+            { icon: FileText, label: "Kỹ năng", value: "4 kỹ năng", desc: "Nghe, Đọc, Viết, Nói" },
           ].map((item) => (
             <Card key={item.label} className="border-border">
               <CardContent className="p-5 text-center space-y-2">
