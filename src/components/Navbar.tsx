@@ -51,9 +51,9 @@ const Navbar = () => {
 
         {/* Desktop CTA */}
         <div className="hidden lg:flex items-center gap-3">
-          <Button variant="ghost" size="sm">Đăng nhập</Button>
-          <Button size="sm" className="gradient-primary text-primary-foreground font-semibold shadow-md hover:opacity-90 transition-opacity">
-            Bắt đầu học
+          <Button variant="ghost" size="sm" asChild><Link to="/auth">Đăng nhập</Link></Button>
+          <Button size="sm" className="gradient-primary text-primary-foreground font-semibold shadow-md hover:opacity-90 transition-opacity" asChild>
+            <Link to="/auth">Bắt đầu học</Link>
           </Button>
         </div>
 
