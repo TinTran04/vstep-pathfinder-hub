@@ -75,7 +75,12 @@ const listeningParts: Part[] = [
   },
 ];
 
-const TOTAL_TIME = 40 * 60;
+// Audio duration per part (seconds)
+// Part 1: 8 announcements (~15s each) + 8 × 30s read time = 120 + 240 = 360s (6 min)
+// Part 2: 3 conversations (~90s each) + 3 × 20s before each = 270 + 60 = 330s (5.5 min)
+// Part 3: 3 talks (~120s each) + 3 × 30s before each = 360 + 90 = 450s (7.5 min)
+const PART_DURATIONS = [360, 330, 450];
+const TOTAL_TIME = PART_DURATIONS.reduce((a, b) => a + b, 0); // ~19 min total audio + buffer
 
 const ListeningQuiz = () => {
   const navigate = useNavigate();
@@ -86,8 +91,9 @@ const ListeningQuiz = () => {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [audioDuration] = useState(180);
   const audioInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const audioDuration = PART_DURATIONS[currentPart];
 
   useEffect(() => {
     if (submitted) return;

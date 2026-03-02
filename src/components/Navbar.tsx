@@ -7,7 +7,7 @@ const navLinks = [
   { label: "Trang chủ", href: "#" },
   { label: "Giới thiệu VSTEP", href: "#vstep-overview" },
   { label: "Practice", href: "/quiz", isRoute: true },
-  { label: "Lộ trình học", href: "#journey" },
+  { label: "Bài Mẫu", href: "/writing-samples", isRoute: true },
   { label: "Bảng giá", href: "#pricing" },
   { label: "Kết quả học viên", href: "/results", isRoute: true },
   { label: "Lịch thi", href: "/vstep-registration", isRoute: true },

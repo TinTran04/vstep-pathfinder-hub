@@ -15,6 +15,7 @@ import SpeakingQuiz from "./pages/SpeakingQuiz";
 import VstepRegistration from "./pages/VstepRegistration";
 import Admin from "./pages/Admin";
 import Results from "./pages/Results";
+import WritingSamples from "./pages/WritingSamples";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
