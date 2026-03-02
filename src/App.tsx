@@ -8,6 +8,8 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Quiz from "./pages/Quiz";
 import QuizTake from "./pages/QuizTake";
+import VstepRegistration from "./pages/VstepRegistration";
+import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +26,8 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/quiz" element={<Quiz />} />
           <Route path="/quiz/:skill/:id" element={<QuizTake />} />
+          <Route path="/vstep-registration" element={<VstepRegistration />} />
+          <Route path="/results" element={<Results />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

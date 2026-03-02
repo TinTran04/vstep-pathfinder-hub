@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 
 const navLinks = [
   { label: "Trang chủ", href: "#" },
-  { label: "4 Kỹ năng", href: "#skills" },
-  { label: "Luyện đề", href: "#exam" },
+  { label: "Giới thiệu VSTEP", href: "#vstep-overview" },
+  { label: "Practice", href: "/quiz", isRoute: true },
   { label: "Lộ trình học", href: "#journey" },
   { label: "Bảng giá", href: "#pricing" },
+  { label: "Kết quả học viên", href: "/results", isRoute: true },
+  { label: "Đăng ký thi", href: "/vstep-registration", isRoute: true },
 ];
 
 const Navbar = () => {
@@ -38,15 +40,25 @@ const Navbar = () => {
 
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-1">
-          {navLinks.map((l) => (
-            <a
-              key={l.label}
-              href={l.href}
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
-            >
-              {l.label}
-            </a>
-          ))}
+          {navLinks.map((l) =>
+            (l as any).isRoute ? (
+              <Link
+                key={l.label}
+                to={l.href}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <a
+                key={l.label}
+                href={l.href}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+              >
+                {l.label}
+              </a>
+            )
+          )}
         </nav>
 
         {/* Desktop CTA */}
@@ -66,16 +78,27 @@ const Navbar = () => {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="lg:hidden bg-card border-t border-border px-4 pb-4 space-y-2">
-          {navLinks.map((l) => (
-            <a
-              key={l.label}
-              href={l.href}
-              className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
-              onClick={() => setMobileOpen(false)}
-            >
-              {l.label}
-            </a>
-          ))}
+          {navLinks.map((l) =>
+            (l as any).isRoute ? (
+              <Link
+                key={l.label}
+                to={l.href}
+                className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={() => setMobileOpen(false)}
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <a
+                key={l.label}
+                href={l.href}
+                className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={() => setMobileOpen(false)}
+              >
+                {l.label}
+              </a>
+            )
+          )}
           <div className="flex gap-2 pt-2">
             <Button variant="outline" size="sm" className="flex-1" asChild><Link to="/auth">Đăng nhập</Link></Button>
             <Button size="sm" className="flex-1 gradient-primary text-primary-foreground" asChild><Link to="/auth">Bắt đầu học</Link></Button>

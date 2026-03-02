@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
+import VstepOverview from "@/components/VstepOverview";
 import BenefitsSection from "@/components/BenefitsSection";
 import SkillsSection from "@/components/SkillsSection";
 import LearningJourney from "@/components/LearningJourney";
@@ -15,6 +16,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <HeroSection />
+      <VstepOverview />
       <BenefitsSection />
       <SkillsSection />
       <LearningJourney />
