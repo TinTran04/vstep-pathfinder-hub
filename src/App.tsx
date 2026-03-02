@@ -39,6 +39,7 @@ const App = () => (
           <Route path="/vstep-registration" element={<VstepRegistration />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/writing-samples" element={<WritingSamples />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
