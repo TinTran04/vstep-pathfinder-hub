@@ -7,27 +7,19 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Question {
-  id: number;
-  question: string;
-  options: string[];
-  correct: number;
+  id: number; question: string; options: string[]; correct: number;
 }
-
 interface Part {
-  title: string;
-  type: string;
-  readTime: string;
-  description: string;
-  questions: Question[];
+  title: string; type: string; readTime: string; description: string; questions: Question[];
 }
 
 const listeningParts: Part[] = [
   {
     title: "Part 1 – Short Announcements / Instructions",
-    type: "Thông báo ngắn",
-    readTime: "30 giây",
+    type: "Thông báo ngắn", readTime: "30 giây",
     description: "Nghe 8 thông báo hoặc hướng dẫn ngắn. Đáp án (A, B, C, D) thường ngắn gọn.",
     questions: [
       { id: 1, question: "What is the main purpose of the announcement?", options: ["To announce a holiday", "To inform about a schedule change", "To introduce a new teacher", "To cancel a class"], correct: 1 },
@@ -42,9 +34,8 @@ const listeningParts: Part[] = [
   },
   {
     title: "Part 2 – Conversations",
-    type: "Hội thoại",
-    readTime: "20 giây trước mỗi đoạn",
-    description: "Nghe 3 đoạn hội thoại giữa 2 người (1 nam – 1 nữ). Mỗi đoạn có 4 câu hỏi.",
+    type: "Hội thoại", readTime: "20 giây trước mỗi đoạn",
+    description: "Nghe 3 đoạn hội thoại giữa 2 người. Mỗi đoạn có 4 câu hỏi.",
     questions: [
       { id: 9, question: "What are the speakers mainly discussing?", options: ["A project deadline", "A job interview", "A vacation plan", "A birthday party"], correct: 0 },
       { id: 10, question: "What does the woman suggest?", options: ["Hiring more staff", "Extending the deadline", "Working overtime", "Cancelling the project"], correct: 2 },
@@ -62,9 +53,8 @@ const listeningParts: Part[] = [
   },
   {
     title: "Part 3 – Talks / Lectures",
-    type: "Bài nói / Bài giảng",
-    readTime: "30 giây trước mỗi bài",
-    description: "Nghe 3 bài nói hoặc bài giảng mang tính học thuật. Mỗi bài có 5 câu hỏi. Chủ đề trang trọng, xuất hiện từ vựng chuyên ngành.",
+    type: "Bài nói / Bài giảng", readTime: "30 giây trước mỗi bài",
+    description: "Nghe 3 bài nói hoặc bài giảng mang tính học thuật. Mỗi bài có 5 câu hỏi.",
     questions: [
       { id: 21, question: "What is the main topic of the lecture?", options: ["Climate change effects", "Economic growth patterns", "Modern architecture", "Digital marketing"], correct: 0 },
       { id: 22, question: "According to the speaker, what is the primary cause?", options: ["Industrial pollution", "Deforestation", "Urbanization", "All of the above"], correct: 3 },
@@ -85,23 +75,20 @@ const listeningParts: Part[] = [
   },
 ];
 
-const TOTAL_TIME = 40 * 60; // 40 minutes
+const TOTAL_TIME = 40 * 60;
 
 const ListeningQuiz = () => {
   const navigate = useNavigate();
   const [currentPart, setCurrentPart] = useState(0);
-  const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
 
-  // Audio simulation state
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [audioDuration] = useState(180); // 3 min per segment
+  const [audioDuration] = useState(180);
   const audioInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Timer
   useEffect(() => {
     if (submitted) return;
     const timer = setInterval(() => {
@@ -110,7 +97,6 @@ const ListeningQuiz = () => {
     return () => clearInterval(timer);
   }, [submitted]);
 
-  // Audio simulation
   useEffect(() => {
     if (isPlaying && !submitted) {
       audioInterval.current = setInterval(() => {
@@ -128,8 +114,6 @@ const ListeningQuiz = () => {
   const part = listeningParts[currentPart];
   const allQuestions = listeningParts.flatMap((p) => p.questions);
   const totalQ = allQuestions.length;
-  const globalQIndex = listeningParts.slice(0, currentPart).reduce((sum, p) => sum + p.questions.length, 0) + currentQ;
-  const q = part.questions[currentQ];
 
   const score = submitted ? allQuestions.filter((q) => answers[q.id] === q.correct).length : 0;
 
@@ -137,30 +121,13 @@ const ListeningQuiz = () => {
     setAudioProgress((p) => Math.max(0, Math.min(audioDuration, p + delta)));
   };
 
-  const handleNext = () => {
-    if (currentQ < part.questions.length - 1) {
-      setCurrentQ((c) => c + 1);
-    } else if (currentPart < listeningParts.length - 1) {
-      setCurrentPart((p) => p + 1);
-      setCurrentQ(0);
-      setAudioProgress(0);
-      setIsPlaying(false);
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentQ > 0) {
-      setCurrentQ((c) => c - 1);
-    } else if (currentPart > 0) {
-      setCurrentPart((p) => p - 1);
-      setCurrentQ(listeningParts[currentPart - 1].questions.length - 1);
-    }
-  };
-
   const reset = () => {
-    setAnswers({}); setCurrentPart(0); setCurrentQ(0); setSubmitted(false);
+    setAnswers({}); setCurrentPart(0); setSubmitted(false);
     setTimeLeft(TOTAL_TIME); setIsPlaying(false); setAudioProgress(0);
   };
+
+  // Get global question offset for current part
+  const partOffset = listeningParts.slice(0, currentPart).reduce((s, p) => s + p.questions.length, 0);
 
   if (submitted) {
     return (
@@ -172,8 +139,7 @@ const ListeningQuiz = () => {
             </div>
             <h2 className="text-2xl font-bold text-foreground">Kết quả Listening</h2>
             <div className="text-5xl font-bold text-foreground">{score}<span className="text-2xl text-muted-foreground">/{totalQ}</span></div>
-            <p className="text-muted-foreground">{score >= 25 ? "Xuất sắc!" : score >= 18 ? "Khá tốt! Hãy ôn lại các câu sai." : "Cần cải thiện thêm."}</p>
-
+            <p className="text-muted-foreground">{score >= 25 ? "Xuất sắc!" : score >= 18 ? "Khá tốt!" : "Cần cải thiện."}</p>
             {listeningParts.map((pt, pi) => (
               <div key={pi} className="text-left">
                 <h3 className="font-semibold text-sm text-foreground mb-2">{pt.title}</h3>
@@ -189,7 +155,6 @@ const ListeningQuiz = () => {
                 </div>
               </div>
             ))}
-
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => navigate("/quiz")}><ArrowLeft size={16} /> Quay lại</Button>
               <Button className="flex-1 gradient-primary text-primary-foreground" onClick={reset}><RotateCcw size={16} /> Làm lại</Button>
@@ -210,98 +175,96 @@ const ListeningQuiz = () => {
             <Clock size={16} className={timeLeft < 300 ? "text-destructive" : "text-muted-foreground"} />
             <span className={timeLeft < 300 ? "text-destructive" : "text-foreground"}>{formatTime(timeLeft)}</span>
           </div>
-          <span className="text-sm text-muted-foreground">Câu {globalQIndex + 1}/{totalQ}</span>
+          <span className="text-sm text-muted-foreground">Đã trả lời {Object.keys(answers).length}/{totalQ}</span>
         </div>
-        <Progress value={((globalQIndex + 1) / totalQ) * 100} className="h-1" />
+        <Progress value={(Object.keys(answers).length / totalQ) * 100} className="h-1" />
       </header>
 
-      <div className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
+      <div className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-4">
         {/* Part tabs */}
         <div className="flex gap-2">
           {listeningParts.map((pt, i) => (
-            <button key={i} onClick={() => { setCurrentPart(i); setCurrentQ(0); setAudioProgress(0); setIsPlaying(false); }}
+            <button key={i} onClick={() => { setCurrentPart(i); setAudioProgress(0); setIsPlaying(false); }}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${i === currentPart ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
               Phần {i + 1}
             </button>
           ))}
         </div>
 
-        {/* Part info */}
-        <div className="bg-card border border-border rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-foreground">{part.title}</h3>
-            <Badge variant="outline" className="text-xs">{part.questions.length} câu</Badge>
+        {/* Video-like frame */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col" style={{ height: "calc(100vh - 180px)" }}>
+          {/* Part info header */}
+          <div className="px-5 py-3 border-b border-border bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-foreground text-sm">{part.title}</h3>
+                <p className="text-xs text-muted-foreground">{part.description}</p>
+              </div>
+              <Badge variant="outline" className="text-xs">{part.questions.length} câu</Badge>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">{part.description}</p>
-          <p className="text-xs text-muted-foreground mt-1">Thời gian đọc câu hỏi: {part.readTime}</p>
-        </div>
 
-        {/* Audio player */}
-        <Card className="border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Volume2 size={18} className="text-primary" />
-              <span className="text-sm font-medium text-foreground">Audio – Phần {currentPart + 1}</span>
-              <span className="text-xs text-muted-foreground ml-auto">{formatTime(audioProgress)} / {formatTime(audioDuration)}</span>
+          {/* Scrollable questions area */}
+          <ScrollArea className="flex-1">
+            <div className="p-5 space-y-4">
+              {part.questions.map((q, i) => {
+                const globalIdx = partOffset + i + 1;
+                return (
+                  <div key={q.id} className={`rounded-xl border-2 p-4 transition-colors ${answers[q.id] !== undefined ? "border-primary/30 bg-primary/5" : "border-border"}`}>
+                    <h4 className="text-sm font-semibold text-foreground mb-3">
+                      <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.question}
+                    </h4>
+                    <RadioGroup
+                      value={answers[q.id]?.toString()}
+                      onValueChange={(v) => setAnswers((p) => ({ ...p, [q.id]: parseInt(v) }))}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                    >
+                      {q.options.map((opt, oi) => (
+                        <label key={oi} className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer text-sm transition-all ${answers[q.id] === oi ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 hover:bg-muted/50"}`}>
+                          <RadioGroupItem value={oi.toString()} id={`lq${q.id}-o${oi}`} />
+                          <Label htmlFor={`lq${q.id}-o${oi}`} className="cursor-pointer flex-1">
+                            <span className="font-medium text-muted-foreground mr-1.5">{String.fromCharCode(65 + oi)}.</span>
+                            <span className="text-foreground">{opt}</span>
+                          </Label>
+                        </label>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                );
+              })}
             </div>
-            <Progress value={(audioProgress / audioDuration) * 100} className="h-2 mb-3" />
-            <div className="flex items-center justify-center gap-3">
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => seekAudio(-10)}>
-                <SkipBack size={16} />
-              </Button>
-              <Button size="icon" className="h-11 w-11 gradient-primary text-primary-foreground" onClick={() => setIsPlaying(!isPlaying)}>
-                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-              </Button>
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => seekAudio(10)}>
-                <SkipForward size={16} />
-              </Button>
+          </ScrollArea>
+
+          {/* Audio player at bottom */}
+          <div className="border-t border-border bg-card px-5 py-3">
+            <div className="flex items-center gap-3">
+              <Volume2 size={18} className="text-primary shrink-0" />
+              <span className="text-xs text-muted-foreground w-12">{formatTime(audioProgress)}</span>
+              <div className="flex-1">
+                <Progress value={(audioProgress / audioDuration) * 100} className="h-2" />
+              </div>
+              <span className="text-xs text-muted-foreground w-12 text-right">{formatTime(audioDuration)}</span>
+              <div className="flex items-center gap-1.5 ml-2">
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(-10)}>
+                  <SkipBack size={14} />
+                </Button>
+                <Button size="icon" className="h-10 w-10 gradient-primary text-primary-foreground" onClick={() => setIsPlaying(!isPlaying)}>
+                  {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(10)}>
+                  <SkipForward size={14} />
+                </Button>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Question nav dots */}
-        <div className="flex flex-wrap gap-2 justify-center">
-          {part.questions.map((pq, i) => {
-            const gIdx = listeningParts.slice(0, currentPart).reduce((s, p) => s + p.questions.length, 0) + i;
-            return (
-              <button key={pq.id} onClick={() => setCurrentQ(i)}
-                className={`w-8 h-8 rounded-full text-xs font-medium transition-colors ${i === currentQ ? "gradient-primary text-primary-foreground" : answers[pq.id] !== undefined ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
-                {gIdx + 1}
-              </button>
-            );
-          })}
+          </div>
         </div>
 
-        {/* Question */}
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-6">
-              <span className="text-primary mr-2">Câu {globalQIndex + 1}.</span>{q.question}
-            </h2>
-            <RadioGroup value={answers[q.id]?.toString()} onValueChange={(v) => setAnswers((p) => ({ ...p, [q.id]: parseInt(v) }))} className="space-y-3">
-              {q.options.map((opt, i) => (
-                <label key={i} className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${answers[q.id] === i ? "border-primary bg-primary/5" : "border-border hover:border-primary/30 hover:bg-muted/50"}`}>
-                  <RadioGroupItem value={i.toString()} id={`lq${q.id}-o${i}`} />
-                  <Label htmlFor={`lq${q.id}-o${i}`} className="cursor-pointer flex-1 text-sm text-foreground">
-                    <span className="font-medium text-muted-foreground mr-2">{String.fromCharCode(65 + i)}.</span>{opt}
-                  </Label>
-                </label>
-              ))}
-            </RadioGroup>
-          </CardContent>
-        </Card>
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between">
-          <Button variant="outline" disabled={globalQIndex === 0} onClick={handlePrev}><ArrowLeft size={16} /> Câu trước</Button>
-          {globalQIndex === totalQ - 1 ? (
-            <Button className="gradient-primary text-primary-foreground" onClick={() => setSubmitted(true)}>Hoàn thành</Button>
-          ) : (
-            <Button onClick={handleNext}>Câu tiếp <ArrowLeft size={16} className="rotate-180" /></Button>
-          )}
+        {/* Submit */}
+        <div className="flex justify-end">
+          <Button className="gradient-primary text-primary-foreground" onClick={() => setSubmitted(true)}>
+            Hoàn thành
+          </Button>
         </div>
-
-        <p className="text-center text-sm text-muted-foreground">Đã trả lời {Object.keys(answers).length}/{totalQ} câu</p>
       </div>
     </div>
   );

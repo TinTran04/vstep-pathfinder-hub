@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, MapPin, Calendar, Phone, Mail, Globe, Clock, Users, FileText, DollarSign } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, Phone, Mail, Globe, Clock, Users, FileText, DollarSign, QrCode, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const examSchedule = [
   { date: "15/04/2026", location: "ĐH Quốc gia Hà Nội", slots: 200, status: "open" },
@@ -14,33 +16,28 @@ const examSchedule = [
 ];
 
 const centers = [
-  {
-    name: "Trung tâm Khảo thí ĐH Quốc gia Hà Nội",
-    address: "144 Xuân Thủy, Cầu Giấy, Hà Nội",
-    phone: "024 3754 7670",
-    email: "vstep@vnu.edu.vn",
-    website: "https://ettc.vnu.edu.vn",
-  },
-  {
-    name: "Trung tâm Ngoại ngữ ĐH Sư phạm TP.HCM",
-    address: "280 An Dương Vương, Quận 5, TP.HCM",
-    phone: "028 3835 4409",
-    email: "flc@hcmue.edu.vn",
-    website: "https://hcmue.edu.vn",
-  },
-  {
-    name: "Trung tâm Ngoại ngữ ĐH Đà Nẵng",
-    address: "41 Lê Duẩn, Hải Châu, Đà Nẵng",
-    phone: "0236 3822 041",
-    email: "sfl@udn.vn",
-    website: "https://udn.vn",
-  },
+  { name: "Trung tâm Khảo thí ĐH Quốc gia Hà Nội", address: "144 Xuân Thủy, Cầu Giấy, Hà Nội", phone: "024 3754 7670", email: "vstep@vnu.edu.vn", website: "https://ettc.vnu.edu.vn" },
+  { name: "Trung tâm Ngoại ngữ ĐH Sư phạm TP.HCM", address: "280 An Dương Vương, Quận 5, TP.HCM", phone: "028 3835 4409", email: "flc@hcmue.edu.vn", website: "https://hcmue.edu.vn" },
+  { name: "Trung tâm Ngoại ngữ ĐH Đà Nẵng", address: "41 Lê Duẩn, Hải Châu, Đà Nẵng", phone: "0236 3822 041", email: "sfl@udn.vn", website: "https://udn.vn" },
 ];
 
 const VstepRegistration = () => {
+  const [qrDialog, setQrDialog] = useState(false);
+  const [qrExam, setQrExam] = useState<typeof examSchedule[0] | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+  const handleRegister = (exam: typeof examSchedule[0]) => {
+    setQrExam(exam);
+    setPaymentSuccess(false);
+    setQrDialog(true);
+  };
+
+  const simulatePayment = () => {
+    setPaymentSuccess(true);
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
           <Link to="/" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -134,7 +131,7 @@ const VstepRegistration = () => {
                     <span>{exam.slots} chỗ</span>
                   </div>
                   {exam.status === "open" && (
-                    <Button size="sm" className="w-full gradient-primary text-primary-foreground mt-2">
+                    <Button size="sm" className="w-full gradient-primary text-primary-foreground mt-2" onClick={() => handleRegister(exam)}>
                       Đăng ký ngay
                     </Button>
                   )}
@@ -155,23 +152,11 @@ const VstepRegistration = () => {
                 <CardContent className="p-5 space-y-3">
                   <h3 className="font-bold text-foreground text-sm">{center.name}</h3>
                   <div className="space-y-2 text-sm text-muted-foreground">
-                    <div className="flex items-start gap-2">
-                      <MapPin size={14} className="shrink-0 mt-0.5" />
-                      <span>{center.address}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone size={14} className="shrink-0" />
-                      <span>{center.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail size={14} className="shrink-0" />
-                      <span>{center.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Globe size={14} className="shrink-0" />
-                      <a href={center.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                        Website
-                      </a>
+                    <div className="flex items-start gap-2"><MapPin size={14} className="shrink-0 mt-0.5" /><span>{center.address}</span></div>
+                    <div className="flex items-center gap-2"><Phone size={14} className="shrink-0" /><span>{center.phone}</span></div>
+                    <div className="flex items-center gap-2"><Mail size={14} className="shrink-0" /><span>{center.email}</span></div>
+                    <div className="flex items-center gap-2"><Globe size={14} className="shrink-0" />
+                      <a href={center.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Website</a>
                     </div>
                   </div>
                 </CardContent>
@@ -193,6 +178,93 @@ const VstepRegistration = () => {
           </div>
         </div>
       </div>
+
+      {/* QR Payment Dialog */}
+      <Dialog open={qrDialog} onOpenChange={setQrDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {paymentSuccess ? <CheckCircle2 size={20} className="text-emerald-600" /> : <QrCode size={20} className="text-primary" />}
+              {paymentSuccess ? "Đăng ký thành công!" : "Thanh toán lệ phí thi"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {paymentSuccess ? (
+            <div className="text-center space-y-4 py-4">
+              <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                <CheckCircle2 size={40} className="text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Chuyển khoản thành công!</h3>
+                <p className="text-sm text-muted-foreground mt-1">Đăng ký thi VSTEP của bạn đã được xác nhận.</p>
+              </div>
+              <div className="bg-muted/50 rounded-xl p-4 text-left space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Ngày thi:</span>
+                  <span className="font-medium text-foreground">{qrExam?.date}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Địa điểm:</span>
+                  <span className="font-medium text-foreground">{qrExam?.location}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Số tiền:</span>
+                  <span className="font-medium text-foreground">1.500.000đ</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Mã GD:</span>
+                  <span className="font-medium text-primary">VSTEP{Date.now().toString().slice(-8)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Trạng thái:</span>
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Đã thanh toán</Badge>
+                </div>
+              </div>
+              <Button className="w-full gradient-primary text-primary-foreground" onClick={() => setQrDialog(false)}>Đóng</Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded-xl p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ngày thi:</span>
+                  <span className="font-medium text-foreground">{qrExam?.date}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Địa điểm:</span>
+                  <span className="font-medium text-foreground">{qrExam?.location}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Lệ phí:</span>
+                  <span className="font-bold text-foreground">1.500.000đ</span>
+                </div>
+              </div>
+
+              {/* Fake QR Code */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-48 h-48 bg-card border-2 border-border rounded-xl flex items-center justify-center relative">
+                  {/* Simulated QR pattern */}
+                  <div className="grid grid-cols-7 gap-0.5 p-3">
+                    {Array.from({ length: 49 }).map((_, i) => (
+                      <div key={i} className={`w-4 h-4 rounded-sm ${[0,1,2,3,4,5,6,7,8,12,13,14,20,21,27,28,34,35,36,40,41,42,43,44,45,46,47,48].includes(i) ? "bg-foreground" : Math.random() > 0.5 ? "bg-foreground" : "bg-transparent"}`} />
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">Quét mã QR bằng ứng dụng ngân hàng để thanh toán</p>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Ngân hàng: <strong className="text-foreground">Vietcombank</strong></p>
+                  <p className="text-xs text-muted-foreground">STK: <strong className="text-foreground">1234 5678 9012</strong></p>
+                  <p className="text-xs text-muted-foreground">Nội dung: <strong className="text-primary">VSTEP {qrExam?.date?.replace(/\//g, "")}</strong></p>
+                </div>
+              </div>
+
+              <Button className="w-full gradient-primary text-primary-foreground" onClick={simulatePayment}>
+                Xác nhận đã chuyển khoản
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => setQrDialog(false)}>Hủy</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
