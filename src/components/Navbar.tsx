@@ -40,15 +40,25 @@ const Navbar = () => {
 
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-1">
-          {navLinks.map((l) => (
-            <a
-              key={l.label}
-              href={l.href}
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
-            >
-              {l.label}
-            </a>
-          ))}
+          {navLinks.map((l) =>
+            (l as any).isRoute ? (
+              <Link
+                key={l.label}
+                to={l.href}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <a
+                key={l.label}
+                href={l.href}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+              >
+                {l.label}
+              </a>
+            )
+          )}
         </nav>
 
         {/* Desktop CTA */}
