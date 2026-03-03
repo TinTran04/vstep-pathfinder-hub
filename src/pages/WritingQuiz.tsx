@@ -112,6 +112,7 @@ const WritingQuiz = () => {
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<Record<number, { taskAchievement: string; coherence: string; lexical: string; grammar: string; score: string; tips: string[]; errors: TextError[] }>>({});
+  const [feedbackTask, setFeedbackTask] = useState(0);
 
   useEffect(() => {
     if (submitted) return;
