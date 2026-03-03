@@ -283,6 +283,20 @@ const WritingQuiz = () => {
                         </div>
                       ))}
                     </div>
+                    {/* Annotated text with highlighted errors */}
+                    {fb.errors && fb.errors.length > 0 && (
+                      <div>
+                        <p className="text-sm font-semibold text-foreground mb-2">📝 Bài viết đã chấm (bôi màu lỗi sai):</p>
+                        <div className="bg-card rounded-xl p-4 border border-border">
+                          <AnnotatedText text={writings[t.id] || ""} errors={fb.errors} />
+                        </div>
+                      </div>
+                    )}
+                    {fb.errors && fb.errors.length === 0 && (
+                      <div className="bg-card rounded-xl p-4 border border-border">
+                        <p className="text-sm text-foreground">✅ Không phát hiện lỗi phổ biến. Bài viết khá tốt!</p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-sm font-semibold text-foreground mb-2">💡 Cách cải thiện:</p>
                       <ul className="space-y-1">
