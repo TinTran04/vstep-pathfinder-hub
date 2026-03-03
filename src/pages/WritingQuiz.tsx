@@ -129,7 +129,7 @@ const WritingQuiz = () => {
   const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
   const meetsMinimum = wordCount >= task.minWords;
 
-  const reset = () => { setWritings({ 1: "", 2: "" }); setCurrentTask(0); setSubmitted(false); setTimeLeft(TOTAL_TIME); setShowAIFeedback(false); setAiFeedback({}); };
+  const reset = () => { setWritings({ 1: "", 2: "" }); setCurrentTask(0); setSubmitted(false); setTimeLeft(TOTAL_TIME); setShowAIFeedback(false); setAiFeedback({}); setFeedbackTask(0); };
 
   const findErrors = (text: string, taskId: number): TextError[] => {
     const errors: TextError[] = [];
