@@ -130,6 +130,68 @@ const WritingQuiz = () => {
 
   const reset = () => { setWritings({ 1: "", 2: "" }); setCurrentTask(0); setSubmitted(false); setTimeLeft(TOTAL_TIME); setShowAIFeedback(false); setAiFeedback({}); };
 
+  const findErrors = (text: string, taskId: number): TextError[] => {
+    const errors: TextError[] = [];
+    // Common grammar/vocab patterns to detect
+    const patterns: { regex: RegExp; suggestion: string; explanation: string; type: TextError["type"] }[] = [
+      { regex: /\b(i)\b/g, suggestion: "I", explanation: "Đại từ nhân xưng 'I' luôn viết hoa.", type: "grammar" },
+      { regex: /\b(dont|doesnt|didnt|cant|wont|isnt|arent|wasnt|werent|havent|hasnt|hadnt)\b/gi, suggestion: (m: string) => m.replace(/nt$/i, "n't"), explanation: "Cần thêm dấu nháy cho dạng rút gọn.", type: "spelling" },
+      { regex: /\b(alot)\b/gi, suggestion: "a lot", explanation: "'A lot' viết tách thành 2 từ.", type: "spelling" },
+      { regex: /\b(becuz|bcuz|cuz)\b/gi, suggestion: "because", explanation: "Sử dụng từ đầy đủ 'because' trong bài viết chính thức.", type: "vocabulary" },
+      { regex: /\b(gonna)\b/gi, suggestion: "going to", explanation: "'Gonna' là dạng nói, dùng 'going to' trong viết.", type: "vocabulary" },
+      { regex: /\b(wanna)\b/gi, suggestion: "want to", explanation: "'Wanna' là dạng nói, dùng 'want to' trong viết.", type: "vocabulary" },
+      { regex: /\b(wich|whitch)\b/gi, suggestion: "which", explanation: "Lỗi chính tả: đúng là 'which'.", type: "spelling" },
+      { regex: /\b(recieve)\b/gi, suggestion: "receive", explanation: "Lỗi chính tả: đúng là 'receive' (i trước e sau c).", type: "spelling" },
+      { regex: /\b(definately|definatly)\b/gi, suggestion: "definitely", explanation: "Lỗi chính tả: đúng là 'definitely'.", type: "spelling" },
+      { regex: /\b(their|there|they're)\b/gi, suggestion: "", explanation: "Kiểm tra lại: their (sở hữu), there (nơi đó), they're (they are).", type: "grammar" },
+      { regex: /\b(very good)\b/gi, suggestion: "excellent / outstanding", explanation: "Thay 'very good' bằng từ mạnh hơn để nâng điểm từ vựng.", type: "vocabulary" },
+      { regex: /\b(very bad)\b/gi, suggestion: "terrible / dreadful", explanation: "Thay 'very bad' bằng từ mạnh hơn.", type: "vocabulary" },
+      { regex: /\b(very big)\b/gi, suggestion: "enormous / massive", explanation: "Dùng từ mạnh hơn thay cho 'very + adj'.", type: "vocabulary" },
+      { regex: /\b(very small)\b/gi, suggestion: "tiny / minuscule", explanation: "Dùng từ mạnh hơn thay cho 'very + adj'.", type: "vocabulary" },
+      { regex: /\b(He go|She go|It go)\b/g, suggestion: (m: string) => m.replace("go", "goes"), explanation: "Chia động từ ngôi thứ 3 số ít: thêm -s/-es.", type: "grammar" },
+      { regex: /\b(childs)\b/gi, suggestion: "children", explanation: "Danh từ bất quy tắc: child → children.", type: "grammar" },
+      { regex: /\b(mans)\b/gi, suggestion: "men", explanation: "Danh từ bất quy tắc: man → men.", type: "grammar" },
+      { regex: /\b(womans)\b/gi, suggestion: "women", explanation: "Danh từ bất quy tắc: woman → women.", type: "grammar" },
+      { regex: /\b(informations)\b/gi, suggestion: "information", explanation: "'Information' là danh từ không đếm được, không thêm -s.", type: "grammar" },
+      { regex: /\b(advices)\b/gi, suggestion: "advice", explanation: "'Advice' là danh từ không đếm được.", type: "grammar" },
+      { regex: /\.\s*However\s+/g, suggestion: ". However, ", explanation: "Sau 'However' cần dấu phẩy.", type: "coherence" },
+      { regex: /\.\s*Moreover\s+(?!,)/g, suggestion: ". Moreover, ", explanation: "Sau 'Moreover' cần dấu phẩy.", type: "coherence" },
+      { regex: /\.\s*Furthermore\s+(?!,)/g, suggestion: ". Furthermore, ", explanation: "Sau 'Furthermore' cần dấu phẩy.", type: "coherence" },
+      { regex: /\.\s*In addition\s+(?!,)/g, suggestion: ". In addition, ", explanation: "Sau 'In addition' cần dấu phẩy.", type: "coherence" },
+    ];
+
+    patterns.forEach(({ regex, suggestion, explanation, type }) => {
+      let match;
+      const re = new RegExp(regex.source, regex.flags);
+      while ((match = re.exec(text)) !== null) {
+        const sug = typeof suggestion === "function" ? (suggestion as (m: string) => string)(match[0]) : suggestion;
+        // Skip empty suggestions (informational only like their/there/they're)
+        if (!sug) continue;
+        errors.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          original: match[0],
+          suggestion: sug,
+          explanation,
+          type,
+        });
+      }
+    });
+
+    // Remove overlapping errors (keep the first found)
+    errors.sort((a, b) => a.start - b.start);
+    const filtered: TextError[] = [];
+    let lastEnd = -1;
+    for (const err of errors) {
+      if (err.start >= lastEnd) {
+        filtered.push(err);
+        lastEnd = err.end;
+      }
+    }
+
+    return filtered;
+  };
+
   const generateAIFeedback = () => {
     setAiLoading(true);
     setTimeout(() => {
@@ -137,6 +199,8 @@ const WritingQuiz = () => {
       tasks.forEach(t => {
         const text = writings[t.id] || "";
         const wc = text.trim() ? text.trim().split(/\s+/).length : 0;
+        const errors = findErrors(text, t.id);
+
         if (wc < 20) {
           feedback[t.id] = {
             taskAchievement: "N/A – Bài viết quá ngắn để đánh giá",
@@ -145,9 +209,10 @@ const WritingQuiz = () => {
             grammar: "N/A",
             score: "0/10",
             tips: ["Viết tối thiểu " + t.minWords + " từ để được đánh giá"],
+            errors: [],
           };
         } else {
-          feedback[t.id] = t.id === 1 ? {
+          const base = t.id === 1 ? {
             taskAchievement: "7.5/10 – Hoàn thành đủ 3 ý trong đề bài. Phần mời bạn đến thăm có thể mở rộng thêm chi tiết cụ thể.",
             coherence: "7.0/10 – Bài viết có cấu trúc rõ ràng (mở – thân – kết). Tuy nhiên cần sử dụng thêm từ nối giữa các đoạn.",
             lexical: "7.0/10 – Vốn từ đa dạng ở mức trung bình. Nên dùng thêm collocations và tránh lặp từ.",
@@ -173,6 +238,7 @@ const WritingQuiz = () => {
               "Đọc essays mẫu band 8+ để học cách diễn đạt",
             ],
           };
+          feedback[t.id] = { ...base, errors };
         }
       });
       setAiFeedback(feedback);
