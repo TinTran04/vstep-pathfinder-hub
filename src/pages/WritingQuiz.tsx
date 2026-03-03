@@ -249,7 +249,6 @@ const WritingQuiz = () => {
   };
 
   if (submitted) {
-    const [feedbackTask, setFeedbackTask] = useState(0);
     const activeTask = tasks[feedbackTask];
     const activeText = writings[activeTask.id] || "";
     const activeWc = activeText.trim() ? activeText.trim().split(/\s+/).length : 0;
