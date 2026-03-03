@@ -133,7 +133,7 @@ const WritingQuiz = () => {
   const findErrors = (text: string, taskId: number): TextError[] => {
     const errors: TextError[] = [];
     // Common grammar/vocab patterns to detect
-    const patterns: { regex: RegExp; suggestion: string; explanation: string; type: TextError["type"] }[] = [
+    const patterns: { regex: RegExp; suggestion: string | ((m: string) => string); explanation: string; type: TextError["type"] }[] = [
       { regex: /\b(i)\b/g, suggestion: "I", explanation: "Đại từ nhân xưng 'I' luôn viết hoa.", type: "grammar" },
       { regex: /\b(dont|doesnt|didnt|cant|wont|isnt|arent|wasnt|werent|havent|hasnt|hadnt)\b/gi, suggestion: (m: string) => m.replace(/nt$/i, "n't"), explanation: "Cần thêm dấu nháy cho dạng rút gọn.", type: "spelling" },
       { regex: /\b(alot)\b/gi, suggestion: "a lot", explanation: "'A lot' viết tách thành 2 từ.", type: "spelling" },
