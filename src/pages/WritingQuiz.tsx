@@ -112,6 +112,7 @@ const WritingQuiz = () => {
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<Record<number, { taskAchievement: string; coherence: string; lexical: string; grammar: string; score: string; tips: string[]; errors: TextError[] }>>({});
+  const [feedbackTask, setFeedbackTask] = useState(0);
 
   useEffect(() => {
     if (submitted) return;
@@ -128,7 +129,7 @@ const WritingQuiz = () => {
   const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
   const meetsMinimum = wordCount >= task.minWords;
 
-  const reset = () => { setWritings({ 1: "", 2: "" }); setCurrentTask(0); setSubmitted(false); setTimeLeft(TOTAL_TIME); setShowAIFeedback(false); setAiFeedback({}); };
+  const reset = () => { setWritings({ 1: "", 2: "" }); setCurrentTask(0); setSubmitted(false); setTimeLeft(TOTAL_TIME); setShowAIFeedback(false); setAiFeedback({}); setFeedbackTask(0); };
 
   const findErrors = (text: string, taskId: number): TextError[] => {
     const errors: TextError[] = [];
@@ -248,98 +249,150 @@ const WritingQuiz = () => {
   };
 
   if (submitted) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <Card className="w-full max-w-3xl border-border">
-          <CardContent className="p-8 space-y-6">
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-full mx-auto flex items-center justify-center bg-emerald-100 mb-4">
-                <CheckCircle2 size={40} className="text-emerald-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-foreground">{showAIFeedback ? "Kết quả chấm điểm AI" : "Bài viết đã được nộp!"}</h2>
-              {!showAIFeedback && <p className="text-muted-foreground mt-2">Nhấn "Chấm điểm AI" để nhận feedback chi tiết theo 4 tiêu chí.</p>}
-            </div>
+    const activeTask = tasks[feedbackTask];
+    const activeText = writings[activeTask.id] || "";
+    const activeWc = activeText.trim() ? activeText.trim().split(/\s+/).length : 0;
+    const activeFb = aiFeedback[activeTask.id];
 
-            {showAIFeedback ? (
-              tasks.map(t => {
-                const fb = aiFeedback[t.id];
-                if (!fb) return null;
-                return (
-                  <div key={t.id} className="bg-muted/50 rounded-2xl p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-foreground">{t.title}</h3>
-                      <Badge className="gradient-primary text-primary-foreground text-sm">{fb.score}</Badge>
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        {/* Header */}
+        <header className="bg-card border-b border-border sticky top-0 z-40">
+          <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 h-14">
+            <button onClick={() => navigate("/quiz")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+              <ArrowLeft size={16} /> Quay lại
+            </button>
+            <h2 className="text-sm font-bold text-foreground">
+              {showAIFeedback ? "🤖 Kết quả chấm điểm AI" : "📝 Bài viết đã nộp"}
+            </h2>
+            <div className="flex items-center gap-2">
+              {!showAIFeedback ? (
+                <Button className="gradient-primary text-primary-foreground" size="sm" onClick={generateAIFeedback} disabled={aiLoading}>
+                  {aiLoading ? <><Loader2 size={16} className="animate-spin" /> Đang chấm...</> : "🤖 Chấm điểm AI"}
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={reset}><RotateCcw size={16} /> Làm lại</Button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Task tabs */}
+        <div className="bg-card border-b border-border">
+          <div className="max-w-[1400px] mx-auto flex px-4 gap-1">
+            {tasks.map((t, i) => (
+              <button
+                key={i}
+                onClick={() => setFeedbackTask(i)}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  i === feedbackTask
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.title}
+                {showAIFeedback && activeFb && i === feedbackTask && (
+                  <Badge className="ml-2 gradient-primary text-primary-foreground text-xs">{aiFeedback[t.id]?.score}</Badge>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
+          {/* Left: Annotated essay */}
+          <div className="flex-1 border-r border-border">
+            <ScrollArea className="h-[calc(100vh-112px)]">
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-foreground flex items-center gap-2">
+                    <FileText size={18} className="text-primary" />
+                    Bài viết của bạn
+                  </h3>
+                  <Badge variant={activeWc >= activeTask.minWords ? "default" : "destructive"}
+                    className={activeWc >= activeTask.minWords ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : ""}>
+                    {activeWc} / {activeTask.minWords}+ từ
+                  </Badge>
+                </div>
+
+                {showAIFeedback && activeFb ? (
+                  <div className="bg-card rounded-xl p-5 border border-border">
+                    {activeFb.errors && activeFb.errors.length > 0 ? (
+                      <AnnotatedText text={activeText} errors={activeFb.errors} />
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-sm text-emerald-600">
+                          <CheckCircle2 size={16} />
+                          <span className="font-medium">Không phát hiện lỗi phổ biến. Bài viết khá tốt!</span>
+                        </div>
+                        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{activeText}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-card rounded-xl p-5 border border-border">
+                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                      {activeText || <span className="text-muted-foreground italic">Chưa viết</span>}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Right: Scores & Tips */}
+          <div className="w-[380px] shrink-0">
+            <ScrollArea className="h-[calc(100vh-112px)]">
+              <div className="p-6 space-y-5">
+                {showAIFeedback && activeFb ? (
+                  <>
+                    {/* Score overview */}
+                    <div className="text-center p-4 bg-muted/50 rounded-2xl">
+                      <p className="text-xs text-muted-foreground mb-1">Điểm tổng</p>
+                      <p className="text-3xl font-bold text-primary">{activeFb.score}</p>
                     </div>
-                    <div className="grid sm:grid-cols-2 gap-3">
+
+                    {/* Criteria scores */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-foreground">📊 Đánh giá theo tiêu chí</h4>
                       {[
-                        { label: "📋 Task Achievement", value: fb.taskAchievement },
-                        { label: "🔗 Coherence & Cohesion", value: fb.coherence },
-                        { label: "📚 Lexical Resource", value: fb.lexical },
-                        { label: "📝 Grammar Range & Accuracy", value: fb.grammar },
+                        { label: "📋 Task Achievement", value: activeFb.taskAchievement },
+                        { label: "🔗 Coherence & Cohesion", value: activeFb.coherence },
+                        { label: "📚 Lexical Resource", value: activeFb.lexical },
+                        { label: "📝 Grammar", value: activeFb.grammar },
                       ].map(item => (
                         <div key={item.label} className="bg-card rounded-xl p-3 border border-border">
-                          <p className="text-sm font-semibold text-foreground mb-1">{item.label}</p>
+                          <p className="text-xs font-semibold text-foreground mb-1">{item.label}</p>
                           <p className="text-xs text-muted-foreground">{item.value}</p>
                         </div>
                       ))}
                     </div>
-                    {/* Annotated text with highlighted errors */}
-                    {fb.errors && fb.errors.length > 0 && (
-                      <div>
-                        <p className="text-sm font-semibold text-foreground mb-2">📝 Bài viết đã chấm (bôi màu lỗi sai):</p>
-                        <div className="bg-card rounded-xl p-4 border border-border">
-                          <AnnotatedText text={writings[t.id] || ""} errors={fb.errors} />
-                        </div>
-                      </div>
-                    )}
-                    {fb.errors && fb.errors.length === 0 && (
-                      <div className="bg-card rounded-xl p-4 border border-border">
-                        <p className="text-sm text-foreground">✅ Không phát hiện lỗi phổ biến. Bài viết khá tốt!</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-foreground mb-2">💡 Cách cải thiện:</p>
-                      <ul className="space-y-1">
-                        {fb.tips.map((tip: string, i: number) => (
-                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-2"><span className="text-primary">•</span>{tip}</li>
+
+                    {/* Tips */}
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-foreground">💡 Gợi ý cải thiện</h4>
+                      <ul className="space-y-2">
+                        {activeFb.tips.map((tip: string, i: number) => (
+                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-2 bg-muted/30 rounded-lg p-2.5">
+                            <span className="text-primary mt-0.5">•</span>{tip}
+                          </li>
                         ))}
                       </ul>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              tasks.map((t) => {
-                const text = writings[t.id] || "";
-                const wc = text.trim() ? text.trim().split(/\s+/).length : 0;
-                return (
-                  <div key={t.id} className="bg-muted/50 rounded-2xl p-5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-foreground">{t.title}</h3>
-                      <Badge variant={wc >= t.minWords ? "default" : "destructive"} className={wc >= t.minWords ? "bg-emerald-100 text-emerald-700" : ""}>
-                        {wc} / {t.minWords}+ từ
-                      </Badge>
+                  </>
+                ) : (
+                  <div className="text-center py-12 space-y-3">
+                    <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-muted">
+                      <CheckCircle2 size={32} className="text-muted-foreground" />
                     </div>
-                    <div className="bg-card rounded-xl p-4 border border-border max-h-40 overflow-y-auto">
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{text || <span className="text-muted-foreground italic">Chưa viết</span>}</p>
-                    </div>
+                    <p className="text-sm text-muted-foreground">Nhấn "Chấm điểm AI" để nhận<br/>feedback chi tiết theo 4 tiêu chí</p>
                   </div>
-                );
-              })
-            )}
-
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => navigate("/quiz")}><ArrowLeft size={16} /> Quay lại</Button>
-              {!showAIFeedback ? (
-                <Button className="flex-1 gradient-primary text-primary-foreground" onClick={generateAIFeedback} disabled={aiLoading}>
-                  {aiLoading ? <><Loader2 size={16} className="animate-spin" /> Đang chấm...</> : "🤖 Chấm điểm AI"}
-                </Button>
-              ) : (
-                <Button className="flex-1 gradient-primary text-primary-foreground" onClick={reset}><RotateCcw size={16} /> Làm lại</Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
       </div>
     );
   }
