@@ -89,6 +89,8 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [redeemDialog, setRedeemDialog] = useState<typeof rewardsStore[0] | null>(null);
   const [redeemedIds, setRedeemedIds] = useState<number[]>([]);
+  // Track monthly redemption counts: { rewardId: count }
+  const [monthlyRedeemCounts, setMonthlyRedeemCounts] = useState<Record<number, number>>({});
 
   // Settings state
   const [settingsName, setSettingsName] = useState(user?.name ?? "Nguyễn Văn A");
