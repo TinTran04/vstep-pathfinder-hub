@@ -1059,49 +1059,51 @@ const Admin = () => {
             </DialogTitle>
           </DialogHeader>
 
-          {/* Step 1: Choose skill */}
-          {!editExam && examStep === "skill" && (
-            <div className="grid grid-cols-2 gap-3 py-2">
-              {(["Listening", "Reading", "Writing", "Speaking"] as const).map(skill => {
-                const Icon = skillIcons[skill];
-                const color = skillColors[skill];
-                return (
-                  <button
-                    key={skill}
-                    onClick={() => selectSkillForExam(skill)}
-                    className={`p-5 rounded-xl border-2 border-border hover:border-primary/40 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 flex flex-col items-center gap-3 group`}
-                  >
-                    <div className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                      <Icon size={24} />
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">{skill}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {skill === "Listening" && "Nghe hiểu"}
-                      {skill === "Reading" && "Đọc hiểu"}
-                      {skill === "Writing" && "Viết luận"}
-                      {skill === "Speaking" && "Nói"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="overflow-y-auto flex-1 pr-1 -mr-2">
+            {/* Step 1: Choose skill */}
+            {!editExam && examStep === "skill" && (
+              <div className="grid grid-cols-2 gap-3 py-2">
+                {(["Listening", "Reading", "Writing", "Speaking"] as const).map(skill => {
+                  const Icon = skillIcons[skill];
+                  const color = skillColors[skill];
+                  return (
+                    <button
+                      key={skill}
+                      onClick={() => selectSkillForExam(skill)}
+                      className={`p-5 rounded-xl border-2 border-border hover:border-primary/40 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 flex flex-col items-center gap-3 group`}
+                    >
+                      <div className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                        <Icon size={24} />
+                      </div>
+                      <span className="text-sm font-semibold text-foreground">{skill}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {skill === "Listening" && "Nghe hiểu"}
+                        {skill === "Reading" && "Đọc hiểu"}
+                        {skill === "Writing" && "Viết luận"}
+                        {skill === "Speaking" && "Nói"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Step 2: Skill-specific form */}
-          {(editExam || examStep === "form") && (
-            <>
-              {!editExam && (
-                <Button variant="ghost" size="sm" className="w-fit gap-1 text-xs text-muted-foreground -mt-2" onClick={() => setExamStep("skill")}>
-                  <ArrowLeft size={14} /> Chọn kỹ năng khác
-                </Button>
-              )}
-              {renderSkillForm()}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setExamDialog(false)}>Hủy</Button>
-                <Button onClick={saveExam} className="gradient-primary text-primary-foreground gap-1.5"><Save size={14} /> Lưu</Button>
-              </DialogFooter>
-            </>
-          )}
+            {/* Step 2: Skill-specific form */}
+            {(editExam || examStep === "form") && (
+              <>
+                {!editExam && (
+                  <Button variant="ghost" size="sm" className="w-fit gap-1 text-xs text-muted-foreground -mt-2" onClick={() => setExamStep("skill")}>
+                    <ArrowLeft size={14} /> Chọn kỹ năng khác
+                  </Button>
+                )}
+                {renderSkillForm()}
+                <DialogFooter className="pt-4">
+                  <Button variant="outline" onClick={() => setExamDialog(false)}>Hủy</Button>
+                  <Button onClick={saveExam} className="gradient-primary text-primary-foreground gap-1.5"><Save size={14} /> Lưu</Button>
+                </DialogFooter>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
