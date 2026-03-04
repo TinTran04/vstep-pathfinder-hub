@@ -618,7 +618,7 @@ const OverviewTab = ({
 );
 
 /* ──────────────── REWARDS STORE TAB ──────────────── */
-const RewardsTab = ({ totalPoints, redeemedIds, setRedeemDialog }: any) => (
+const RewardsTab = ({ totalPoints, redeemedIds, monthlyRedeemCounts, setRedeemDialog }: any) => (
   <>
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Đổi phần thưởng 🎁</h1>
