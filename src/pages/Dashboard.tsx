@@ -644,21 +644,27 @@ const RewardsTab = ({ totalPoints, redeemedIds, monthlyRedeemCounts, setRedeemDi
     {/* Rewards grid */}
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {rewardsStore.map((reward, i) => {
-        const isRedeemed = redeemedIds.includes(reward.id);
+        const redeemCount = monthlyRedeemCounts[reward.id] || 0;
+        const isMaxed = redeemCount >= reward.monthlyLimit;
         const canAfford = totalPoints >= reward.cost;
         return (
           <motion.div key={reward.id}
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}>
-            <Card className={`border-border transition-all duration-300 hover:border-primary/30 ${isRedeemed ? "opacity-60" : "card-press"}`}>
+            <Card className={`border-border transition-all duration-300 hover:border-primary/30 ${isMaxed ? "opacity-60" : "card-press"}`}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <span className="text-3xl">{reward.emoji}</span>
-                  {isRedeemed && (
-                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">
-                      <Check size={12} className="mr-1" /> Đã đổi
+                  <div className="flex flex-col items-end gap-1">
+                    {isMaxed && (
+                      <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">
+                        Hết lượt tháng này
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px] flex items-center gap-1">
+                      <RotateCcw size={10} /> {redeemCount}/{reward.monthlyLimit} lượt/tháng
                     </Badge>
-                  )}
+                  </div>
                 </div>
                 <h3 className="font-bold text-foreground">{reward.name}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{reward.description}</p>
@@ -668,12 +674,12 @@ const RewardsTab = ({ totalPoints, redeemedIds, monthlyRedeemCounts, setRedeemDi
                   </span>
                   <Button
                     size="sm"
-                    variant={canAfford && !isRedeemed ? "default" : "outline"}
-                    disabled={isRedeemed}
-                    onClick={() => !isRedeemed && setRedeemDialog(reward)}
-                    className={canAfford && !isRedeemed ? "gradient-primary text-primary-foreground" : ""}
+                    variant={canAfford && !isMaxed ? "default" : "outline"}
+                    disabled={isMaxed}
+                    onClick={() => !isMaxed && setRedeemDialog(reward)}
+                    className={canAfford && !isMaxed ? "gradient-primary text-primary-foreground" : ""}
                   >
-                    {isRedeemed ? "Đã đổi" : canAfford ? "Đổi ngay" : "Chưa đủ điểm"}
+                    {isMaxed ? "Hết lượt" : canAfford ? "Đổi ngay" : "Chưa đủ điểm"}
                   </Button>
                 </div>
               </CardContent>
