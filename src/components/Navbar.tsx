@@ -20,7 +20,7 @@ const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const { isLoggedIn, user, login, logout } = useAuth();
+  const { isLoggedIn, user, logout } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -94,13 +94,15 @@ const Navbar = () => {
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                     <BarChart3 size={16} /> Dashboard
                   </Link>
+                  {user.role === "admin" && (
+                    <Link to="/admin" onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                      <Settings size={16} /> Quản trị Admin
+                    </Link>
+                  )}
                   <Link to="/dashboard" onClick={() => setUserMenuOpen(false)}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                     <ShoppingBag size={16} /> Đổi thưởng
-                  </Link>
-                  <Link to="/dashboard" onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                    <Settings size={16} /> Cài đặt
                   </Link>
                   <div className="border-t border-border mt-1 pt-1">
                     <button onClick={() => { logout(); setUserMenuOpen(false); }}
@@ -113,7 +115,9 @@ const Navbar = () => {
             </div>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={login}>Đăng nhập (Test)</Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/auth">Đăng nhập</Link>
+              </Button>
               <Button size="sm" className="gradient-primary text-primary-foreground font-semibold shadow-md hover:opacity-90 transition-opacity" asChild>
                 <Link to="/auth">Bắt đầu học</Link>
               </Button>
@@ -168,7 +172,9 @@ const Navbar = () => {
             </div>
           ) : (
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => { login(); setMobileOpen(false); }}>Đăng nhập (Test)</Button>
+              <Button variant="outline" size="sm" className="flex-1" asChild>
+                <Link to="/auth" onClick={() => setMobileOpen(false)}>Đăng nhập</Link>
+              </Button>
               <Button size="sm" className="flex-1 gradient-primary text-primary-foreground" asChild>
                 <Link to="/auth" onClick={() => setMobileOpen(false)}>Bắt đầu học</Link>
               </Button>

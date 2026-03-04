@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { login, register } = useAuth();
 
-  // Form state
   const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -33,19 +33,41 @@ const Auth = () => {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
+
     setTimeout(() => {
-      setLoading(false);
-      toast({
-        title: isLogin ? "Đăng nhập thành công!" : "Đăng ký thành công!",
-        description: isLogin ? "Chào mừng bạn quay trở lại." : "Tài khoản đã được tạo thành công.",
-      });
-      navigate("/dashboard");
-    }, 1200);
+      if (isLogin) {
+        const result = login(form.email, form.password);
+        setLoading(false);
+        if (result.success) {
+          toast.success("Đăng nhập thành công!");
+          // Check role from the auth context after login
+          // We need to determine redirect based on account type
+          const isAdmin = form.email.toLowerCase() === "admin@vsteppro.vn";
+          navigate(isAdmin ? "/admin" : "/dashboard");
+        } else {
+          setErrors({ password: result.error || "Đăng nhập thất bại" });
+        }
+      } else {
+        const result = register(form.name, form.email, form.password);
+        setLoading(false);
+        if (result.success) {
+          toast.success("Đăng ký thành công!");
+          navigate("/dashboard");
+        } else {
+          setErrors({ email: result.error || "Đăng ký thất bại" });
+        }
+      }
+    }, 800);
   };
 
   const update = (field: string, value: string) => {
     setForm((p) => ({ ...p, [field]: value }));
     if (errors[field]) setErrors((p) => ({ ...p, [field]: "" }));
+  };
+
+  const fillAccount = (email: string, password: string) => {
+    setForm((p) => ({ ...p, email, password }));
+    setErrors({});
   };
 
   return (
@@ -96,6 +118,51 @@ const Auth = () => {
               {isLogin ? "Chào mừng bạn quay trở lại VSTEPPro" : "Tạo tài khoản để bắt đầu hành trình VSTEP"}
             </p>
           </div>
+
+          {/* Demo accounts info */}
+          {isLogin && (
+            <div className="bg-muted/50 border border-border rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Info size={16} className="text-primary" />
+                Tài khoản demo
+              </div>
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => fillAccount("admin@vsteppro.vn", "admin123")}
+                  className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">👨‍💼 Admin</p>
+                    <p className="text-xs text-muted-foreground">admin@vsteppro.vn / admin123</p>
+                  </div>
+                  <span className="text-[10px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">Điền ngay →</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillAccount("user@vsteppro.vn", "user123")}
+                  className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">👩‍🎓 Học viên (Premium)</p>
+                    <p className="text-xs text-muted-foreground">user@vsteppro.vn / user123</p>
+                  </div>
+                  <span className="text-[10px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">Điền ngay →</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillAccount("hocvien@gmail.com", "123456")}
+                  className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">👤 Học viên (Free)</p>
+                    <p className="text-xs text-muted-foreground">hocvien@gmail.com / 123456</p>
+                  </div>
+                  <span className="text-[10px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">Điền ngay →</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
