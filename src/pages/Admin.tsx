@@ -83,6 +83,16 @@ const monthlyUsageData = [
   { name: "T3", users: 620 },
 ];
 
+// Subscription purchase data
+const subscriptionPurchaseData = [
+  { month: "T10", free: 12, weekly: 5, monthly: 8 },
+  { month: "T11", free: 15, weekly: 7, monthly: 12 },
+  { month: "T12", free: 18, weekly: 9, monthly: 15 },
+  { month: "T1", free: 22, weekly: 11, monthly: 18 },
+  { month: "T2", free: 28, weekly: 14, monthly: 22 },
+  { month: "T3", free: 35, weekly: 16, monthly: 28 },
+];
+
 const planDistData = [
   { name: "Miễn phí", value: 2, fill: "hsl(var(--muted-foreground))" },
   { name: "Gói Tuần", value: 1, fill: "hsl(210, 80%, 55%)" },
