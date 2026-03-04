@@ -61,18 +61,18 @@ const pointActions = [
   { action: "Mời bạn bè đăng ký", points: 100, icon: Gift },
 ];
 
-// Rewards store - from low to high
+// Rewards store - from low to high, with monthly limits
 const rewardsStore = [
-  { id: 1, name: "Badge 'Người mới'", description: "Huy hiệu hiển thị trên hồ sơ", cost: 50, icon: Award, category: "badge", emoji: "🏅" },
-  { id: 2, name: "1 đề thi Premium", description: "Mở khóa 1 đề thi nâng cao", cost: 100, icon: FileText, category: "test", emoji: "📝" },
-  { id: 3, name: "Badge 'Chăm chỉ'", description: "Huy hiệu học viên chăm chỉ", cost: 200, icon: Star, category: "badge", emoji: "⭐" },
-  { id: 4, name: "3 lượt chấm AI Writing", description: "Chấm bài viết bằng AI", cost: 300, icon: Sparkles, category: "ai", emoji: "🤖" },
-  { id: 5, name: "Giảm 10% gói Tháng", description: "Mã giảm giá cho gói Premium", cost: 500, icon: Ticket, category: "discount", emoji: "🎫" },
-  { id: 6, name: "1 tuần Premium miễn phí", description: "Trải nghiệm Premium 7 ngày", cost: 800, icon: Crown, category: "premium", emoji: "👑" },
-  { id: 7, name: "Badge 'Chiến binh VSTEP'", description: "Huy hiệu cực hiếm", cost: 1000, icon: Trophy, category: "badge", emoji: "🏆" },
-  { id: 8, name: "AI Writing không giới hạn (1 tháng)", description: "Chấm bài không giới hạn trong 30 ngày", cost: 1500, icon: Sparkles, category: "ai", emoji: "✨" },
-  { id: 9, name: "Giảm 30% gói Năm", description: "Mã giảm giá lớn cho gói Premium", cost: 2000, icon: CreditCard, category: "discount", emoji: "💳" },
-  { id: 10, name: "VIP Lifetime Badge", description: "Huy hiệu VIP vĩnh viễn trên hồ sơ", cost: 3000, icon: Crown, category: "badge", emoji: "💎" },
+  { id: 1, name: "Badge 'Người mới'", description: "Huy hiệu hiển thị trên hồ sơ", cost: 50, icon: Award, category: "badge", emoji: "🏅", monthlyLimit: 1 },
+  { id: 2, name: "1 đề thi Premium", description: "Mở khóa 1 đề thi nâng cao", cost: 100, icon: FileText, category: "test", emoji: "📝", monthlyLimit: 5 },
+  { id: 3, name: "Badge 'Chăm chỉ'", description: "Huy hiệu học viên chăm chỉ", cost: 200, icon: Star, category: "badge", emoji: "⭐", monthlyLimit: 1 },
+  { id: 4, name: "3 lượt chấm AI Writing", description: "Chấm bài viết bằng AI", cost: 300, icon: Sparkles, category: "ai", emoji: "🤖", monthlyLimit: 3 },
+  { id: 5, name: "Giảm 10% gói Tháng", description: "Mã giảm giá cho gói Premium", cost: 500, icon: Ticket, category: "discount", emoji: "🎫", monthlyLimit: 2 },
+  { id: 6, name: "1 tuần Premium miễn phí", description: "Trải nghiệm Premium 7 ngày", cost: 800, icon: Crown, category: "premium", emoji: "👑", monthlyLimit: 1 },
+  { id: 7, name: "Badge 'Chiến binh VSTEP'", description: "Huy hiệu cực hiếm", cost: 1000, icon: Trophy, category: "badge", emoji: "🏆", monthlyLimit: 1 },
+  { id: 8, name: "AI Writing không giới hạn (1 tháng)", description: "Chấm bài không giới hạn trong 30 ngày", cost: 1500, icon: Sparkles, category: "ai", emoji: "✨", monthlyLimit: 1 },
+  { id: 9, name: "Giảm 30% gói Năm", description: "Mã giảm giá lớn cho gói Premium", cost: 2000, icon: CreditCard, category: "discount", emoji: "💳", monthlyLimit: 1 },
+  { id: 10, name: "VIP Lifetime Badge", description: "Huy hiệu VIP vĩnh viễn trên hồ sơ", cost: 3000, icon: Crown, category: "badge", emoji: "💎", monthlyLimit: 1 },
 ];
 
 type TabType = "overview" | "rewards" | "settings";
