@@ -172,7 +172,9 @@ const Navbar = () => {
             </div>
           ) : (
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => { login(); setMobileOpen(false); }}>Đăng nhập (Test)</Button>
+              <Button variant="outline" size="sm" className="flex-1" asChild>
+                <Link to="/auth" onClick={() => setMobileOpen(false)}>Đăng nhập</Link>
+              </Button>
               <Button size="sm" className="flex-1 gradient-primary text-primary-foreground" asChild>
                 <Link to="/auth" onClick={() => setMobileOpen(false)}>Bắt đầu học</Link>
               </Button>
