@@ -4,6 +4,7 @@ import { Menu, X, ChevronDown, BarChart3, ShoppingBag, Settings, LogOut } from "
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
+import logoImg from "@/assets/logo.png";
 
 const navLinks = [
   { label: "Trang chủ", href: "#" },
@@ -44,9 +45,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 md:px-8 h-16 md:h-18">
         {/* Logo */}
         <a href="#" className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-extrabold text-lg">V</span>
-          </div>
+          <img src={logoImg} alt="VSTEPPro" className="w-9 h-9 rounded-xl object-contain" />
           <span className="font-bold text-xl text-foreground tracking-tight">VSTEP<span className="text-gradient">Pro</span></span>
         </a>
 
