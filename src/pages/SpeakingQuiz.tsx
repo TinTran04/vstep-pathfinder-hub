@@ -325,9 +325,8 @@ const SpeakingQuiz = () => {
         <div className="w-1/2 flex flex-col p-6 space-y-4">
           {/* Video area */}
           <div className="relative flex-1 bg-muted rounded-2xl overflow-hidden flex items-center justify-center min-h-[300px]">
-            {cameraOn ? (
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-            ) : (
+            <video ref={videoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${cameraOn ? '' : 'hidden'}`} />
+            {!cameraOn && (
               <div className="text-center text-muted-foreground">
                 <VideoOff size={48} className="mx-auto mb-2 opacity-50" />
                 <p className="text-sm">Camera đang tắt</p>
