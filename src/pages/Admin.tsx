@@ -144,12 +144,12 @@ const Admin = () => {
   const [priceForm, setPriceForm] = useState({ name: "", price: 0, period: "/tháng", features: "" });
 
   // User CRUD
-  const openAddUser = () => { setEditUser(null); setUserForm({ name: "", email: "", role: "student", status: "active" }); setUserDialog(true); };
-  const openEditUser = (u: User) => { setEditUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, status: u.status }); setUserDialog(true); };
+  const openAddUser = () => { setEditUser(null); setUserForm({ name: "", email: "", role: "student", status: "active", plan: "Miễn phí" }); setUserDialog(true); };
+  const openEditUser = (u: User) => { setEditUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, status: u.status, plan: u.plan }); setUserDialog(true); };
   const saveUser = () => {
     if (!userForm.name || !userForm.email) { toast.error("Vui lòng điền đầy đủ"); return; }
     if (editUser) { setUsers(p => p.map(u => u.id === editUser.id ? { ...u, ...userForm } : u)); toast.success("Cập nhật thành công"); }
-    else { setUsers(p => [...p, { id: Date.now().toString(), ...userForm, createdAt: new Date().toISOString().split("T")[0], examsCompleted: 0, plan: "Miễn phí", lastActive: "Vừa xong", points: 0, streak: 0 }]); toast.success("Thêm thành công"); }
+    else { setUsers(p => [...p, { id: Date.now().toString(), ...userForm, createdAt: new Date().toISOString().split("T")[0], examsCompleted: 0, lastActive: "Vừa xong", points: 0, streak: 0 }]); toast.success("Thêm thành công"); }
     setUserDialog(false);
   };
   const deleteUser = (id: string) => { setUsers(p => p.filter(u => u.id !== id)); toast.success("Xóa thành công"); };
