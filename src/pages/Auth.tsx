@@ -65,11 +65,6 @@ const Auth = () => {
     if (errors[field]) setErrors((p) => ({ ...p, [field]: "" }));
   };
 
-  const fillAccount = (email: string, password: string) => {
-    setForm((p) => ({ ...p, email, password }));
-    setErrors({});
-  };
-
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left panel - branding */}
