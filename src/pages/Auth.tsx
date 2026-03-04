@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Info } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,11 +65,6 @@ const Auth = () => {
     if (errors[field]) setErrors((p) => ({ ...p, [field]: "" }));
   };
 
-  const fillAccount = (email: string, password: string) => {
-    setForm((p) => ({ ...p, email, password }));
-    setErrors({});
-  };
-
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left panel - branding */}
@@ -119,50 +114,6 @@ const Auth = () => {
             </p>
           </div>
 
-          {/* Demo accounts info */}
-          {isLogin && (
-            <div className="bg-muted/50 border border-border rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Info size={16} className="text-primary" />
-                Tài khoản demo
-              </div>
-              <div className="grid gap-2">
-                <button
-                  type="button"
-                  onClick={() => fillAccount("admin@vsteppro.vn", "admin123")}
-                  className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">👨‍💼 Admin</p>
-                    <p className="text-xs text-muted-foreground">admin@vsteppro.vn / admin123</p>
-                  </div>
-                  <span className="text-[10px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">Điền ngay →</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillAccount("user@vsteppro.vn", "user123")}
-                  className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">👩‍🎓 Học viên (Premium)</p>
-                    <p className="text-xs text-muted-foreground">user@vsteppro.vn / user123</p>
-                  </div>
-                  <span className="text-[10px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">Điền ngay →</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillAccount("hocvien@gmail.com", "123456")}
-                  className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">👤 Học viên (Free)</p>
-                    <p className="text-xs text-muted-foreground">hocvien@gmail.com / 123456</p>
-                  </div>
-                  <span className="text-[10px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">Điền ngay →</span>
-                </button>
-              </div>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
