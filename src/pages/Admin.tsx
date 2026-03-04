@@ -1031,6 +1031,17 @@ const Admin = () => {
                 <Select value={userForm.status} onValueChange={v => setUserForm(p => ({ ...p, status: v as any }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Hoạt động</SelectItem><SelectItem value="inactive">Ngưng</SelectItem></SelectContent></Select>
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Gói sử dụng</Label>
+              <Select value={userForm.plan} onValueChange={v => setUserForm(p => ({ ...p, plan: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Miễn phí">Miễn phí (Free)</SelectItem>
+                  <SelectItem value="Gói Tuần">Gói Tuần (Premium)</SelectItem>
+                  <SelectItem value="Gói Tháng">Gói Tháng (Premium)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUserDialog(false)}>Hủy</Button>
