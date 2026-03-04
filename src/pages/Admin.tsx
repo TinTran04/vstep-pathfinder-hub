@@ -128,7 +128,7 @@ const Admin = () => {
 
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [userForm, setUserForm] = useState({ name: "", email: "", role: "student" as "admin" | "student", status: "active" as "active" | "inactive" });
+  const [userForm, setUserForm] = useState({ name: "", email: "", role: "student" as "admin" | "student", status: "active" as "active" | "inactive", plan: "Miễn phí" });
 
   // User detail view
   const [viewUser, setViewUser] = useState<User | null>(null);
