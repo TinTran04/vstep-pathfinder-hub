@@ -77,6 +77,13 @@ const SpeakingQuiz = () => {
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Attach stream to video element whenever it changes
+  useEffect(() => {
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraOn]);
+
   // Camera
   const toggleCamera = useCallback(async () => {
     if (cameraOn) {
@@ -87,7 +94,6 @@ const SpeakingQuiz = () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: micOn });
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
         setCameraOn(true);
       } catch { /* permission denied */ }
     }
