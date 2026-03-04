@@ -98,6 +98,7 @@ const Quiz = () => {
   const [skillView, setSkillView] = useState<SkillView>("exams");
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<QuizItem | null>(null);
+  const navigate = useNavigate();
   const { isLoggedIn, user, logout } = useAuth();
 
   const skillRoutes: Record<Skill, string> = {
