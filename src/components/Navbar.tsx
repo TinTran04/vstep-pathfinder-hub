@@ -115,7 +115,9 @@ const Navbar = () => {
             </div>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={login}>Đăng nhập (Test)</Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/auth">Đăng nhập</Link>
+              </Button>
               <Button size="sm" className="gradient-primary text-primary-foreground font-semibold shadow-md hover:opacity-90 transition-opacity" asChild>
                 <Link to="/auth">Bắt đầu học</Link>
               </Button>
