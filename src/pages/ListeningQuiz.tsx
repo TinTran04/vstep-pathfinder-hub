@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 
 interface Question {
   id: number; question: string; options: string[]; correct: number;
@@ -211,7 +211,7 @@ const ListeningQuiz = () => {
           </div>
 
           {/* Scrollable questions area */}
-          <ScrollArea className="flex-1">
+          <div className="flex-1 overflow-y-auto">
             <div className="p-5 space-y-4">
               {part.questions.map((q, i) => {
                 const globalIdx = partOffset + i + 1;
@@ -239,7 +239,7 @@ const ListeningQuiz = () => {
                 );
               })}
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Audio player at bottom */}
           <div className="border-t border-border bg-card px-5 py-3">
