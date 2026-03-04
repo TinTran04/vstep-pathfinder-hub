@@ -534,7 +534,52 @@ const Admin = () => {
                             />
                           </PieChart>
                         </ResponsiveContainer>
+                </div>
+
+                {/* Subscription purchase chart */}
+                <Card className="border-border hover:shadow-md transition-shadow duration-300">
+                  <CardHeader className="pb-2 px-5 pt-5">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <DollarSign size={16} className="text-primary" /> Thống kê mua gói theo tháng
+                      </CardTitle>
+                      <Badge variant="secondary" className="text-[10px]">6 tháng gần nhất</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-5 pb-5">
+                    <div className="h-52">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={subscriptionPurchaseData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <Tooltip
+                            contentStyle={{
+                              background: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                              fontSize: "12px",
+                            }}
+                          />
+                          <Bar dataKey="free" name="Miễn phí" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="weekly" name="Gói Tuần" fill="hsl(210, 80%, 55%)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="monthly" name="Gói Tháng" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-3 justify-center">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground" /> Miễn phí
                       </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: "hsl(210, 80%, 55%)" }} /> Gói Tuần
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="w-2.5 h-2.5 rounded-full bg-primary" /> Gói Tháng
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
                       <div className="flex flex-wrap gap-3 mt-2 justify-center">
                         {planDistData.map(p => (
                           <div key={p.name} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
