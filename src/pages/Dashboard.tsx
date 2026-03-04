@@ -4,8 +4,9 @@ import {
   BarChart3, BookOpen, Clock, TrendingUp, Award, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, FileText, Settings, User,
   Flame, Gift, Share2, Star, Zap, Trophy, Copy, Check, Camera, Mail, Lock,
-  ShoppingBag, Sparkles, Crown, Ticket, CreditCard,
+  ShoppingBag, Sparkles, Crown, Ticket, CreditCard, RotateCcw,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
