@@ -11,7 +11,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Quiz from "./pages/Quiz";
-import QuizTake from "./pages/QuizTake";
+
 import ListeningQuiz from "./pages/ListeningQuiz";
 import ReadingQuiz from "./pages/ReadingQuiz";
 import WritingQuiz from "./pages/WritingQuiz";
@@ -33,7 +33,7 @@ const AnimatedRoutes = () => {
         <Route path="/auth" element={<PageTransition><Auth /></PageTransition>} />
         <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
         <Route path="/quiz" element={<PageTransition><Quiz /></PageTransition>} />
-        <Route path="/quiz/:skill/:id" element={<PageTransition><QuizTake /></PageTransition>} />
+        
         <Route path="/quiz/listening/take" element={<PageTransition><ListeningQuiz /></PageTransition>} />
         <Route path="/quiz/reading/take" element={<PageTransition><ReadingQuiz /></PageTransition>} />
         <Route path="/quiz/writing/take" element={<PageTransition><WritingQuiz /></PageTransition>} />
