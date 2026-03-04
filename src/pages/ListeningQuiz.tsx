@@ -239,7 +239,7 @@ const ListeningQuiz = () => {
                 );
               })}
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Audio player at bottom */}
           <div className="border-t border-border bg-card px-5 py-3">
