@@ -211,7 +211,7 @@ const ListeningQuiz = () => {
           </div>
 
           {/* Scrollable questions area */}
-          <ScrollArea className="flex-1">
+          <div className="flex-1 overflow-y-auto">
             <div className="p-5 space-y-4">
               {part.questions.map((q, i) => {
                 const globalIdx = partOffset + i + 1;
