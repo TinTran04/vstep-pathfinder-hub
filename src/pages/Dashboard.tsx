@@ -131,10 +131,16 @@ const Dashboard = () => {
       toast.error("Bạn không đủ điểm để đổi phần thưởng này!");
       return;
     }
+    const currentCount = monthlyRedeemCounts[reward.id] || 0;
+    if (currentCount >= reward.monthlyLimit) {
+      toast.error(`Bạn đã đạt giới hạn ${reward.monthlyLimit} lượt/tháng cho phần thưởng này!`);
+      return;
+    }
     setTotalPoints((p) => p - reward.cost);
+    setMonthlyRedeemCounts(prev => ({ ...prev, [reward.id]: currentCount + 1 }));
     setRedeemedIds((prev) => [...prev, reward.id]);
     setRedeemDialog(null);
-    toast.success(`🎉 Đã đổi thành công: ${reward.name}!`);
+    toast.success(`🎉 Đã đổi thành công: ${reward.name}! (${currentCount + 1}/${reward.monthlyLimit} lượt tháng này)`);
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
