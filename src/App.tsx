@@ -11,7 +11,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Quiz from "./pages/Quiz";
-import QuizTake from "./pages/QuizTake";
+
 import ListeningQuiz from "./pages/ListeningQuiz";
 import ReadingQuiz from "./pages/ReadingQuiz";
 import WritingQuiz from "./pages/WritingQuiz";
