@@ -49,6 +49,10 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Reward colors */
+    --reward-gold: 45 93% 47%;
+    --reward-streak: 24 95% 53%;
   }
 
   .dark {
@@ -79,6 +83,8 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    --reward-gold: 45 93% 57%;
+    --reward-streak: 24 95% 63%;
   }
 }
 
@@ -90,6 +96,13 @@
   body {
     @apply bg-background text-foreground font-sans;
     font-family: 'Be Vietnam Pro', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Smooth scroll for anchor links */
+  html {
+    scroll-behavior: smooth;
   }
 }
 
@@ -116,5 +129,65 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* Micro-interactions */
+  .btn-bounce:active {
+    transform: scale(0.97);
+  }
+
+  /* Card press effect */
+  .card-press:active {
+    transform: scale(0.98) translateY(0);
+    transition-duration: 100ms;
+  }
+
+  /* Glow effect on focus */
+  .glow-focus:focus-within {
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.15);
+  }
+
+  /* Skeleton shimmer */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.08) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Streak fire animation */
+  @keyframes fire-pulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.1); filter: brightness(1.2); }
+  }
+  .animate-fire {
+    animation: fire-pulse 2s ease-in-out infinite;
+  }
+
+  /* Number counter animation */
+  @keyframes count-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-count {
+    animation: count-up 0.5s ease-out forwards;
+  }
+
+  /* Reward coin spin */
+  @keyframes coin-spin {
+    0% { transform: rotateY(0deg); }
+    100% { transform: rotateY(360deg); }
+  }
+  .animate-coin {
+    animation: coin-spin 0.6s ease-out;
   }
 }

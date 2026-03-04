@@ -2,7 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
+import SmoothScroll from "./components/SmoothScroll";
+import PageTransition from "./components/PageTransition";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -20,28 +23,39 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<PageTransition><Index /></PageTransition>} />
+        <Route path="/auth" element={<PageTransition><Auth /></PageTransition>} />
+        <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
+        <Route path="/quiz" element={<PageTransition><Quiz /></PageTransition>} />
+        <Route path="/quiz/:skill/:id" element={<PageTransition><QuizTake /></PageTransition>} />
+        <Route path="/quiz/listening/take" element={<PageTransition><ListeningQuiz /></PageTransition>} />
+        <Route path="/quiz/reading/take" element={<PageTransition><ReadingQuiz /></PageTransition>} />
+        <Route path="/quiz/writing/take" element={<PageTransition><WritingQuiz /></PageTransition>} />
+        <Route path="/quiz/speaking/take" element={<PageTransition><SpeakingQuiz /></PageTransition>} />
+        <Route path="/vstep-registration" element={<PageTransition><VstepRegistration /></PageTransition>} />
+        <Route path="/admin" element={<PageTransition><Admin /></PageTransition>} />
+        <Route path="/results" element={<PageTransition><Results /></PageTransition>} />
+        <Route path="/writing-samples" element={<PageTransition><WritingSamples /></PageTransition>} />
+        <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
+      </Routes>
+    </AnimatePresence>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/quiz" element={<Quiz />} />
-          <Route path="/quiz/:skill/:id" element={<QuizTake />} />
-          <Route path="/quiz/listening/take" element={<ListeningQuiz />} />
-          <Route path="/quiz/reading/take" element={<ReadingQuiz />} />
-          <Route path="/quiz/writing/take" element={<WritingQuiz />} />
-          <Route path="/quiz/speaking/take" element={<SpeakingQuiz />} />
-          <Route path="/vstep-registration" element={<VstepRegistration />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/results" element={<Results />} />
-          <Route path="/writing-samples" element={<WritingSamples />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <SmoothScroll>
+          <AnimatedRoutes />
+        </SmoothScroll>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
