@@ -299,6 +299,7 @@ const Dashboard = () => {
           {activeTab === "rewards" && <RewardsTab
             totalPoints={totalPoints}
             redeemedIds={redeemedIds}
+            monthlyRedeemCounts={monthlyRedeemCounts}
             setRedeemDialog={setRedeemDialog}
           />}
 
