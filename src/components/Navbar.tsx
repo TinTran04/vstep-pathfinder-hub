@@ -4,6 +4,7 @@ import { Menu, X, ChevronDown, BarChart3, ShoppingBag, Settings, LogOut } from "
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
+import logoImg from "@/assets/logo.png";
 
 const navLinks = [
   { label: "Trang chủ", href: "#" },
