@@ -538,19 +538,24 @@ const OverviewTab = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-3 h-40 mt-4">
-            {weeklyData.map((d: any, i: number) => (
-              <motion.div key={d.day} className="flex-1 flex flex-col items-center gap-2"
-                initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }}
-                transition={{ duration: 0.5, delay: 0.5 + i * 0.05 }} style={{ transformOrigin: "bottom" }}>
-                <span className="text-xs font-medium text-muted-foreground">{d.hours}h</span>
-                <div className="w-full bg-muted rounded-t-lg overflow-hidden" style={{ height: "100%" }}>
-                  <div className="w-full gradient-primary rounded-t-lg transition-all duration-500"
-                    style={{ height: `${(d.hours / maxHours) * 100}%`, marginTop: "auto" }} />
-                </div>
-                <span className="text-xs text-muted-foreground">{d.day}</span>
-              </motion.div>
-            ))}
+          <div className="h-48 mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="h" />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                  }}
+                  formatter={(value: number) => [`${value}h`, "Thời gian học"]}
+                />
+                <Bar dataKey="hours" name="Giờ học" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
