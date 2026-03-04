@@ -1052,7 +1052,7 @@ const Admin = () => {
 
       {/* Exam Dialog — Step-based */}
       <Dialog open={examDialog} onOpenChange={setExamDialog}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {editExam ? "Chỉnh sửa đề thi" : examStep === "skill" ? "Chọn kỹ năng" : `Thêm đề ${examForm.skill}`}
