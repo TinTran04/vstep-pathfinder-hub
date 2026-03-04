@@ -4,8 +4,9 @@ import {
   BarChart3, BookOpen, Clock, TrendingUp, Award, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, FileText, Settings, User,
   Flame, Gift, Share2, Star, Zap, Trophy, Copy, Check, Camera, Mail, Lock,
-  ShoppingBag, Sparkles, Crown, Ticket, CreditCard,
+  ShoppingBag, Sparkles, Crown, Ticket, CreditCard, RotateCcw,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,18 +61,18 @@ const pointActions = [
   { action: "Mời bạn bè đăng ký", points: 100, icon: Gift },
 ];
 
-// Rewards store - from low to high
+// Rewards store - from low to high, with monthly limits
 const rewardsStore = [
-  { id: 1, name: "Badge 'Người mới'", description: "Huy hiệu hiển thị trên hồ sơ", cost: 50, icon: Award, category: "badge", emoji: "🏅" },
-  { id: 2, name: "1 đề thi Premium", description: "Mở khóa 1 đề thi nâng cao", cost: 100, icon: FileText, category: "test", emoji: "📝" },
-  { id: 3, name: "Badge 'Chăm chỉ'", description: "Huy hiệu học viên chăm chỉ", cost: 200, icon: Star, category: "badge", emoji: "⭐" },
-  { id: 4, name: "3 lượt chấm AI Writing", description: "Chấm bài viết bằng AI", cost: 300, icon: Sparkles, category: "ai", emoji: "🤖" },
-  { id: 5, name: "Giảm 10% gói Tháng", description: "Mã giảm giá cho gói Premium", cost: 500, icon: Ticket, category: "discount", emoji: "🎫" },
-  { id: 6, name: "1 tuần Premium miễn phí", description: "Trải nghiệm Premium 7 ngày", cost: 800, icon: Crown, category: "premium", emoji: "👑" },
-  { id: 7, name: "Badge 'Chiến binh VSTEP'", description: "Huy hiệu cực hiếm", cost: 1000, icon: Trophy, category: "badge", emoji: "🏆" },
-  { id: 8, name: "AI Writing không giới hạn (1 tháng)", description: "Chấm bài không giới hạn trong 30 ngày", cost: 1500, icon: Sparkles, category: "ai", emoji: "✨" },
-  { id: 9, name: "Giảm 30% gói Năm", description: "Mã giảm giá lớn cho gói Premium", cost: 2000, icon: CreditCard, category: "discount", emoji: "💳" },
-  { id: 10, name: "VIP Lifetime Badge", description: "Huy hiệu VIP vĩnh viễn trên hồ sơ", cost: 3000, icon: Crown, category: "badge", emoji: "💎" },
+  { id: 1, name: "Badge 'Người mới'", description: "Huy hiệu hiển thị trên hồ sơ", cost: 50, icon: Award, category: "badge", emoji: "🏅", monthlyLimit: 1 },
+  { id: 2, name: "1 đề thi Premium", description: "Mở khóa 1 đề thi nâng cao", cost: 100, icon: FileText, category: "test", emoji: "📝", monthlyLimit: 5 },
+  { id: 3, name: "Badge 'Chăm chỉ'", description: "Huy hiệu học viên chăm chỉ", cost: 200, icon: Star, category: "badge", emoji: "⭐", monthlyLimit: 1 },
+  { id: 4, name: "3 lượt chấm AI Writing", description: "Chấm bài viết bằng AI", cost: 300, icon: Sparkles, category: "ai", emoji: "🤖", monthlyLimit: 3 },
+  { id: 5, name: "Giảm 10% gói Tháng", description: "Mã giảm giá cho gói Premium", cost: 500, icon: Ticket, category: "discount", emoji: "🎫", monthlyLimit: 2 },
+  { id: 6, name: "1 tuần Premium miễn phí", description: "Trải nghiệm Premium 7 ngày", cost: 800, icon: Crown, category: "premium", emoji: "👑", monthlyLimit: 1 },
+  { id: 7, name: "Badge 'Chiến binh VSTEP'", description: "Huy hiệu cực hiếm", cost: 1000, icon: Trophy, category: "badge", emoji: "🏆", monthlyLimit: 1 },
+  { id: 8, name: "AI Writing không giới hạn (1 tháng)", description: "Chấm bài không giới hạn trong 30 ngày", cost: 1500, icon: Sparkles, category: "ai", emoji: "✨", monthlyLimit: 1 },
+  { id: 9, name: "Giảm 30% gói Năm", description: "Mã giảm giá lớn cho gói Premium", cost: 2000, icon: CreditCard, category: "discount", emoji: "💳", monthlyLimit: 1 },
+  { id: 10, name: "VIP Lifetime Badge", description: "Huy hiệu VIP vĩnh viễn trên hồ sơ", cost: 3000, icon: Crown, category: "badge", emoji: "💎", monthlyLimit: 1 },
 ];
 
 type TabType = "overview" | "rewards" | "settings";
@@ -88,6 +89,8 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [redeemDialog, setRedeemDialog] = useState<typeof rewardsStore[0] | null>(null);
   const [redeemedIds, setRedeemedIds] = useState<number[]>([]);
+  // Track monthly redemption counts: { rewardId: count }
+  const [monthlyRedeemCounts, setMonthlyRedeemCounts] = useState<Record<number, number>>({});
 
   // Settings state
   const [settingsName, setSettingsName] = useState(user?.name ?? "Nguyễn Văn A");
@@ -128,10 +131,16 @@ const Dashboard = () => {
       toast.error("Bạn không đủ điểm để đổi phần thưởng này!");
       return;
     }
+    const currentCount = monthlyRedeemCounts[reward.id] || 0;
+    if (currentCount >= reward.monthlyLimit) {
+      toast.error(`Bạn đã đạt giới hạn ${reward.monthlyLimit} lượt/tháng cho phần thưởng này!`);
+      return;
+    }
     setTotalPoints((p) => p - reward.cost);
+    setMonthlyRedeemCounts(prev => ({ ...prev, [reward.id]: currentCount + 1 }));
     setRedeemedIds((prev) => [...prev, reward.id]);
     setRedeemDialog(null);
-    toast.success(`🎉 Đã đổi thành công: ${reward.name}!`);
+    toast.success(`🎉 Đã đổi thành công: ${reward.name}! (${currentCount + 1}/${reward.monthlyLimit} lượt tháng này)`);
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,6 +299,7 @@ const Dashboard = () => {
           {activeTab === "rewards" && <RewardsTab
             totalPoints={totalPoints}
             redeemedIds={redeemedIds}
+            monthlyRedeemCounts={monthlyRedeemCounts}
             setRedeemDialog={setRedeemDialog}
           />}
 
@@ -376,16 +386,27 @@ const Dashboard = () => {
                   {totalPoints} điểm
                 </span>
               </div>
+              <div className="bg-muted/50 rounded-xl p-4 flex items-center justify-between">
+                <span className="text-sm text-muted-foreground flex items-center gap-1"><RotateCcw size={14} /> Lượt đổi tháng này</span>
+                <span className="text-sm font-bold text-foreground">
+                  {monthlyRedeemCounts[redeemDialog.id] || 0}/{redeemDialog.monthlyLimit}
+                </span>
+              </div>
               {totalPoints < redeemDialog.cost && (
                 <p className="text-sm text-destructive text-center">
                   Bạn cần thêm <strong>{redeemDialog.cost - totalPoints}</strong> điểm nữa
+                </p>
+              )}
+              {(monthlyRedeemCounts[redeemDialog.id] || 0) >= redeemDialog.monthlyLimit && (
+                <p className="text-sm text-destructive text-center">
+                  Đã đạt giới hạn <strong>{redeemDialog.monthlyLimit} lượt/tháng</strong>
                 </p>
               )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setRedeemDialog(null)}>Hủy</Button>
                 <Button
                   onClick={() => handleRedeem(redeemDialog)}
-                  disabled={totalPoints < redeemDialog.cost}
+                  disabled={totalPoints < redeemDialog.cost || (monthlyRedeemCounts[redeemDialog.id] || 0) >= redeemDialog.monthlyLimit}
                   className="gradient-primary text-primary-foreground gap-1"
                 >
                   <ShoppingBag size={16} />
@@ -517,19 +538,24 @@ const OverviewTab = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-3 h-40 mt-4">
-            {weeklyData.map((d: any, i: number) => (
-              <motion.div key={d.day} className="flex-1 flex flex-col items-center gap-2"
-                initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }}
-                transition={{ duration: 0.5, delay: 0.5 + i * 0.05 }} style={{ transformOrigin: "bottom" }}>
-                <span className="text-xs font-medium text-muted-foreground">{d.hours}h</span>
-                <div className="w-full bg-muted rounded-t-lg overflow-hidden" style={{ height: "100%" }}>
-                  <div className="w-full gradient-primary rounded-t-lg transition-all duration-500"
-                    style={{ height: `${(d.hours / maxHours) * 100}%`, marginTop: "auto" }} />
-                </div>
-                <span className="text-xs text-muted-foreground">{d.day}</span>
-              </motion.div>
-            ))}
+          <div className="h-48 mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="h" />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                  }}
+                  formatter={(value: number) => [`${value}h`, "Thời gian học"]}
+                />
+                <Bar dataKey="hours" name="Giờ học" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
@@ -592,7 +618,7 @@ const OverviewTab = ({
 );
 
 /* ──────────────── REWARDS STORE TAB ──────────────── */
-const RewardsTab = ({ totalPoints, redeemedIds, setRedeemDialog }: any) => (
+const RewardsTab = ({ totalPoints, redeemedIds, monthlyRedeemCounts, setRedeemDialog }: any) => (
   <>
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Đổi phần thưởng 🎁</h1>
@@ -618,21 +644,27 @@ const RewardsTab = ({ totalPoints, redeemedIds, setRedeemDialog }: any) => (
     {/* Rewards grid */}
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {rewardsStore.map((reward, i) => {
-        const isRedeemed = redeemedIds.includes(reward.id);
+        const redeemCount = monthlyRedeemCounts[reward.id] || 0;
+        const isMaxed = redeemCount >= reward.monthlyLimit;
         const canAfford = totalPoints >= reward.cost;
         return (
           <motion.div key={reward.id}
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}>
-            <Card className={`border-border transition-all duration-300 hover:border-primary/30 ${isRedeemed ? "opacity-60" : "card-press"}`}>
+            <Card className={`border-border transition-all duration-300 hover:border-primary/30 ${isMaxed ? "opacity-60" : "card-press"}`}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <span className="text-3xl">{reward.emoji}</span>
-                  {isRedeemed && (
-                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">
-                      <Check size={12} className="mr-1" /> Đã đổi
+                  <div className="flex flex-col items-end gap-1">
+                    {isMaxed && (
+                      <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">
+                        Hết lượt tháng này
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px] flex items-center gap-1">
+                      <RotateCcw size={10} /> {redeemCount}/{reward.monthlyLimit} lượt/tháng
                     </Badge>
-                  )}
+                  </div>
                 </div>
                 <h3 className="font-bold text-foreground">{reward.name}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{reward.description}</p>
@@ -642,12 +674,12 @@ const RewardsTab = ({ totalPoints, redeemedIds, setRedeemDialog }: any) => (
                   </span>
                   <Button
                     size="sm"
-                    variant={canAfford && !isRedeemed ? "default" : "outline"}
-                    disabled={isRedeemed}
-                    onClick={() => !isRedeemed && setRedeemDialog(reward)}
-                    className={canAfford && !isRedeemed ? "gradient-primary text-primary-foreground" : ""}
+                    variant={canAfford && !isMaxed ? "default" : "outline"}
+                    disabled={isMaxed}
+                    onClick={() => !isMaxed && setRedeemDialog(reward)}
+                    className={canAfford && !isMaxed ? "gradient-primary text-primary-foreground" : ""}
                   >
-                    {isRedeemed ? "Đã đổi" : canAfford ? "Đổi ngay" : "Chưa đủ điểm"}
+                    {isMaxed ? "Hết lượt" : canAfford ? "Đổi ngay" : "Chưa đủ điểm"}
                   </Button>
                 </div>
               </CardContent>

@@ -83,6 +83,16 @@ const monthlyUsageData = [
   { name: "T3", users: 620 },
 ];
 
+// Subscription purchase data
+const subscriptionPurchaseData = [
+  { month: "T10", free: 12, weekly: 5, monthly: 8 },
+  { month: "T11", free: 15, weekly: 7, monthly: 12 },
+  { month: "T12", free: 18, weekly: 9, monthly: 15 },
+  { month: "T1", free: 22, weekly: 11, monthly: 18 },
+  { month: "T2", free: 28, weekly: 14, monthly: 22 },
+  { month: "T3", free: 35, weekly: 16, monthly: 28 },
+];
+
 const planDistData = [
   { name: "Miễn phí", value: 2, fill: "hsl(var(--muted-foreground))" },
   { name: "Gói Tuần", value: 1, fill: "hsl(210, 80%, 55%)" },
@@ -118,7 +128,7 @@ const Admin = () => {
 
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [userForm, setUserForm] = useState({ name: "", email: "", role: "student" as "admin" | "student", status: "active" as "active" | "inactive" });
+  const [userForm, setUserForm] = useState({ name: "", email: "", role: "student" as "admin" | "student", status: "active" as "active" | "inactive", plan: "Miễn phí" });
 
   // User detail view
   const [viewUser, setViewUser] = useState<User | null>(null);
@@ -134,12 +144,12 @@ const Admin = () => {
   const [priceForm, setPriceForm] = useState({ name: "", price: 0, period: "/tháng", features: "" });
 
   // User CRUD
-  const openAddUser = () => { setEditUser(null); setUserForm({ name: "", email: "", role: "student", status: "active" }); setUserDialog(true); };
-  const openEditUser = (u: User) => { setEditUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, status: u.status }); setUserDialog(true); };
+  const openAddUser = () => { setEditUser(null); setUserForm({ name: "", email: "", role: "student", status: "active", plan: "Miễn phí" }); setUserDialog(true); };
+  const openEditUser = (u: User) => { setEditUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, status: u.status, plan: u.plan }); setUserDialog(true); };
   const saveUser = () => {
     if (!userForm.name || !userForm.email) { toast.error("Vui lòng điền đầy đủ"); return; }
     if (editUser) { setUsers(p => p.map(u => u.id === editUser.id ? { ...u, ...userForm } : u)); toast.success("Cập nhật thành công"); }
-    else { setUsers(p => [...p, { id: Date.now().toString(), ...userForm, createdAt: new Date().toISOString().split("T")[0], examsCompleted: 0, plan: "Miễn phí", lastActive: "Vừa xong", points: 0, streak: 0 }]); toast.success("Thêm thành công"); }
+    else { setUsers(p => [...p, { id: Date.now().toString(), ...userForm, createdAt: new Date().toISOString().split("T")[0], examsCompleted: 0, lastActive: "Vừa xong", points: 0, streak: 0 }]); toast.success("Thêm thành công"); }
     setUserDialog(false);
   };
   const deleteUser = (id: string) => { setUsers(p => p.filter(u => u.id !== id)); toast.success("Xóa thành công"); };
@@ -524,7 +534,52 @@ const Admin = () => {
                             />
                           </PieChart>
                         </ResponsiveContainer>
+                </div>
+
+                {/* Subscription purchase chart */}
+                <Card className="border-border hover:shadow-md transition-shadow duration-300">
+                  <CardHeader className="pb-2 px-5 pt-5">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <DollarSign size={16} className="text-primary" /> Thống kê mua gói theo tháng
+                      </CardTitle>
+                      <Badge variant="secondary" className="text-[10px]">6 tháng gần nhất</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-5 pb-5">
+                    <div className="h-52">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={subscriptionPurchaseData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <Tooltip
+                            contentStyle={{
+                              background: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                              fontSize: "12px",
+                            }}
+                          />
+                          <Bar dataKey="free" name="Miễn phí" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="weekly" name="Gói Tuần" fill="hsl(210, 80%, 55%)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="monthly" name="Gói Tháng" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-3 justify-center">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground" /> Miễn phí
                       </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: "hsl(210, 80%, 55%)" }} /> Gói Tuần
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="w-2.5 h-2.5 rounded-full bg-primary" /> Gói Tháng
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
                       <div className="flex flex-wrap gap-3 mt-2 justify-center">
                         {planDistData.map(p => (
                           <div key={p.name} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -975,6 +1030,17 @@ const Admin = () => {
               <div className="space-y-1.5"><Label className="text-xs">Trạng thái</Label>
                 <Select value={userForm.status} onValueChange={v => setUserForm(p => ({ ...p, status: v as any }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Hoạt động</SelectItem><SelectItem value="inactive">Ngưng</SelectItem></SelectContent></Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Gói sử dụng</Label>
+              <Select value={userForm.plan} onValueChange={v => setUserForm(p => ({ ...p, plan: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Miễn phí">Miễn phí (Free)</SelectItem>
+                  <SelectItem value="Gói Tuần">Gói Tuần (Premium)</SelectItem>
+                  <SelectItem value="Gói Tháng">Gói Tháng (Premium)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
