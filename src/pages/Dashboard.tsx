@@ -386,16 +386,27 @@ const Dashboard = () => {
                   {totalPoints} điểm
                 </span>
               </div>
+              <div className="bg-muted/50 rounded-xl p-4 flex items-center justify-between">
+                <span className="text-sm text-muted-foreground flex items-center gap-1"><RotateCcw size={14} /> Lượt đổi tháng này</span>
+                <span className="text-sm font-bold text-foreground">
+                  {monthlyRedeemCounts[redeemDialog.id] || 0}/{redeemDialog.monthlyLimit}
+                </span>
+              </div>
               {totalPoints < redeemDialog.cost && (
                 <p className="text-sm text-destructive text-center">
                   Bạn cần thêm <strong>{redeemDialog.cost - totalPoints}</strong> điểm nữa
+                </p>
+              )}
+              {(monthlyRedeemCounts[redeemDialog.id] || 0) >= redeemDialog.monthlyLimit && (
+                <p className="text-sm text-destructive text-center">
+                  Đã đạt giới hạn <strong>{redeemDialog.monthlyLimit} lượt/tháng</strong>
                 </p>
               )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setRedeemDialog(null)}>Hủy</Button>
                 <Button
                   onClick={() => handleRedeem(redeemDialog)}
-                  disabled={totalPoints < redeemDialog.cost}
+                  disabled={totalPoints < redeemDialog.cost || (monthlyRedeemCounts[redeemDialog.id] || 0) >= redeemDialog.monthlyLimit}
                   className="gradient-primary text-primary-foreground gap-1"
                 >
                   <ShoppingBag size={16} />
