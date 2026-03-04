@@ -98,7 +98,7 @@ const Quiz = () => {
   const [skillView, setSkillView] = useState<SkillView>("exams");
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<QuizItem | null>(null);
-  const navigate = useNavigate();
+  const { isLoggedIn, user, logout } = useAuth();
 
   const skillRoutes: Record<Skill, string> = {
     listening: "/quiz/listening/take",
@@ -106,6 +106,13 @@ const Quiz = () => {
     writing: "/quiz/writing/take",
     speaking: "/quiz/speaking/take",
   };
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!isLoggedIn) {
+      navigate("/auth");
+    }
+  }, [isLoggedIn, navigate]);
 
   const handleStartQuiz = (q: QuizItem) => {
     setSelectedQuiz(q);
@@ -119,15 +126,15 @@ const Quiz = () => {
     setConfirmDialog(false);
   };
 
+  if (!isLoggedIn || !user) return null;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-40">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 md:px-8 h-16">
           <div className="flex items-center gap-4">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">V</span>
-              </div>
+              <img src={logoImg} alt="VSTEPPro" className="w-8 h-8 rounded-lg object-contain" />
               <span className="font-bold text-lg text-foreground">VSTEP<span className="text-gradient">Pro</span></span>
             </Link>
             {selectedSkill && (
@@ -138,7 +145,17 @@ const Quiz = () => {
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>Dashboard</Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/auth")}>Đăng nhập</Button>
+            <div className="flex items-center gap-2">
+              <Avatar className="w-8 h-8">
+                <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
+                  {user.name.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium text-foreground hidden sm:inline">{user.name}</span>
+            </div>
+            <Button variant="ghost" size="icon" onClick={logout} className="text-muted-foreground hover:text-destructive">
+              <LogOut size={18} />
+            </Button>
           </div>
         </div>
       </header>
