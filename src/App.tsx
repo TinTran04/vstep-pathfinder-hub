@@ -6,21 +6,25 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import SmoothScroll from "./components/SmoothScroll";
 import PageTransition from "./components/PageTransition";
-import { AuthProvider } from "./hooks/useAuth";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Quiz from "./pages/Quiz";
+import { AuthProvider } from "@/features/auth/hooks/useAuth";
+import Index from "@/features/landing/pages/Index";
+import Auth from "@/features/auth/pages/Auth";
+import Dashboard from "@/features/dashboard/pages/Dashboard";
+import Quiz from "@/features/quiz/pages/Quiz";
 
-import ListeningQuiz from "./pages/ListeningQuiz";
-import ReadingQuiz from "./pages/ReadingQuiz";
-import WritingQuiz from "./pages/WritingQuiz";
-import SpeakingQuiz from "./pages/SpeakingQuiz";
-import VstepRegistration from "./pages/VstepRegistration";
-import Admin from "./pages/Admin";
-import Results from "./pages/Results";
-import WritingSamples from "./pages/WritingSamples";
-import NotFound from "./pages/NotFound";
+import ListeningQuiz from "@/features/quiz/listening/pages/ListeningQuiz";
+import ReadingQuiz from "@/features/quiz/reading/pages/ReadingQuiz";
+import WritingQuiz from "@/features/quiz/writing/pages/WritingQuiz";
+import SpeakingQuiz from "@/features/quiz/speaking/pages/SpeakingQuiz";
+import VstepRegistration from "@/features/registration/pages/VstepRegistration";
+import Admin from "@/features/admin/pages/Admin";
+import Results from "@/features/quiz/pages/Results";
+import WritingSamples from "@/features/quiz/writing/pages/WritingSamples";
+import MockTestLanding from "@/features/attempts/pages/MockTestLanding";
+import AttemptReview from "@/features/attempts/pages/AttemptReview";
+import AttemptResult from "@/features/attempts/pages/AttemptResult";
+import MockTestReviewRedirect from "@/features/attempts/components/MockTestReviewRedirect";
+import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +46,10 @@ const AnimatedRoutes = () => {
         <Route path="/admin" element={<PageTransition><Admin /></PageTransition>} />
         <Route path="/results" element={<PageTransition><Results /></PageTransition>} />
         <Route path="/writing-samples" element={<PageTransition><WritingSamples /></PageTransition>} />
+        <Route path="/mock-test" element={<PageTransition><MockTestLanding /></PageTransition>} />
+        <Route path="/attempts/:attemptId/result" element={<PageTransition><AttemptResult /></PageTransition>} />
+        <Route path="/attempts/:attemptId/review" element={<PageTransition><AttemptReview /></PageTransition>} />
+        <Route path="/mock-test/review" element={<PageTransition><MockTestReviewRedirect /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>

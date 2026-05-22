@@ -90,6 +90,8 @@
 | **Recharts** | Biểu đồ & data visualization |
 | **React Hook Form + Zod** | Form management & validation |
 | **Vitest** | Unit testing |
+| **Framer Motion** | Animation & Page transitions |
+| **Lenis** | Smooth scrolling |
 | **Be Vietnam Pro** | Font chữ chính (Google Fonts) |
 
 ---
@@ -102,6 +104,10 @@ src/
 ├── components/
 │   ├── ui/                  # shadcn/ui components (button, card, dialog, ...)
 │   ├── AnnotatedText.tsx    # Component bôi màu lỗi Writing (AI feedback)
+│   ├── SmoothScroll.tsx     # Cuộn trang mượt mà (Lenis)
+│   ├── PageTransition.tsx   # Hiệu ứng chuyển trang (Framer Motion)
+│   ├── ScrollReveal.tsx     # Hiệu ứng xuất hiện khi cuộn (Framer Motion)
+│   ├── StaggerChildren.tsx  # Hiệu ứng xuất hiện tuần tự
 │   ├── Navbar.tsx           # Navigation bar chính
 │   ├── HeroSection.tsx      # Hero section trang chủ
 │   ├── VstepOverview.tsx    # Giới thiệu VSTEP
