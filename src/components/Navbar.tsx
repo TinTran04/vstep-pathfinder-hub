@@ -3,10 +3,16 @@ import { Link } from "react-router-dom";
 import { Menu, X, ChevronDown, BarChart3, ShoppingBag, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import logoImg from "@/assets/logo.png";
 
-const navLinks = [
+interface NavLink {
+  label: string;
+  href: string;
+  isRoute?: boolean;
+}
+
+const navLinks: NavLink[] = [
   { label: "Trang chủ", href: "#" },
   { label: "Giới thiệu VSTEP", href: "#vstep-overview" },
   { label: "Practice", href: "/quiz", isRoute: true },
@@ -52,7 +58,7 @@ const Navbar = () => {
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-1">
           {navLinks.map((l) =>
-            (l as any).isRoute ? (
+            l.isRoute ? (
               <Link key={l.label} to={l.href}
                 className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted">
                 {l.label}
@@ -135,7 +141,7 @@ const Navbar = () => {
       {mobileOpen && (
         <div className="lg:hidden bg-card border-t border-border px-4 pb-4 space-y-2">
           {navLinks.map((l) =>
-            (l as any).isRoute ? (
+            l.isRoute ? (
               <Link key={l.label} to={l.href}
                 className="block px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
                 onClick={() => setMobileOpen(false)}>
