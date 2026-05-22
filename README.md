@@ -99,50 +99,29 @@
 ## Cấu trúc dự án
 
 ```
-src/
-├── assets/                  # Hình ảnh tĩnh (hero dashboard, etc.)
-├── components/
-│   ├── ui/                  # shadcn/ui components (button, card, dialog, ...)
-│   ├── AnnotatedText.tsx    # Component bôi màu lỗi Writing (AI feedback)
-│   ├── SmoothScroll.tsx     # Cuộn trang mượt mà (Lenis)
-│   ├── PageTransition.tsx   # Hiệu ứng chuyển trang (Framer Motion)
-│   ├── ScrollReveal.tsx     # Hiệu ứng xuất hiện khi cuộn (Framer Motion)
-│   ├── StaggerChildren.tsx  # Hiệu ứng xuất hiện tuần tự
-│   ├── Navbar.tsx           # Navigation bar chính
-│   ├── HeroSection.tsx      # Hero section trang chủ
-│   ├── VstepOverview.tsx    # Giới thiệu VSTEP
-│   ├── BenefitsSection.tsx  # Lợi ích sử dụng
-│   ├── SkillsSection.tsx    # 4 kỹ năng VSTEP
-│   ├── LearningJourney.tsx  # Lộ trình học tập
-│   ├── ExamSection.tsx      # Đề thi mô phỏng
-│   ├── DashboardSection.tsx # Preview dashboard
-│   ├── TestimonialSection.tsx # Đánh giá học viên
-│   ├── PricingSection.tsx   # Bảng giá
-│   ├── CTASection.tsx       # Call-to-action
-│   └── FooterSection.tsx    # Footer
-├── hooks/
-│   ├── use-mobile.tsx       # Detect mobile viewport
-│   └── use-toast.ts         # Toast notification hook
-├── lib/
-│   └── utils.ts             # Utility functions (cn helper)
-├── pages/
-│   ├── Index.tsx            # Landing page (trang chủ)
-│   ├── Auth.tsx             # Đăng nhập / Đăng ký
-│   ├── Dashboard.tsx        # Dashboard cá nhân
-│   ├── Quiz.tsx             # Trang chọn kỹ năng & đề thi
-│   ├── QuizTake.tsx         # Trang làm bài quiz chung
-│   ├── ListeningQuiz.tsx    # Làm bài Listening (3 Parts, trắc nghiệm)
-│   ├── ReadingQuiz.tsx      # Làm bài Reading (4 Passages, split-screen)
-│   ├── WritingQuiz.tsx      # Làm bài Writing (2 Tasks, chấm AI)
-│   ├── SpeakingQuiz.tsx     # Làm bài Speaking (3 Parts, ghi âm + AI)
-│   ├── WritingSamples.tsx   # Bài mẫu Writing band 8+
-│   ├── VstepRegistration.tsx # Lịch thi & đăng ký
-│   ├── Admin.tsx            # Trang quản trị
-│   ├── Results.tsx          # Kết quả & testimonials học viên
-│   └── NotFound.tsx         # Trang 404
-├── App.tsx                  # Root component & routing
-├── main.tsx                 # Entry point
-└── index.css                # Design tokens & global styles
+vstep-pathfinder-hub/
+├── src/
+│   ├── assets/             # Tài nguyên hình ảnh tĩnh
+│   ├── components/         # Component UI tái sử dụng toàn cục
+│   │   ├── ui/             # Thư viện component của shadcn/ui
+│   │   ├── PageTransition.tsx  # Hiệu ứng chuyển trang mượt mà
+│   │   ├── SmoothScroll.tsx    # Cuộn mượt mà sử dụng Lenis
+│   │   └── StaggerChildren.tsx # Hiệu ứng xuất hiện tuần tự
+│   ├── features/           # Kiến trúc chia nhỏ theo Module/Feature
+│   │   ├── auth/           # Xác thực & Phân quyền đăng nhập
+│   │   ├── dashboard/      # Dashboard tiến độ cá nhân & Đổi thưởng
+│   │   ├── admin/          # Quản lý danh sách học viên & Đề thi
+│   │   ├── registration/   # Tra cứu lịch thi & Đăng ký VietQR
+│   │   ├── landing/        # Các section chính trên Landing Page
+│   │   ├── quiz/           # Trắc nghiệm, chấm Writing & Speaking AI
+│   │   └── attempts/       # Lượt thi, Review chi tiết & Transition [NEW]
+│   ├── hooks/              # Custom React Hooks
+│   ├── lib/                # Config & Utilities chung
+│   ├── pages/              # Các trang tiện ích (NotFound, ...)
+│   ├── services/           # Service nền tảng & apiClient Backend-Ready [NEW]
+│   ├── App.tsx             # Định nghĩa cấu trúc Routes chính
+│   ├── main.tsx            # Điểm khởi chạy của dự án
+│   └── index.css           # Global CSS & Design system Tokens
 ```
 
 ---
@@ -151,20 +130,23 @@ src/
 
 | Route | Trang | Mô tả |
 |---|---|---|
-| `/` | Index | Landing page với hero, giới thiệu, pricing, testimonials |
-| `/auth` | Auth | Đăng nhập / Đăng ký (toggle) |
-| `/dashboard` | Dashboard | Dashboard cá nhân hóa với biểu đồ tiến độ |
-| `/quiz` | Quiz | Chọn kỹ năng (L/R/W/S) & đề thi, xem tổng quan hoặc danh sách đề |
-| `/quiz/:skill/:id` | QuizTake | Làm bài quiz cụ thể |
-| `/quiz/listening/take` | ListeningQuiz | Làm bài Listening mô phỏng VSTEP |
-| `/quiz/reading/take` | ReadingQuiz | Làm bài Reading mô phỏng VSTEP |
-| `/quiz/writing/take` | WritingQuiz | Làm bài Writing + chấm điểm AI |
-| `/quiz/speaking/take` | SpeakingQuiz | Làm bài Speaking + ghi âm + AI |
-| `/writing-samples` | WritingSamples | Bài mẫu Writing Task 1 & 2 (B1/B2) |
-| `/vstep-registration` | VstepRegistration | Lịch thi VSTEP & đăng ký |
-| `/admin` | Admin | Trang quản trị (users, đề thi, thống kê) |
-| `/results` | Results | Bảng xếp hạng & đánh giá học viên |
-| `*` | NotFound | Trang 404 |
+| `/` | Index | Landing page chính |
+| `/auth` | Auth | Đăng nhập & Đăng ký tài khoản |
+| `/dashboard` | Dashboard | Dashboard cá nhân hóa, streak & cửa hàng quà tặng |
+| `/quiz` | Quiz | Lựa chọn kỹ năng (L/R/W/S) & chế độ làm bài (Luyện tập / Thi thử) |
+| `/mock-test` | MockTestLanding | [NEW] Landing page thi thử toàn diện VSTEP |
+| `/quiz/listening/take` | ListeningQuiz | Giao diện thi Listening (chốt chặn tua/pause trong Thi thử) |
+| `/quiz/reading/take` | ReadingQuiz | Giao diện thi Reading song song |
+| `/quiz/writing/take` | WritingQuiz | Giao diện thi Writing kèm bộ đếm từ & chấm điểm AI |
+| `/quiz/speaking/take` | SpeakingQuiz | Giao diện thi Speaking ghi âm & AI feedback |
+| `/attempts/:attemptId/result` | AttemptResult | [NEW] Bảng điểm kết quả bài làm tổng quan, xếp band VSTEP |
+| `/attempts/:attemptId/review` | AttemptReview | [NEW] Xem lại đáp án đúng, giải thích & transcript bài làm |
+| `/mock-test/review` | MockTestReviewRedirect | [NEW] Redirect tương thích ngược về kết quả bài làm gần nhất |
+| `/vstep-registration` | VstepRegistration | Lịch thi VSTEP trên toàn quốc & QR thanh toán |
+| `/admin` | Admin | Quản trị học viên & Đề thi (Step-based forms) |
+| `/results` | Results | Trang xếp hạng điểm số & đánh giá học viên |
+| `/writing-samples` | WritingSamples | Kho bài viết mẫu band 8+ tham khảo |
+| `*` | NotFound | Trang báo lỗi 404 |
 
 ---
 
@@ -290,6 +272,20 @@ bun run dev
 ```
 
 Mở trình duyệt tại `http://localhost:8080`
+
+### ⚙️ Cấu hình Môi trường (Environment Variables)
+
+Ứng dụng hỗ trợ chuyển đổi linh hoạt giữa dữ liệu **Mock** (chạy không cần Backend) và dữ liệu **API thật** bằng cách cấu hình các tệp `.env.local` hoặc `.env.production`:
+
+```bash
+# Nguồn dữ liệu sử dụng: "mock" hoặc "api" (mặc định là "mock")
+VITE_DATA_SOURCE=mock
+
+# Base URL của Backend API (khi cấu hình VITE_DATA_SOURCE=api)
+VITE_API_BASE_URL=https://api.vsteppro.edu.vn/api/v1
+```
+
+*Để có thêm hướng dẫn kết nối API và thứ tự ưu tiên tích hợp Backend, vui lòng tham khảo [Frontend Backend-Ready Guide](docs/FRONTEND_BACKEND_READY.md).*
 
 ---
 

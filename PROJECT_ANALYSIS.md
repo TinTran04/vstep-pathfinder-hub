@@ -290,6 +290,12 @@ sequenceDiagram
 - **Tối ưu hóa hiển thị Mobile**: Thiết kế lại khung split-screen của màn Reading và Writing trên thiết bị di động (ví dụ: chuyển từ dạng chia đôi trái-phải sang tab vuốt ngang tiện lợi).
 - **Hệ thống Bảng xếp hạng (Leaderboards) & Thi đấu trực tuyến (Arena)**: Cho phép thi thử trực tuyến cùng lúc với hàng trăm học viên khác để tạo cảm giác trường thi chân thực nhất.
 
+### 5.6. Tiêu chuẩn hóa Chất lượng Mã nguồn (Code Quality Standard)
+Để đảm bảo dự án có khả năng mở rộng (scalability) và dễ dàng bảo trì bởi đội ngũ lập trình viên đông đảo khi kết nối Backend:
+- **TypeScript Strong Typing**: Loại bỏ hoàn toàn sự lạm dụng của kiểu dữ liệu lỏng lẻo (`any`), thay thế bằng các interfaces và type alias tường minh cho toàn bộ luồng đăng ký lịch thi, dashboard, attempts, và admin quản trị.
+- **Tuân thủ ESLint**: Cấu hình và vượt qua 100% các tiêu chí kiểm tra nghiêm ngặt của ESLint trên toàn bộ thư mục `src/`, đạt trạng thái **0 errors** trên toàn hệ thống.
+- **Quy chuẩn Đóng gói (Build Validation)**: Thiết lập quy trình build tự động, đảm bảo biên dịch thành công 100% ở cả chế độ Mock (chạy độc lập) và API Mode (kết nối máy chủ thật).
+
 ---
 
 Báo cáo phân tích trên tổng hợp đầy đủ cấu trúc hiện hữu của dự án **VSTEPPro**, đề ra các Use Cases cốt lõi cần quản lý và vạch ra lộ trình công nghệ vững chắc giúp phát triển dự án thành hệ thống thực tế hoàn chỉnh.
