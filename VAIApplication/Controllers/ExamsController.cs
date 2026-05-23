@@ -105,7 +105,7 @@ public class ExamsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> ImportReadingDocx([FromForm] IFormFile file, [FromForm] bool isPublished = false)
+    public async Task<IActionResult> ImportReadingDocx(IFormFile file, [FromForm] bool isPublished = false)
     {
         if (file is null || file.Length == 0)
         {
