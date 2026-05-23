@@ -15,7 +15,7 @@ public class ReadingExamImportService : IReadingExamImportService
     private static readonly Regex DurationRegex = new(@"Time\s+permitted\s*:\s*(\d+)\s*minutes?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PassageRegex = new(@"^\s*PASSAGE\s+(\d+)\b.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex QuestionRegex = new(@"^\s*(\d{1,3})\s*[\.\)]\s+(.+)$", RegexOptions.Compiled);
-    private static readonly Regex OptionRegex = new(@"^\s*([A-Da-d])\s*[\.\)]\s+(.+)$", RegexOptions.Compiled);
+    private static readonly Regex OptionMarkerRegex = new(@"([A-Da-d])[\.\)]\s*", RegexOptions.Compiled);
     private static readonly Regex AnswerRegex = new(@"(?:^|\s)(\d{1,3})\s*[\.\):\-]\s*([A-Da-d])\b", RegexOptions.Compiled);
     private static readonly string[] ExpectedOptionLabels = ["A", "B", "C", "D"];
 
@@ -184,50 +184,161 @@ public class ReadingExamImportService : IReadingExamImportService
     {
         var questions = new List<ParsedQuestion>();
         ParsedQuestion? currentQuestion = null;
-        ParsedOption? currentOption = null;
+        string? currentOptionLabel = null;
 
         foreach (var line in lines)
         {
             var questionMatch = QuestionRegex.Match(line);
             if (questionMatch.Success)
             {
-                FlushOption(currentQuestion, ref currentOption);
                 FlushQuestion(questions, ref currentQuestion);
 
                 currentQuestion = new ParsedQuestion
                 {
                     Number = int.Parse(questionMatch.Groups[1].Value)
                 };
-                currentQuestion.QuestionTextLines.Add(questionMatch.Groups[2].Value.Trim());
+
+                AddQuestionTextAndOptions(currentQuestion, questionMatch.Groups[2].Value.Trim(), ref currentOptionLabel, warnings, sectionNumber);
                 continue;
             }
 
-            var optionMatch = OptionRegex.Match(line);
-            if (optionMatch.Success && currentQuestion is not null)
+            if (currentQuestion is not null)
             {
-                FlushOption(currentQuestion, ref currentOption);
-                currentOption = new ParsedOption
+                var optionSegments = SplitOptionSegments(line);
+                if (optionSegments.Count > 0)
                 {
-                    Label = optionMatch.Groups[1].Value.ToUpperInvariant()
-                };
-                currentOption.ContentLines.Add(optionMatch.Groups[2].Value.Trim());
-                continue;
-            }
+                    foreach (var segment in optionSegments)
+                    {
+                        AddOrMergeOption(currentQuestion, segment.Label, segment.Content, warnings, sectionNumber);
+                        currentOptionLabel = segment.Label;
+                    }
 
-            if (currentOption is not null)
-            {
-                currentOption.ContentLines.Add(line.Trim());
-            }
-            else if (currentQuestion is not null)
-            {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(currentOptionLabel) &&
+                    currentQuestion.Options.TryGetValue(currentOptionLabel, out var currentOption))
+                {
+                    currentOption.ContentLines.Add(line.Trim());
+                    continue;
+                }
+
                 currentQuestion.QuestionTextLines.Add(line.Trim());
             }
         }
 
-        FlushOption(currentQuestion, ref currentOption);
         FlushQuestion(questions, ref currentQuestion);
 
         return questions.Select(question => ToExamQuestion(question, answerKey, sectionNumber, warnings)).ToList();
+    }
+
+    private static void AddQuestionTextAndOptions(
+        ParsedQuestion question,
+        string text,
+        ref string? currentOptionLabel,
+        List<ImportReadingWarningResponse> warnings,
+        int sectionNumber)
+    {
+        var optionSegments = SplitOptionSegments(text);
+        if (optionSegments.Count == 0)
+        {
+            question.QuestionTextLines.Add(text);
+            currentOptionLabel = null;
+            return;
+        }
+
+        var questionText = text[..optionSegments[0].StartIndex].Trim();
+        if (!string.IsNullOrWhiteSpace(questionText))
+        {
+            question.QuestionTextLines.Add(questionText);
+        }
+
+        foreach (var segment in optionSegments)
+        {
+            AddOrMergeOption(question, segment.Label, segment.Content, warnings, sectionNumber);
+            currentOptionLabel = segment.Label;
+        }
+    }
+
+    private static List<OptionSegment> SplitOptionSegments(string line)
+    {
+        var markerMatches = OptionMarkerRegex.Matches(line)
+            .Where(match => IsValidOptionMarker(line, match))
+            .ToList();
+
+        if (markerMatches.Count == 0)
+        {
+            return new List<OptionSegment>();
+        }
+
+        var segments = new List<OptionSegment>();
+        for (var i = 0; i < markerMatches.Count; i++)
+        {
+            var marker = markerMatches[i];
+            var contentStart = marker.Index + marker.Length;
+            var contentEnd = i + 1 < markerMatches.Count ? markerMatches[i + 1].Index : line.Length;
+            var content = line[contentStart..contentEnd].Trim();
+
+            segments.Add(new OptionSegment(
+                marker.Groups[1].Value.ToUpperInvariant(),
+                content,
+                marker.Index));
+        }
+
+        return segments;
+    }
+
+    private static bool IsValidOptionMarker(string line, Match marker)
+    {
+        var label = marker.Groups[1].Value[0];
+        var markerIndex = marker.Index;
+
+        if (markerIndex == 0)
+        {
+            return true;
+        }
+
+        var previous = line[markerIndex - 1];
+
+        if (char.IsWhiteSpace(previous) || previous is '.' or ';' or ':' or '!' or '?' or ')' or ']' or '}')
+        {
+            return true;
+        }
+
+        // Word often flattens "A. text B. text" into "A.textB.text"; allow uppercase markers after content.
+        return char.IsUpper(label) && (char.IsLower(previous) || char.IsDigit(previous));
+    }
+
+    private static void AddOrMergeOption(
+        ParsedQuestion question,
+        string label,
+        string content,
+        List<ImportReadingWarningResponse> warnings,
+        int sectionNumber)
+    {
+        if (!question.Options.TryGetValue(label, out var option))
+        {
+            option = new ParsedOption
+            {
+                Label = label
+            };
+            question.Options[label] = option;
+        }
+        else
+        {
+            warnings.Add(new ImportReadingWarningResponse
+            {
+                Code = "DuplicateOption",
+                Message = $"Question {question.Number} has duplicate option {label}; duplicated content was merged.",
+                QuestionNumber = question.Number,
+                SectionNumber = sectionNumber
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(content))
+        {
+            option.ContentLines.Add(content.Trim());
+        }
     }
 
     private static ExamQuestion ToExamQuestion(
@@ -248,7 +359,37 @@ public class ReadingExamImportService : IReadingExamImportService
             });
         }
 
-        var existingLabels = parsedQuestion.Options.Select(option => option.Label).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var options = parsedQuestion.Options.Values
+            .GroupBy(option => option.Label, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var merged = new ParsedOption
+                {
+                    Label = group.Key.ToUpperInvariant()
+                };
+
+                foreach (var option in group)
+                {
+                    merged.ContentLines.AddRange(option.ContentLines);
+                }
+
+                if (group.Count() > 1)
+                {
+                    warnings.Add(new ImportReadingWarningResponse
+                    {
+                        Code = "DuplicateOption",
+                        Message = $"Question {parsedQuestion.Number} has duplicate option {group.Key}; duplicated content was merged.",
+                        QuestionNumber = parsedQuestion.Number,
+                        SectionNumber = sectionNumber
+                    });
+                }
+
+                return merged;
+            })
+            .OrderBy(option => GetOptionDisplayOrder(option.Label))
+            .ToList();
+
+        var existingLabels = options.Select(option => option.Label).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var expectedLabel in ExpectedOptionLabels.Where(label => !existingLabels.Contains(label)))
         {
             warnings.Add(new ImportReadingWarningResponse
@@ -267,13 +408,13 @@ public class ReadingExamImportService : IReadingExamImportService
             CorrectAnswer = correctAnswer,
             Score = 1,
             DisplayOrder = parsedQuestion.Number,
-            Options = parsedQuestion.Options.Select((option, index) => new ExamOption
+            Options = options.Select(option => new ExamOption
             {
                 Label = option.Label,
                 Content = JoinLines(option.ContentLines),
                 IsCorrect = !string.IsNullOrWhiteSpace(correctAnswer) &&
                     string.Equals(option.Label, correctAnswer, StringComparison.OrdinalIgnoreCase),
-                DisplayOrder = index + 1
+                DisplayOrder = GetOptionDisplayOrder(option.Label)
             }).ToList()
         };
     }
@@ -284,15 +425,6 @@ public class ReadingExamImportService : IReadingExamImportService
         {
             questions.Add(currentQuestion);
             currentQuestion = null;
-        }
-    }
-
-    private static void FlushOption(ParsedQuestion? currentQuestion, ref ParsedOption? currentOption)
-    {
-        if (currentQuestion is not null && currentOption is not null)
-        {
-            currentQuestion.Options.Add(currentOption);
-            currentOption = null;
         }
     }
 
@@ -319,6 +451,18 @@ public class ReadingExamImportService : IReadingExamImportService
         return Regex.Replace(value, @"\s+", " ").Trim();
     }
 
+    private static int GetOptionDisplayOrder(string label)
+    {
+        return label.ToUpperInvariant() switch
+        {
+            "A" => 1,
+            "B" => 2,
+            "C" => 3,
+            "D" => 4,
+            _ => 99
+        };
+    }
+
     private static string RemoveDiacritics(string value)
     {
         var normalized = value.Normalize(NormalizationForm.FormD);
@@ -341,7 +485,7 @@ public class ReadingExamImportService : IReadingExamImportService
 
         public List<string> QuestionTextLines { get; } = new();
 
-        public List<ParsedOption> Options { get; } = new();
+        public Dictionary<string, ParsedOption> Options { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private sealed class ParsedOption
@@ -350,4 +494,6 @@ public class ReadingExamImportService : IReadingExamImportService
 
         public List<string> ContentLines { get; } = new();
     }
+
+    private sealed record OptionSegment(string Label, string Content, int StartIndex);
 }
