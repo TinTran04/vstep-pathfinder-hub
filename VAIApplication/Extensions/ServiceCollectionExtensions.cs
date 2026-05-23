@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IExamService, ExamService>();
+        services.AddScoped<IReadingExamImportService, ReadingExamImportService>();
         services.AddScoped<IPracticeService, PracticeService>();
         services.AddScoped<IWritingPracticeService, WritingPracticeService>();
         services.AddScoped<ISpeakingPracticeService, SpeakingPracticeService>();

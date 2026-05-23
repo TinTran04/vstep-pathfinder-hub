@@ -12,10 +12,12 @@ namespace VAIApplication.Controllers;
 public class ExamsController : ControllerBase
 {
     private readonly IExamService _examService;
+    private readonly IReadingExamImportService _readingExamImportService;
 
-    public ExamsController(IExamService examService)
+    public ExamsController(IExamService examService, IReadingExamImportService readingExamImportService)
     {
         _examService = examService;
+        _readingExamImportService = readingExamImportService;
     }
 
     /// <summary>
@@ -83,6 +85,43 @@ public class ExamsController : ControllerBase
         {
             var response = await _examService.CreateExamAsync(request);
             return StatusCode(StatusCodes.Status201Created, ApiResponse<ExamResponse>.Ok(response, "Create exam successfully."));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Import de Reading tu file DOCX, tao exam kem passage, cau hoi va dap an; chi admin va staff duoc thuc hien.
+    /// </summary>
+    /// <param name="file">File DOCX chua de Reading theo dinh dang passage, cau hoi va dap an.</param>
+    /// <param name="isPublished">Trang thai publish cua de sau khi import, mac dinh la false.</param>
+    [HttpPost("import-reading-docx")]
+    [Authorize(Roles = "admin,staff")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<ImportReadingExamResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ImportReadingDocx([FromForm] IFormFile file, [FromForm] bool isPublished = false)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<object>.Fail("File is required."));
+        }
+
+        if (!string.Equals(Path.GetExtension(file.FileName), ".docx", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(ApiResponse<object>.Fail("Only .docx files are supported."));
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var response = await _readingExamImportService.ImportAsync(stream, file.FileName, isPublished);
+            return StatusCode(StatusCodes.Status201Created, ApiResponse<ImportReadingExamResponse>.Ok(response, "Import reading exam successfully."));
         }
         catch (InvalidOperationException exception)
         {
