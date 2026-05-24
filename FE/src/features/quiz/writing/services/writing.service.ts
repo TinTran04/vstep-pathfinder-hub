@@ -47,10 +47,17 @@ export const writingService = {
 
   async getWritingSamples() {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    return {
-      task1Samples,
-      task2Samples,
-    };
+    const stored = localStorage.getItem("vstep_writing_samples");
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Error parsing writing samples", e);
+      }
+    }
+    const data = { task1Samples, task2Samples };
+    localStorage.setItem("vstep_writing_samples", JSON.stringify(data));
+    return data;
   },
 
   async generateWritingFeedback(writings: Record<number, string>) {

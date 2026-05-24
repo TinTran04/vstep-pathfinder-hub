@@ -30,9 +30,10 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import logoImg from "@/assets/logo.png";
 
 import { User, Exam, PricePlan } from "../mocks/admin.mock";
+import { SampleEssay } from "@/features/quiz/writing/mocks/writing.mock";
 import { adminService } from "../services/admin.service";
 
-type Tab = "dashboard" | "users" | "exams" | "pricing";
+type Tab = "dashboard" | "users" | "exams" | "pricing" | "sample-answers";
 
 export interface AdminStats {
   usageData: { name: string; users: number; exams: number }[];
@@ -49,6 +50,7 @@ const sidebarItems = [
   { title: "Tổng quan", value: "dashboard" as Tab, icon: LayoutDashboard },
   { title: "Tài khoản", value: "users" as Tab, icon: Users },
   { title: "Đề thi", value: "exams" as Tab, icon: FileText },
+  { title: "Bài viết mẫu", value: "sample-answers" as Tab, icon: BookOpen },
   { title: "Quản lí giá", value: "pricing" as Tab, icon: DollarSign },
 ];
 
@@ -69,6 +71,7 @@ const Admin = () => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [plans, setPlans] = useState<PricePlan[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [writingSamples, setWritingSamples] = useState<{ task1Samples: SampleEssay[]; task2Samples: SampleEssay[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,12 +81,14 @@ const Admin = () => {
       adminService.getExams(),
       adminService.getPricePlans(),
       adminService.getAdminStats(),
-    ]).then(([fetchedUsers, fetchedExams, fetchedPlans, fetchedStats]) => {
+      adminService.getWritingSamples(),
+    ]).then(([fetchedUsers, fetchedExams, fetchedPlans, fetchedStats, fetchedSamples]) => {
       if (isMounted) {
         setUsers(fetchedUsers);
         setExams(fetchedExams);
         setPlans(fetchedPlans);
         setStats(fetchedStats);
+        setWritingSamples(fetchedSamples);
         setLoading(false);
       }
     });
@@ -121,6 +126,169 @@ const Admin = () => {
   const [priceDialog, setPriceDialog] = useState(false);
   const [editPlan, setEditPlan] = useState<PricePlan | null>(null);
   const [priceForm, setPriceForm] = useState({ name: "", price: 0, period: "/tháng", features: "" });
+
+  // Writing Sample states
+  const [sampleDialog, setSampleDialog] = useState(false);
+  const [editSample, setEditSample] = useState<(SampleEssay & { taskType: "task1" | "task2" }) | null>(null);
+  const [sampleForm, setSampleForm] = useState<{
+    taskType: "task1" | "task2";
+    level: "B1" | "B2";
+    score: string;
+    content: string;
+    reasons: string[];
+  }>({
+    taskType: "task1",
+    level: "B2",
+    score: "8.0/10",
+    content: "",
+    reasons: [""]
+  });
+
+  const [searchSample, setSearchSample] = useState("");
+  const [filterSampleTask, setFilterSampleTask] = useState("all");
+  const [filterSampleLevel, setFilterSampleLevel] = useState("all");
+
+  const openAddSample = () => {
+    setEditSample(null);
+    setSampleForm({
+      taskType: "task1",
+      level: "B2",
+      score: "8.0/10",
+      content: "",
+      reasons: [""]
+    });
+    setSampleDialog(true);
+  };
+
+  const openEditSample = (s: SampleEssay, taskType: "task1" | "task2") => {
+    setEditSample({ ...s, taskType });
+    setSampleForm({
+      taskType: taskType,
+      level: s.level,
+      score: s.score,
+      content: s.content,
+      reasons: s.reasons.length > 0 ? [...s.reasons] : [""]
+    });
+    setSampleDialog(true);
+  };
+
+  const saveSample = async () => {
+    if (!sampleForm.content || !sampleForm.score) {
+      toast.error("Vui lòng điền đầy đủ thông tin");
+      return;
+    }
+    const filteredReasons = sampleForm.reasons.filter(r => r.trim() !== "");
+    if (filteredReasons.length === 0) {
+      toast.error("Vui lòng nhập ít nhất một lý do chấm điểm");
+      return;
+    }
+
+    try {
+      if (editSample) {
+        if (editSample.taskType !== sampleForm.taskType) {
+          await adminService.deleteWritingSample(editSample.id);
+          const created = await adminService.createWritingSample({
+            taskType: sampleForm.taskType,
+            level: sampleForm.level,
+            score: sampleForm.score,
+            content: sampleForm.content,
+            reasons: filteredReasons
+          });
+          const fetched = await adminService.getWritingSamples();
+          setWritingSamples(fetched);
+        } else {
+          const updated = await adminService.updateWritingSample(editSample.id, {
+            level: sampleForm.level,
+            score: sampleForm.score,
+            content: sampleForm.content,
+            reasons: filteredReasons
+          });
+          setWritingSamples(p => {
+            if (!p) return p;
+            if (sampleForm.taskType === "task1") {
+              return {
+                ...p,
+                task1Samples: p.task1Samples.map(x => x.id === editSample.id ? updated : x)
+              };
+            } else {
+              return {
+                ...p,
+                task2Samples: p.task2Samples.map(x => x.id === editSample.id ? updated : x)
+              };
+            }
+          });
+        }
+        toast.success("Cập nhật bài mẫu thành công");
+      } else {
+        const created = await adminService.createWritingSample({
+          taskType: sampleForm.taskType,
+          level: sampleForm.level,
+          score: sampleForm.score,
+          content: sampleForm.content,
+          reasons: filteredReasons
+        });
+        setWritingSamples(p => {
+          if (!p) return p;
+          if (sampleForm.taskType === "task1") {
+            return {
+              ...p,
+              task1Samples: [...p.task1Samples, created]
+            };
+          } else {
+            return {
+              ...p,
+              task2Samples: [...p.task2Samples, created]
+            };
+          }
+        });
+        toast.success("Thêm bài mẫu thành công");
+      }
+      setSampleDialog(false);
+    } catch (err) {
+      toast.error("Có lỗi xảy ra khi lưu bài mẫu");
+    }
+  };
+
+  const deleteSample = async (id: number) => {
+    try {
+      await adminService.deleteWritingSample(id);
+      setWritingSamples(p => {
+        if (!p) return p;
+        return {
+          task1Samples: p.task1Samples.filter(x => x.id !== id),
+          task2Samples: p.task2Samples.filter(x => x.id !== id)
+        };
+      });
+      toast.success("Xóa bài mẫu thành công");
+    } catch (err) {
+      toast.error("Có lỗi xảy ra khi xóa bài mẫu");
+    }
+  };
+
+  const addReasonField = () => {
+    setSampleForm(p => ({
+      ...p,
+      reasons: [...p.reasons, ""]
+    }));
+  };
+
+  const removeReasonField = (index: number) => {
+    setSampleForm(p => ({
+      ...p,
+      reasons: p.reasons.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateReasonField = (index: number, val: string) => {
+    setSampleForm(p => {
+      const copy = [...p.reasons];
+      copy[index] = val;
+      return {
+        ...p,
+        reasons: copy
+      };
+    });
+  };
 
   // User CRUD
   const openAddUser = () => { setEditUser(null); setUserForm({ name: "", email: "", role: "student", status: "active", plan: "Miễn phí" }); setUserDialog(true); };
@@ -230,6 +398,20 @@ const Admin = () => {
     const matchesStatus = filterExamStatus === "all" || e.status === filterExamStatus;
     return matchesSearch && matchesSkill && matchesDifficulty && matchesStatus;
   });
+
+  const getFilteredSamples = () => {
+    if (!writingSamples) return [];
+    const t1 = writingSamples.task1Samples.map(s => ({ ...s, taskType: "task1" as const, taskTitle: "Task 1 (Email/Letter)" }));
+    const t2 = writingSamples.task2Samples.map(s => ({ ...s, taskType: "task2" as const, taskTitle: "Task 2 (Essay)" }));
+    const combined = [...t1, ...t2];
+    
+    return combined.filter(s => {
+      const matchesSearch = s.content.toLowerCase().includes(searchSample.toLowerCase()) || s.score.toLowerCase().includes(searchSample.toLowerCase());
+      const matchesTask = filterSampleTask === "all" || s.taskType === filterSampleTask;
+      const matchesLevel = filterSampleLevel === "all" || s.level === filterSampleLevel;
+      return matchesSearch && matchesTask && matchesLevel;
+    });
+  };
 
   const totalStudents = users.filter(u => u.role === "student").length;
   const activeStudents = users.filter(u => u.role === "student" && u.status === "active").length;
@@ -1054,6 +1236,101 @@ const Admin = () => {
                 </div>
               </div>
             )}
+
+            {/* === SAMPLE ANSWERS === */}
+            {activeTab === "sample-answers" && (
+              <div className="space-y-4 max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground">Quản lí bài viết mẫu</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {writingSamples ? getFilteredSamples().length : 0} bài viết mẫu đang hiển thị cho học viên
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-48">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input placeholder="Tìm theo nội dung, điểm số..." className="pl-8 h-9 text-sm" value={searchSample} onChange={e => setSearchSample(e.target.value)} />
+                    </div>
+                    <Select value={filterSampleTask} onValueChange={setFilterSampleTask}>
+                      <SelectTrigger className="h-9 w-[140px] text-xs">
+                        <SelectValue placeholder="Phân loại Task" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả các Task</SelectItem>
+                        <SelectItem value="task1">Task 1 (Thư/Email)</SelectItem>
+                        <SelectItem value="task2">Task 2 (Essay)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterSampleLevel} onValueChange={setFilterSampleLevel}>
+                      <SelectTrigger className="h-9 w-[110px] text-xs">
+                        <SelectValue placeholder="Trình độ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả trình độ</SelectItem>
+                        <SelectItem value="B1">B1</SelectItem>
+                        <SelectItem value="B2">B2</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={openAddSample} size="sm" className="gradient-primary text-primary-foreground gap-1.5 shrink-0">
+                      <Plus size={14} /> Thêm bài mẫu
+                    </Button>
+                  </div>
+                </div>
+
+                <Card className="border-border overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30">
+                          <TableHead className="text-xs font-semibold w-[150px]">Loại bài</TableHead>
+                          <TableHead className="text-xs font-semibold w-[90px]">Trình độ</TableHead>
+                          <TableHead className="text-xs font-semibold w-[90px]">Điểm số</TableHead>
+                          <TableHead className="text-xs font-semibold">Nội dung bài viết mẫu</TableHead>
+                          <TableHead className="text-xs font-semibold w-[180px]">Số lý do chấm điểm</TableHead>
+                          <TableHead className="text-xs font-semibold text-right w-[110px]">Hành động</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {getFilteredSamples().map(s => (
+                          <TableRow key={s.id} className="hover:bg-muted/20 transition-colors">
+                            <TableCell className="font-semibold text-xs text-foreground shrink-0">{s.taskTitle}</TableCell>
+                            <TableCell>
+                              <Badge className={s.level === "B2" ? "gradient-primary text-primary-foreground text-[10px]" : "bg-secondary text-secondary-foreground text-[10px]"}>
+                                {s.level}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Star size={12} className="text-amber-500 fill-amber-500" />
+                                <span className="text-xs font-bold">{s.score}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <p className="text-xs text-muted-foreground truncate max-w-[320px]">{s.content}</p>
+                            </TableCell>
+                            <TableCell className="text-xs font-medium text-foreground">{s.reasons.length} lý do</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-0.5">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditSample(s, s.taskType)}><Edit2 size={13} /></Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteSample(s.id)}><Trash2 size={13} /></Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {getFilteredSamples().length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                              Không tìm thấy bài viết mẫu nào
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </Card>
+              </div>
+            )}
           </main>
         </div>
       </div>
@@ -1248,6 +1525,78 @@ const Admin = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPriceDialog(false)}>Hủy</Button>
             <Button onClick={savePrice} className="gradient-primary text-primary-foreground gap-1.5"><Save size={14} /> Lưu</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Writing Sample Dialog */}
+      <Dialog open={sampleDialog} onOpenChange={setSampleDialog}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>
+              {editSample ? "Chỉnh sửa bài viết mẫu" : "Thêm bài viết mẫu mới"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 pr-1 -mr-2 space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Loại bài</Label>
+                <Select value={sampleForm.taskType} onValueChange={v => setSampleForm(p => ({ ...p, taskType: v as "task1" | "task2" }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="task1">Task 1 (Email/Letter)</SelectItem>
+                    <SelectItem value="task2">Task 2 (Essay)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Trình độ</Label>
+                <Select value={sampleForm.level} onValueChange={v => setSampleForm(p => ({ ...p, level: v as "B1" | "B2" }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="B1">B1</SelectItem>
+                    <SelectItem value="B2">B2</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Điểm số</Label>
+                <Input value={sampleForm.score} onChange={e => setSampleForm(p => ({ ...p, score: e.target.value }))} placeholder="Ví dụ: 8.5/10" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nội dung bài mẫu</Label>
+              <Textarea value={sampleForm.content} onChange={e => setSampleForm(p => ({ ...p, content: e.target.value }))} placeholder="Nhập hoặc dán nội dung bài viết mẫu vào đây..." rows={8} />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Các lý do đạt điểm (Rubric Reasons)</Label>
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addReasonField}>
+                  <Plus size={12} /> Thêm lý do
+                </Button>
+              </div>
+              <div className="space-y-2.5">
+                {sampleForm.reasons.map((reason, idx) => (
+                  <div key={idx} className="flex gap-2 items-start bg-muted/40 p-2.5 rounded-lg border border-border">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-[10px] text-muted-foreground font-semibold">Lý do #{idx + 1}</Label>
+                      <Textarea value={reason} onChange={e => updateReasonField(idx, e.target.value)} placeholder="Nhập lý do phân tích tiêu chí đạt điểm (ví dụ: Task Achievement, Grammar...)" rows={2} className="text-xs animate-none" />
+                    </div>
+                    {sampleForm.reasons.length > 1 && (
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0 mt-5" onClick={() => removeReasonField(idx)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="pt-2 border-t border-border mt-4">
+            <Button variant="outline" onClick={() => setSampleDialog(false)}>Hủy</Button>
+            <Button onClick={saveSample} className="gradient-primary text-primary-foreground gap-1.5"><Save size={14} /> Lưu</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

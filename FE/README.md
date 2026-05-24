@@ -1,4 +1,4 @@
-# VSTEPPro – Nền tảng Luyện thi VSTEP Trực tuyến
+# VSTEPPro — Nền Tảng Luyện Thi VSTEP Trực Tuyến
 
 > Ứng dụng web luyện thi VSTEP (Vietnamese Standardized Test of English Proficiency) toàn diện với hệ thống đề thi mô phỏng, chấm điểm AI và theo dõi tiến độ cá nhân hóa.
 
@@ -8,23 +8,33 @@
 
 ## 📑 Mục lục
 
-- [Tổng quan](#tổng-quan)
+- [Cấu Trúc Repository](#-cấu-trúc-repository)
+- [Tài Liệu Phát Triển](#-tài-liệu-phát-triển)
 - [Tính năng chính](#tính-năng-chính)
 - [Công nghệ sử dụng](#công-nghệ-sử-dụng)
-- [Cấu trúc dự án](#cấu-trúc-dự-án)
+- [Cấu trúc thư mục Frontend](#cấu-trúc-thư-mục-frontend)
 - [Các trang & Route](#các-trang--route)
 - [Hệ thống Quiz theo kỹ năng](#hệ-thống-quiz-theo-kỹ-năng)
 - [Hệ thống chấm điểm AI (Writing)](#hệ-thống-chấm-điểm-ai-writing)
 - [Thiết kế & Design System](#thiết-kế--design-system)
 - [Cài đặt & Chạy dự án](#cài-đặt--chạy-dự-án)
 - [Scripts](#scripts)
-- [Triển khai](#triển-khai)
 
 ---
 
-## Tổng quan
+## 📂 Cấu Trúc Repository
 
-**VSTEPPro** là nền tảng luyện thi VSTEP trực tuyến dành cho người Việt Nam, hỗ trợ luyện tập 4 kỹ năng: **Listening, Reading, Writing, Speaking**. Ứng dụng mô phỏng sát format đề thi VSTEP thực tế, cung cấp hệ thống chấm điểm AI cho bài Writing, bài mẫu band 8+, và dashboard cá nhân hóa.
+Thư mục dự án được tổ chức thành hai phần chính:
+
+* **[Frontend (FE)](file:///E:/EXE/be/vstep-pathfinder-hub/FE)**: Ứng dụng Single Page Application (SPA) viết bằng **React 18**, **TypeScript**, **Vite**, và **Tailwind CSS**.
+* **[Backend (BE)](file:///E:/EXE/be/vstep-pathfinder-hub/BE)**: Hệ thống API Web được xây dựng trên nền tảng **.NET Core 8 Web API** theo mô hình 3-Layer (VAIApplication, BusinessLogicLayer, DataAccessLayer).
+
+---
+
+## 📖 Tài Liệu Phát Triển
+
+* **[Báo Cáo Hệ Thống & Đặc Tả API VSTEPPro](FE_DOCUMENTATION.md)**: Tài liệu gộp tích hợp phân tích cấu trúc dự án, luồng nghiệp vụ, danh sách Use Cases, hướng dẫn kết nối API thực tế và đặc tả chi tiết các API endpoints (API Contract).
+* **[Nhật Ký Thay Đổi Backend (24/05/2026)](../BE/CHANGES_2026_05_24.md)**: Danh sách các tính năng, DTO, Endpoint và các logic thay đổi mới nhất liên quan đến đổi mật khẩu, quên mật khẩu (OTP) và tối ưu hóa gửi mail SMTP bằng background task.
 
 ---
 
@@ -57,21 +67,21 @@
 - Phân loại theo level B1/B2
 - Phân tích lý do đạt điểm cao
 
-### 🗓️ Lịch thi VSTEP & Đăng ký
-- Tra cứu lịch thi tại các trung tâm khảo thí trên toàn quốc
-- Thông tin chi tiết: địa điểm, số chỗ, trạng thái đăng ký
-- Luồng đăng ký & thanh toán (QR code)
+### 💳 Thanh toán & Nâng cấp VIP (/payment)
+- Chọn gói cước VIP (Gói Tuần / Gói Tháng)
+- Sinh mã QR VietQR động theo chuẩn ngân hàng để học viên chuyển khoản tiện lợi
+- Giả lập xác nhận thanh toán để mở khóa toàn bộ tính năng Premium
 
 ### 🔐 Xác thực người dùng
 - Đăng nhập / Đăng ký với email & mật khẩu
+- Khôi phục tài khoản qua mã OTP gửi về email (giao diện đếm ngược 1 phút để nhập OTP trước khi hết hạn)
 - Validation form đầy đủ (email format, password length, confirm password)
-- Giao diện split-screen: branding panel + form panel
 
 ### 🛠️ Trang Admin
 - Dashboard tổng quan: tổng user, đề thi, doanh thu, tỷ lệ hoàn thành
 - Quản lý người dùng (CRUD, search, filter)
 - Quản lý đề thi (thêm/sửa/xoá theo từng skill)
-- Sidebar navigation
+- Quản lý bài mẫu Writing Samples (CRUD)
 
 ---
 
@@ -96,10 +106,10 @@
 
 ---
 
-## Cấu trúc dự án
+## Cấu trúc thư mục Frontend
 
 ```
-vstep-pathfinder-hub/
+FE/
 ├── src/
 │   ├── assets/             # Tài nguyên hình ảnh tĩnh
 │   ├── components/         # Component UI tái sử dụng toàn cục
@@ -108,17 +118,16 @@ vstep-pathfinder-hub/
 │   │   ├── SmoothScroll.tsx    # Cuộn mượt mà sử dụng Lenis
 │   │   └── StaggerChildren.tsx # Hiệu ứng xuất hiện tuần tự
 │   ├── features/           # Kiến trúc chia nhỏ theo Module/Feature
-│   │   ├── auth/           # Xác thực & Phân quyền đăng nhập
+│   │   ├── auth/           # Xác thực, đăng ký, quên mật khẩu (OTP)
 │   │   ├── dashboard/      # Dashboard tiến độ cá nhân & Đổi thưởng
-│   │   ├── admin/          # Quản lý danh sách học viên & Đề thi
-│   │   ├── registration/   # Tra cứu lịch thi & Đăng ký VietQR
-│   │   ├── landing/        # Các section chính trên Landing Page
+│   │   ├── admin/          # Quản lý danh sách học viên, đề thi, bài mẫu
+│   │   ├── landing/        # Landing Page, bảng giá, VietQR payment
 │   │   ├── quiz/           # Trắc nghiệm, chấm Writing & Speaking AI
 │   │   └── attempts/       # Lượt thi, Review chi tiết & Transition [NEW]
 │   ├── hooks/              # Custom React Hooks
 │   ├── lib/                # Config & Utilities chung
 │   ├── pages/              # Các trang tiện ích (NotFound, ...)
-│   ├── services/           # Service nền tảng & apiClient Backend-Ready [NEW]
+│   ├── services/           # Service nền tảng & apiClient Backend-Ready
 │   ├── App.tsx             # Định nghĩa cấu trúc Routes chính
 │   ├── main.tsx            # Điểm khởi chạy của dự án
 │   └── index.css           # Global CSS & Design system Tokens
@@ -131,20 +140,18 @@ vstep-pathfinder-hub/
 | Route | Trang | Mô tả |
 |---|---|---|
 | `/` | Index | Landing page chính |
-| `/auth` | Auth | Đăng nhập & Đăng ký tài khoản |
-| `/dashboard` | Dashboard | Dashboard cá nhân hóa, streak & cửa hàng quà tặng |
-| `/quiz` | Quiz | Lựa chọn kỹ năng (L/R/W/S) & chế độ làm bài (Luyện tập / Thi thử) |
-| `/mock-test` | MockTestLanding | [NEW] Landing page thi thử toàn diện VSTEP |
-| `/quiz/listening/take` | ListeningQuiz | Giao diện thi Listening (chốt chặn tua/pause trong Thi thử) |
+| `/auth` | Auth | Đăng nhập, đăng ký & quên mật khẩu |
+| `/dashboard` | Dashboard | Dashboard cá nhân hóa, streak & đổi quà |
+| `/quiz` | Quiz | Lựa chọn kỹ năng (L/R/W/S) & chế độ làm bài |
+| `/mock-test` | MockTestLanding | Landing page thi thử toàn diện VSTEP |
+| `/quiz/listening/take` | ListeningQuiz | Giao diện thi Listening (khóa tua/pause trong Thi thử) |
 | `/quiz/reading/take` | ReadingQuiz | Giao diện thi Reading song song |
 | `/quiz/writing/take` | WritingQuiz | Giao diện thi Writing kèm bộ đếm từ & chấm điểm AI |
 | `/quiz/speaking/take` | SpeakingQuiz | Giao diện thi Speaking ghi âm & AI feedback |
-| `/attempts/:attemptId/result` | AttemptResult | [NEW] Bảng điểm kết quả bài làm tổng quan, xếp band VSTEP |
-| `/attempts/:attemptId/review` | AttemptReview | [NEW] Xem lại đáp án đúng, giải thích & transcript bài làm |
-| `/mock-test/review` | MockTestReviewRedirect | [NEW] Redirect tương thích ngược về kết quả bài làm gần nhất |
-| `/vstep-registration` | VstepRegistration | Lịch thi VSTEP trên toàn quốc & QR thanh toán |
-| `/admin` | Admin | Quản trị học viên & Đề thi (Step-based forms) |
-| `/results` | Results | Trang xếp hạng điểm số & đánh giá học viên |
+| `/attempts/:attemptId/result` | AttemptResult | Bảng điểm kết quả bài làm tổng quan, xếp band VSTEP |
+| `/attempts/:attemptId/review` | AttemptReview | Xem lại đáp án đúng, giải thích & transcript bài làm |
+| `/payment` | Payment | Trang thanh toán nâng cấp tài khoản Premium |
+| `/admin` | Admin | Quản trị học viên, đề thi, bài mẫu |
 | `/writing-samples` | WritingSamples | Kho bài viết mẫu band 8+ tham khảo |
 | `*` | NotFound | Trang báo lỗi 404 |
 
@@ -183,7 +190,6 @@ vstep-pathfinder-hub/
 
 ### Component: `AnnotatedText`
 Hiển thị bài viết của người dùng với lỗi được **bôi màu** trực tiếp:
-
 ```tsx
 <AnnotatedText text={userEssay} errors={detectedErrors} />
 ```
@@ -200,26 +206,9 @@ interface TextError {
 }
 ```
 
-### Quy ước màu sắc
-| Loại lỗi | Màu | CSS class |
-|---|---|---|
-| Grammar | 🟡 Vàng | `bg-yellow-200` |
-| Vocabulary | 🟠 Cam | `bg-orange-200` |
-| Spelling | 🔴 Đỏ | `bg-red-200` |
-| Coherence | 🔵 Xanh | `bg-blue-200` |
-
-### Tiêu chí chấm (4 criteria)
-1. **Task Achievement** – Hoàn thành yêu cầu đề bài
-2. **Coherence & Cohesion** – Mạch lạc & liên kết
-3. **Lexical Resource** – Vốn từ vựng
-4. **Grammar Range & Accuracy** – Ngữ pháp
-
 ---
 
 ## Thiết kế & Design System
-
-### Font
-- **Be Vietnam Pro** (Google Fonts) – weights: 400, 500, 600, 700, 800
 
 ### Color Tokens (HSL)
 ```css
@@ -231,17 +220,6 @@ interface TextError {
 --destructive: 0 84% 60%;     /* Đỏ cảnh báo */
 ```
 
-### Gradient
-```css
---hero-gradient: linear-gradient(135deg, hsl(217 91% 50%), hsl(217 91% 40%));
-```
-
-### Shadows
-```css
---card-shadow: 0 4px 24px -4px hsl(217 91% 50% / 0.08);
---card-shadow-hover: 0 8px 32px -4px hsl(217 91% 50% / 0.15);
-```
-
 ---
 
 ## Cài đặt & Chạy dự án
@@ -250,71 +228,24 @@ interface TextError {
 - Node.js >= 18
 - npm hoặc bun
 
-### Cài đặt
-
+### Khởi chạy Frontend
 ```bash
-# Clone repository
-git clone <YOUR_GIT_URL>
-cd <YOUR_PROJECT_NAME>
-
 # Cài đặt dependencies
 npm install
-# hoặc
-bun install
-```
 
-### Chạy development server
-
-```bash
+# Chạy development server
 npm run dev
-# hoặc
-bun run dev
 ```
-
 Mở trình duyệt tại `http://localhost:8080`
 
 ### ⚙️ Cấu hình Môi trường (Environment Variables)
-
-Ứng dụng hỗ trợ chuyển đổi linh hoạt giữa dữ liệu **Mock** (chạy không cần Backend) và dữ liệu **API thật** bằng cách cấu hình các tệp `.env.local` hoặc `.env.production`:
-
+Ứng dụng hỗ trợ chuyển đổi giữa dữ liệu **Mock** (chạy Local) và dữ liệu **API thật** bằng cách cấu hình các tệp `.env.local`:
 ```bash
-# Nguồn dữ liệu sử dụng: "mock" hoặc "api" (mặc định là "mock")
+# Nguồn dữ liệu sử dụng: "mock" hoặc "api"
 VITE_DATA_SOURCE=mock
 
 # Base URL của Backend API (khi cấu hình VITE_DATA_SOURCE=api)
-VITE_API_BASE_URL=https://api.vsteppro.edu.vn/api/v1
+VITE_API_BASE_URL=http://localhost:5000/api/v1
 ```
 
-*Để có thêm hướng dẫn kết nối API và thứ tự ưu tiên tích hợp Backend, vui lòng tham khảo [Frontend Backend-Ready Guide](docs/FRONTEND_BACKEND_READY.md).*
-
----
-
-## Scripts
-
-| Script | Mô tả |
-|---|---|
-| `npm run dev` | Khởi chạy dev server (port 8080) |
-| `npm run build` | Build production |
-| `npm run build:dev` | Build development mode |
-| `npm run preview` | Preview bản build |
-| `npm run lint` | Chạy ESLint |
-| `npm run test` | Chạy test (Vitest) |
-| `npm run test:watch` | Chạy test ở watch mode |
-
----
-
-## Triển khai
-
-### Qua Lovable
-Mở [Lovable Project](https://lovable.dev) → **Share** → **Publish**
-
-### Custom Domain
-Project > Settings > Domains > Connect Domain
-
-Xem thêm: [Hướng dẫn custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
-
----
-
-## 📄 License
-
-© 2024 VSTEPPro. All rights reserved.
+*Để xem phân tích kỹ thuật chi tiết và hợp đồng API, tham khảo thêm tại [Báo Cáo Hệ Thống & Đặc Tả API VSTEPPro](FE_DOCUMENTATION.md).*

@@ -64,7 +64,20 @@ public class AuthService : IAuthService
         await _unitOfWork.Users.AddAsync(user);
         await _unitOfWork.SaveChangesAsync();
         user = await GetUserByEmailOrThrowAsync(user.Email);
-        await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+        
+        Console.WriteLine($"[OTP] Generated OTP for {user.Email}: {otp}");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine($"[OTP] Failed to send email to {user.Email}: {exception.Message}");
+            }
+        });
 
         return BuildUnverifiedAuthResponse(user);
     }
@@ -162,7 +175,20 @@ public class AuthService : IAuthService
 
         var otp = SetEmailOtp(user);
         await _unitOfWork.SaveChangesAsync();
-        await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+        
+        Console.WriteLine($"[OTP] Generated OTP for {user.Email}: {otp}");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine($"[OTP] Failed to send email to {user.Email}: {exception.Message}");
+            }
+        });
     }
 
     public async Task LogoutAsync(LogoutRequest request)
@@ -187,7 +213,109 @@ public class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync();
     }
 
-    private async Task<User> GetUserByEmailOrThrowAsync(string email)
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        if (user is null)
+        {
+            throw new KeyNotFoundException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Mật khẩu hiện tại không chính xác.");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Users.Update(user);
+        await _unitOfWork.SaveChangesAsync();
+     }
+
+     public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+     {
+         var user = await GetUserByEmailOrThrowAsync(request.Email);
+
+         if (user.OtpLastSentAt is not null &&
+             user.OtpLastSentAt.Value.AddSeconds(ResendCooldownSeconds) > DateTime.UtcNow)
+         {
+             throw new InvalidOperationException("Vui lòng đợi trước khi yêu cầu mã OTP mới.");
+         }
+
+         var otp = SetEmailOtp(user);
+
+         _unitOfWork.Users.Update(user);
+         await _unitOfWork.SaveChangesAsync();
+
+         Console.WriteLine($"[Forgot Password OTP] Generated OTP for {user.Email}: {otp}");
+
+         _ = Task.Run(async () =>
+         {
+             try
+             {
+                 await _emailService.SendResetPasswordOtpEmailAsync(user.Email, user.FullName, otp);
+             }
+             catch (Exception exception)
+             {
+                 Console.WriteLine($"[Forgot Password OTP] Failed to send email to {user.Email}: {exception.Message}");
+             }
+         });
+     }
+
+     public async Task VerifyResetOtpAsync(VerifyOtpRequest request)
+     {
+         var user = await GetUserByEmailOrThrowAsync(request.Email);
+
+         if (string.IsNullOrWhiteSpace(user.EmailOtpHash) ||
+             user.EmailOtpExpiryTime is null ||
+             user.EmailOtpExpiryTime <= DateTime.UtcNow)
+         {
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+         }
+
+         if (!BCrypt.Net.BCrypt.Verify(request.Otp.Trim(), user.EmailOtpHash))
+         {
+             user.OtpFailedCount++;
+             _unitOfWork.Users.Update(user);
+             await _unitOfWork.SaveChangesAsync();
+
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ.");
+         }
+     }
+
+     public async Task ResetPasswordAsync(ResetPasswordRequest request)
+     {
+         var user = await GetUserByEmailOrThrowAsync(request.Email);
+
+         if (string.IsNullOrWhiteSpace(user.EmailOtpHash) ||
+             user.EmailOtpExpiryTime is null ||
+             user.EmailOtpExpiryTime <= DateTime.UtcNow)
+         {
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+         }
+
+         if (!BCrypt.Net.BCrypt.Verify(request.Otp.Trim(), user.EmailOtpHash))
+         {
+             user.OtpFailedCount++;
+
+             _unitOfWork.Users.Update(user);
+             await _unitOfWork.SaveChangesAsync();
+
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+         }
+
+         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+         user.EmailOtpHash = null;
+         user.EmailOtpExpiryTime = null;
+         user.OtpFailedCount = 0;
+         user.UpdatedAt = DateTime.UtcNow;
+
+         _unitOfWork.Users.Update(user);
+         await _unitOfWork.SaveChangesAsync();
+     }
+
+     private async Task<User> GetUserByEmailOrThrowAsync(string email)
     {
         var normalizedEmail = NormalizeEmail(email);
         var user = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
