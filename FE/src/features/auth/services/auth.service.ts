@@ -181,6 +181,75 @@ export const authService = {
     }
   },
 
+  // ── Change Password ─────────────────────────────────────────────
+  async changePassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post<unknown>("/auth/change-password", {
+        currentPassword,
+        newPassword,
+      });
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message;
+      return {
+        success: false,
+        error: msg || "Đổi mật khẩu thất bại",
+      };
+    }
+  },
+
+  // ── Forgot Password ─────────────────────────────────────────────
+  async forgotPassword(email: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post<unknown>("/auth/forgot-password", { email });
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message;
+      return {
+        success: false,
+        error: msg || "Gửi yêu cầu thất bại",
+      };
+    }
+  },
+
+  // ── Verify Reset Password OTP ───────────────────────────────────
+  async verifyResetOtp(
+    email: string,
+    otp: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post<unknown>("/auth/verify-reset-otp", { email, otp });
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message;
+      return {
+        success: false,
+        error: msg || "Mã OTP không hợp lệ hoặc đã hết hạn",
+      };
+    }
+  },
+
+  // ── Reset Password ──────────────────────────────────────────────
+  async resetPassword(payload: {
+    email: string;
+    otp: string;
+    newPassword: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post<unknown>("/auth/reset-password", payload);
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message;
+      return {
+        success: false,
+        error: msg || "Đặt lại mật khẩu thất bại",
+      };
+    }
+  },
+
   // ── Restore session on page load ────────────────────────────────
   restoreSession(): UserData | null {
     const raw = localStorage.getItem(USER_KEY);

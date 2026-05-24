@@ -18,8 +18,6 @@ const navLinks: NavLink[] = [
   { label: "Practice", href: "/quiz", isRoute: true },
   { label: "Bài Mẫu", href: "/writing-samples", isRoute: true },
   { label: "Bảng giá", href: "#pricing" },
-  { label: "Kết quả học viên", href: "/results", isRoute: true },
-  { label: "Lịch thi", href: "/vstep-registration", isRoute: true },
 ];
 
 const Navbar = () => {
