@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, KeyRound, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { toast } from "sonner";
 
-type Screen = "login" | "register" | "otp";
+type Screen = "login" | "register" | "otp" | "forgot_request" | "forgot_otp" | "forgot_password";
 
 const Auth = () => {
   const [screen, setScreen] = useState<Screen>("login");
@@ -15,7 +15,8 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const navigate = useNavigate();
-  const { login, register, verifyOtp, resendOtp } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { login, register, verifyOtp, resendOtp, forgotPassword, verifyResetOtp, resetPassword } = useAuth();
 
   const [form, setForm] = useState({
     name: "",
@@ -31,13 +32,19 @@ const Auth = () => {
     const errs: Record<string, string> = {};
     if (screen === "register" && !form.name.trim())
       errs.name = "Vui lòng nhập họ tên";
+    
     if (!form.email.trim()) errs.email = "Vui lòng nhập email";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       errs.email = "Email không hợp lệ";
-    if (!form.password) errs.password = "Vui lòng nhập mật khẩu";
-    else if (form.password.length < 6) errs.password = "Mật khẩu tối thiểu 6 ký tự";
-    if (screen === "register" && form.password !== form.confirmPassword)
-      errs.confirmPassword = "Mật khẩu không khớp";
+
+    if (screen !== "forgot_request" && screen !== "forgot_otp") {
+      if (!form.password) errs.password = "Vui lòng nhập mật khẩu";
+      else if (form.password.length < 6) errs.password = "Mật khẩu tối thiểu 6 ký tự";
+
+      if ((screen === "register" || screen === "forgot_password") && form.password !== form.confirmPassword)
+        errs.confirmPassword = "Mật khẩu không khớp";
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -57,7 +64,12 @@ const Auth = () => {
 
   // ── Redirect after login/verify ────────────────────────────────
   const redirectAfterAuth = (role?: string) => {
-    navigate(role === "admin" ? "/admin" : "/dashboard");
+    if (role === "admin") {
+      navigate("/admin");
+    } else {
+      const redirectUrl = searchParams.get("redirect") || "/dashboard";
+      navigate(redirectUrl);
+    }
   };
 
   // ── Handle Login ───────────────────────────────────────────────
@@ -89,7 +101,8 @@ const Auth = () => {
     } else if (result.success) {
       // Fallback nếu BE không cần OTP
       toast.success("Đăng ký thành công!");
-      navigate("/dashboard");
+      const redirectUrl = searchParams.get("redirect") || "/dashboard";
+      navigate(redirectUrl);
     } else {
       setErrors({ email: result.error || "Đăng ký thất bại" });
     }
@@ -104,7 +117,8 @@ const Auth = () => {
     setLoading(false);
     if (result.success) {
       toast.success("Xác thực email thành công! Chào mừng bạn đến VSTEPPro 🎉");
-      navigate("/dashboard");
+      const redirectUrl = searchParams.get("redirect") || "/dashboard";
+      navigate(redirectUrl);
     } else {
       setErrors({ otp: result.error || "Mã OTP không hợp lệ" });
     }
@@ -121,6 +135,272 @@ const Auth = () => {
       toast.error(result.error || "Không thể gửi lại OTP");
     }
   };
+
+  // ── Handle Forgot Password ─────────────────────────────────────
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setLoading(true);
+    const result = await forgotPassword(form.email);
+    setLoading(false);
+    if (result.success) {
+      toast.success("Mã xác thực đã được gửi về Email của bạn!");
+      setScreen("forgot_otp");
+      setForm((p) => ({ ...p, password: "", confirmPassword: "", otp: "" }));
+    } else {
+      setErrors({ email: result.error || "Gửi yêu cầu thất bại" });
+    }
+  };
+
+  // ── Handle Verify Reset OTP ────────────────────────────────────
+  const handleVerifyResetOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateOtp()) return;
+    setLoading(true);
+    const result = await verifyResetOtp(form.email, form.otp);
+    setLoading(false);
+    if (result.success) {
+      toast.success("Mã OTP chính xác! Vui lòng nhập mật khẩu mới.");
+      setScreen("forgot_password");
+      setForm((p) => ({ ...p, password: "", confirmPassword: "" }));
+    } else {
+      setErrors({ otp: result.error || "Mã OTP không hợp lệ" });
+    }
+  };
+
+  // ── Handle Reset Password ──────────────────────────────────────
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setLoading(true);
+    const result = await resetPassword({
+      email: form.email,
+      otp: form.otp,
+      newPassword: form.password,
+    });
+    setLoading(false);
+    if (result.success) {
+      toast.success("Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.");
+      setScreen("login");
+      setForm((p) => ({ ...p, password: "", confirmPassword: "", otp: "" }));
+    } else {
+      setErrors({ password: result.error || "Đặt lại mật khẩu thất bại" });
+    }
+  };
+
+  // ── Forgot Password Request Screen ────────────────────────────
+  if (screen === "forgot_request") {
+    return (
+      <div className="min-h-screen bg-background flex">
+        <LeftPanel />
+
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md space-y-8">
+            <button
+              onClick={() => setScreen("login")}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft size={16} /> Quay lại đăng nhập
+            </button>
+
+            <div>
+              <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mb-4">
+                <KeyRound className="text-primary-foreground" size={26} />
+              </div>
+              <h1 className="text-3xl font-bold text-foreground">Quên mật khẩu</h1>
+              <p className="text-muted-foreground mt-2">
+                Nhập email của bạn để nhận mã xác thực đặt lại mật khẩu
+              </p>
+            </div>
+
+            <form onSubmit={handleForgotPassword} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail
+                    size={18}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="email@example.com"
+                    className="pl-10"
+                    value={form.email}
+                    onChange={(e) => update("email", e.target.value)}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-sm text-destructive">{errors.email}</p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full gradient-primary text-primary-foreground font-semibold h-11"
+                disabled={loading}
+              >
+                {loading ? "Đang xử lý..." : "Gửi mã xác thực"}
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Forgot Password OTP Screen ──────────────────────────────────
+  if (screen === "forgot_otp") {
+    return (
+      <div className="min-h-screen bg-background flex">
+        <LeftPanel />
+
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md space-y-8">
+            <button
+              onClick={() => setScreen("forgot_request")}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft size={16} /> Quay lại
+            </button>
+
+            <div>
+              <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mb-4">
+                <KeyRound className="text-primary-foreground" size={26} />
+              </div>
+              <h1 className="text-3xl font-bold text-foreground">Xác thực mã OTP</h1>
+              <p className="text-muted-foreground mt-2">
+                Mã OTP 6 chữ số đã được gửi tới email <span className="font-semibold text-foreground">{form.email}</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleVerifyResetOtp} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="otp">Mã OTP</Label>
+                <div className="relative">
+                  <KeyRound
+                    size={18}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    id="otp"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    className="pl-10 text-center tracking-[0.5em] text-lg font-mono"
+                    value={form.otp}
+                    onChange={(e) => update("otp", e.target.value.replace(/\D/g, ""))}
+                  />
+                </div>
+                {errors.otp && (
+                  <p className="text-sm text-destructive">{errors.otp}</p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full gradient-primary text-primary-foreground font-semibold h-11"
+                disabled={loading}
+              >
+                {loading ? "Đang xác thực..." : "Xác nhận OTP"}
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Forgot Password Reset Screen ──────────────────────────────
+  if (screen === "forgot_password") {
+    return (
+      <div className="min-h-screen bg-background flex">
+        <LeftPanel />
+
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md space-y-8">
+            <button
+              onClick={() => setScreen("forgot_otp")}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft size={16} /> Quay lại
+            </button>
+
+            <div>
+              <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mb-4">
+                <Lock className="text-primary-foreground" size={26} />
+              </div>
+              <h1 className="text-3xl font-bold text-foreground">Đặt lại mật khẩu</h1>
+              <p className="text-muted-foreground mt-2">
+                Nhập mật khẩu mới cho tài khoản <span className="font-semibold text-foreground">{form.email}</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="password">Mật khẩu mới</Label>
+                <div className="relative">
+                  <Lock
+                    size={18}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="pl-10 pr-10"
+                    value={form.password}
+                    onChange={(e) => update("password", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-destructive">{errors.password}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Xác nhận mật khẩu mới</Label>
+                <div className="relative">
+                  <Lock
+                    size={18}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    className="pl-10"
+                    value={form.confirmPassword}
+                    onChange={(e) => update("confirmPassword", e.target.value)}
+                  />
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-sm text-destructive">
+                    {errors.confirmPassword}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full gradient-primary text-primary-foreground font-semibold h-11"
+                disabled={loading}
+              >
+                {loading ? "Đang đặt lại..." : "Đặt lại mật khẩu"}
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── OTP Screen ─────────────────────────────────────────────────
   if (screen === "otp") {
@@ -333,6 +613,10 @@ const Auth = () => {
               <div className="flex justify-end">
                 <button
                   type="button"
+                  onClick={() => {
+                    setScreen("forgot_request");
+                    setErrors({});
+                  }}
                   className="text-sm text-primary hover:underline"
                 >
                   Quên mật khẩu?

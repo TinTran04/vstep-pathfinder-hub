@@ -15,4 +15,12 @@ public interface IAuthService
     Task ResendOtpAsync(ResendOtpRequest request);
 
     Task LogoutAsync(LogoutRequest request);
+
+    Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
+
+    Task ForgotPasswordAsync(ForgotPasswordRequest request);
+
+    Task VerifyResetOtpAsync(VerifyOtpRequest request);
+
+    Task ResetPasswordAsync(ResetPasswordRequest request);
 }

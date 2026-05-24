@@ -38,6 +38,17 @@ interface AuthContextType {
     otp: string
   ) => Promise<{ success: boolean; error?: string }>;
   resendOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  verifyResetOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (payload: {
+    email: string;
+    otp: string;
+    newPassword: string;
+  }) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -50,6 +61,10 @@ const AuthContext = createContext<AuthContextType>({
   register: () => Promise.resolve({ success: false }),
   verifyOtp: () => Promise.resolve({ success: false }),
   resendOtp: () => Promise.resolve({ success: false }),
+  changePassword: () => Promise.resolve({ success: false }),
+  forgotPassword: () => Promise.resolve({ success: false }),
+  verifyResetOtp: () => Promise.resolve({ success: false }),
+  resetPassword: () => Promise.resolve({ success: false }),
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -114,8 +129,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  // ── Change Password ───────────────────────────────────────────
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    return authService.changePassword(currentPassword, newPassword);
+  };
+
+  // ── Forgot Password ───────────────────────────────────────────
+  const forgotPassword = async (email: string) => {
+    return authService.forgotPassword(email);
+  };
+
+  // ── Verify Reset Password OTP ──────────────────────────────────
+  const verifyResetOtp = async (email: string, otp: string) => {
+    return authService.verifyResetOtp(email, otp);
+  };
+
+  // ── Reset Password ────────────────────────────────────────────
+  const resetPassword = async (payload: {
+    email: string;
+    otp: string;
+    newPassword: string;
+  }) => {
+    return authService.resetPassword(payload);
+  };
+
   const updateUser = (data: Partial<UserData>) => {
-    setUser((prev) => (prev ? { ...prev, ...data } : null));
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...data };
+      localStorage.setItem("vstep_user", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
@@ -130,6 +174,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         register,
         verifyOtp,
         resendOtp,
+        changePassword,
+        forgotPassword,
+        verifyResetOtp,
+        resetPassword,
       }}
     >
       {children}

@@ -90,6 +90,10 @@ public class UserService : IUserService
         user.SubscriptionPlanId = request.SubscriptionPlanId;
         user.EmailConfirmed = request.EmailConfirmed;
 
+        // Clear loaded navigation properties to prevent EF Core relationship fixup resetting the FK values
+        user.Role = null!;
+        user.SubscriptionPlan = null!;
+
         _unitOfWork.Users.Update(user);
         await _unitOfWork.SaveChangesAsync();
 

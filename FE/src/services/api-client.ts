@@ -111,6 +111,15 @@ export const apiClient = {
     return parseResponse<T>(res);
   },
 
+  async put<T>(path: string, body?: unknown, extraHeaders?: HeadersInit): Promise<T> {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
+      method: "PUT",
+      headers: buildHeaders(extraHeaders),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return parseResponse<T>(res);
+  },
+
   async delete<T>(path: string, extraHeaders?: HeadersInit): Promise<T> {
     const res = await fetch(`${getBaseUrl()}${path}`, {
       method: "DELETE",
