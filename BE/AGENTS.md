@@ -350,6 +350,42 @@ BusinessLogicLayer -> VAIApplication      # Sai
 
 ```
 
+## 5.1 Database Identity Rules
+
+Project hiện tại đã refactor hoàn toàn sang int identity IDs.
+
+Tất cả primary key và foreign key phải dùng:
+
+```csharp
+public int Id { get; set; }
+
+Không dùng:
+
+Guid
+UUID
+string ID
+
+Ví dụ đúng:
+
+public int UserId { get; set; }
+
+public int RoleId { get; set; }
+
+public int SubscriptionPlanId { get; set; }
+
+public int ExamId { get; set; }
+
+DbContext phải dùng:
+
+.ValueGeneratedOnAdd()
+
+cho identity columns.
+
+Route API phải dùng int constraint:
+
+[HttpGet("{id:int}")]
+
+Không dùng Guid route.
 
 
 ## 6. Repository Pattern Rules
@@ -366,7 +402,7 @@ Có thể dùng Generic Repository cho thao tác cơ bản:
 
 ```csharp
 
-Task<T?> GetByIdAsync(Guid id);
+Task<T?> GetByIdAsync(int id);
 
 Task AddAsync(T entity);
 
@@ -408,7 +444,7 @@ public interface IExamRepository
 
 {
 
-    Task<Exam?> GetExamDetailAsync(Guid examId);
+    Task<Exam?> GetExamDetailAsync(int examId);
 
     Task<List<Exam>> GetPublishedExamsAsync(int page, int pageSize);
 
@@ -692,6 +728,46 @@ Các rule bắt buộc:
 
 - Lấy thông tin gói từ database/server-side.
 
+### Subscription Payment Rules
+
+Subscription plans hiện tại:
+
+```txt
+1 = free
+2 = weekly
+3 = monthly
+
+Pricing:
+
+free    = 0 VND
+weekly  = 49,000 VND
+monthly = 199,000 VND
+
+Duration:
+
+free    = 0 days
+weekly  = 7 days
+monthly = 30 days
+
+Payment callback phải:
+
+verify secure hash/signature
+chống double payment
+update payment status
+update subscription
+update SubscriptionExpiresAt
+lưu transaction log
+
+Không được trust:
+
+amount từ frontend
+subscription plan từ frontend khi callback
+
+Phải lấy lại dữ liệu plan từ database/server-side.
+
+
+---
+
 
 
 ## 12. Authentication Rules
@@ -719,10 +795,28 @@ Các rule bắt buộc:
   - `free`
   - `weekly`
   - `monthly`
+- Giá gói hiện tại: 
+  - `free = 0 VND` 
+  - `weekly = 49,000 VND` 
+  - `monthly = 199,000 VND`
 
 - User mới mặc định:
-  - `Role = "user"`
-  - `SubscriptionPlan = "free"`
+  - RoleId = 3;
+  - SubscriptionPlanId = 1;
+
+  - User entity KHÔNG lưu role/subscription trực tiếp dạng string.
+
+Bắt buộc dùng relationship:
+
+public int RoleId { get; set; }
+public Role Role { get; set; } = null!;
+
+public int SubscriptionPlanId { get; set; }
+public SubscriptionPlan SubscriptionPlan { get; set; } = null!;
+
+JWT bắt buộc chứa role name claim:
+
+new Claim(ClaimTypes.Role, user.Role.Name)
 
 ### 12.1 Email OTP Verification Rules
 
@@ -1257,7 +1351,7 @@ Quy tắc CRUD:
 - Dùng `DateTime.UtcNow` cho audit fields.
 - Dùng AutoMapper cho mapping phổ biến, mapping thủ công nếu cần tối ưu query projection.
 
-## 22. Cost Optimization Principles
+## 23. Cost Optimization Principles
 
 
 
@@ -1283,7 +1377,7 @@ Luôn ưu tiên giải pháp tiết kiệm chi phí:
 
 
 
-## 23. Things Not To Do
+## 24. Things Not To Do
 
 
 
@@ -1311,7 +1405,7 @@ Không được:
 
 
 
-## 24. Pending Decisions
+## 25. Pending Decisions
 
 
 

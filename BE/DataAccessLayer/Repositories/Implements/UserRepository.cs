@@ -24,6 +24,12 @@ public class UserRepository : IUserRepository
             .FirstOrDefaultAsync(user => user.UserId == userId);
     }
 
+    public Task<User?> GetTrackedByIdAsync(int userId)
+    {
+        return _context.Users
+            .FirstOrDefaultAsync(user => user.UserId == userId);
+    }
+
     public Task<User?> GetByEmailAsync(string email)
     {
         return _context.Users
