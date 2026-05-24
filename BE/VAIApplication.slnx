@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="BusinessLogicLayer/BusinessLogicLayer.csproj" />
-  <Project Path="DataAccessLayer/DataAccessLayer.csproj" />
-  <Project Path="VAIApplication/VAIApplication.csproj" />
-</Solution>
