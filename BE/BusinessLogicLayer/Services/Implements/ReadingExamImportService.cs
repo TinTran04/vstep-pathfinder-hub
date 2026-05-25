@@ -14,7 +14,7 @@ public class ReadingExamImportService : IReadingExamImportService
 {
     private static readonly Regex DurationRegex = new(@"Time\s+permitted\s*:\s*(\d+)\s*minutes?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PassageRegex = new(@"^\s*PASSAGE\s+(\d+)\b.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex QuestionRegex = new(@"^\s*(\d{1,3})\s*[\.\)]\s+(.+)$", RegexOptions.Compiled);
+    private static readonly Regex QuestionRegex = new(@"^\s*(\d{1,3})\s*[\.\)]\s*(.+)$", RegexOptions.Compiled);
     private static readonly Regex OptionMarkerRegex = new(@"([A-Da-d])[\.\)]\s*", RegexOptions.Compiled);
     private static readonly Regex AnswerRegex = new(@"(?:^|\s)(\d{1,3})\s*[\.\):\-]\s*([A-Da-d])\b", RegexOptions.Compiled);
     private static readonly string[] ExpectedOptionLabels = ["A", "B", "C", "D"];
@@ -97,10 +97,34 @@ public class ReadingExamImportService : IReadingExamImportService
             return new List<string>();
         }
 
-        return body.Descendants<Paragraph>()
-            .Select(paragraph => NormalizeWhitespace(paragraph.InnerText))
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .ToList();
+        var lines = new List<string>();
+
+        foreach (var element in body.ChildElements)
+        {
+            if (element is Paragraph paragraph)
+            {
+                AddLine(lines, paragraph.InnerText);
+                continue;
+            }
+
+            if (element is Table table)
+            {
+                foreach (var row in table.Elements<TableRow>())
+                {
+                    var cells = row.Elements<TableCell>()
+                        .Select(cell => NormalizeWhitespace(cell.InnerText))
+                        .Where(cell => !string.IsNullOrWhiteSpace(cell))
+                        .ToList();
+
+                    if (cells.Count > 0)
+                    {
+                        lines.Add(string.Join('\t', cells));
+                    }
+                }
+            }
+        }
+
+        return lines;
     }
 
     private static int ParseDurationMinutes(IEnumerable<string> lines)
@@ -123,16 +147,38 @@ public class ReadingExamImportService : IReadingExamImportService
 
         foreach (var line in answerLines)
         {
+            var cells = line.Split('\t', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (cells.Length >= 2)
+            {
+                for (var i = 0; i + 1 < cells.Length; i += 2)
+                {
+                    AddAnswer(answers, cells[i], cells[i + 1]);
+                }
+
+                continue;
+            }
+
             foreach (Match match in AnswerRegex.Matches(line))
             {
-                if (int.TryParse(match.Groups[1].Value, out var questionNumber))
-                {
-                    answers[questionNumber] = match.Groups[2].Value.ToUpperInvariant();
-                }
+                AddAnswer(answers, match.Groups[1].Value, match.Groups[2].Value);
             }
         }
 
         return answers;
+    }
+
+    private static void AddAnswer(Dictionary<int, string> answers, string questionNumberText, string answerText)
+    {
+        if (!int.TryParse(questionNumberText.Trim(), out var questionNumber))
+        {
+            return;
+        }
+
+        var answer = answerText.Trim().ToUpperInvariant();
+        if (answer.Length == 1 && answer[0] is >= 'A' and <= 'D')
+        {
+            answers[questionNumber] = answer;
+        }
     }
 
     private static List<ExamSection> ParseSections(
@@ -451,6 +497,15 @@ public class ReadingExamImportService : IReadingExamImportService
         return Regex.Replace(value, @"\s+", " ").Trim();
     }
 
+    private static void AddLine(List<string> lines, string value)
+    {
+        var line = NormalizeWhitespace(value);
+        if (!string.IsNullOrWhiteSpace(line))
+        {
+            lines.Add(line);
+        }
+    }
+
     private static int GetOptionDisplayOrder(string label)
     {
         return label.ToUpperInvariant() switch
@@ -476,7 +531,10 @@ public class ReadingExamImportService : IReadingExamImportService
             }
         }
 
-        return builder.ToString().Normalize(NormalizationForm.FormC).Replace('Đ', 'D').Replace('đ', 'd');
+        return builder.ToString()
+            .Normalize(NormalizationForm.FormC)
+            .Replace("\u0110", "D")
+            .Replace("\u0111", "d");
     }
 
     private sealed class ParsedQuestion

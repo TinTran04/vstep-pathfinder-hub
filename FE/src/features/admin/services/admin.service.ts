@@ -41,6 +41,14 @@ interface BEExamResponse {
   createdAt: string;
 }
 
+interface ImportReadingExamResponse {
+  examId: number;
+  title: string;
+  totalSections: number;
+  totalQuestions: number;
+  warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
+}
+
 // --- Mappers ---
 function toUser(u: BEUserResponse): User {
   let planName = "Miễn phí";
@@ -222,6 +230,26 @@ export const adminService = {
   async deleteExam(examId: string): Promise<boolean> {
     await apiClient.delete(`/exams/${examId}`);
     return true;
+  },
+
+  async importReadingDocx(file: File, isPublished = false): Promise<{ exam: Exam; warnings: ImportReadingExamResponse["warnings"] }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("isPublished", String(isPublished));
+
+    const res = await apiClient.upload<ImportReadingExamResponse>("/exams/import-reading-docx", formData);
+    return {
+      exam: {
+        id: res.examId.toString(),
+        title: res.title,
+        skill: "Reading",
+        difficulty: "Trung bình",
+        questions: res.totalQuestions,
+        status: isPublished ? "active" : "draft",
+        uploadedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+      },
+      warnings: res.warnings ?? [],
+    };
   },
 
   // Price Plan CRUD

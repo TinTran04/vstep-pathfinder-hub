@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 import { readingService } from "../services/reading.service";
-import type { StartPracticeResponse, SubmitPracticeResponse } from "../services/reading.service";
+import type { AttemptResultResponse, StartPracticeResponse, SubmitPracticeResponse } from "../services/reading.service";
 import type { SectionResponse, QuestionResponse } from "@/features/quiz/services/practice.api-service";
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
@@ -24,6 +24,10 @@ import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyCo
 
 function getCorrectLabel(q: QuestionResponse): string {
   return q.options.find((o) => o.isCorrect)?.label ?? "";
+}
+
+function getResultAnswer(result: AttemptResultResponse | null, questionId: string) {
+  return result?.answers?.find((answer) => answer.questionId === questionId);
 }
 
 function countAllQuestions(sections: SectionResponse[]): number {
@@ -56,6 +60,7 @@ const ReadingQuiz = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitResult, setSubmitResult] = useState<SubmitPracticeResponse | null>(null);
+  const [attemptResult, setAttemptResult] = useState<AttemptResultResponse | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -106,6 +111,8 @@ const ReadingQuiz = () => {
     try {
       const res = await readingService.submit(practiceData.attemptId, answers, durationUsed);
       setSubmitResult(res);
+      const result = await readingService.getResult(practiceData.attemptId);
+      setAttemptResult(result);
       setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
@@ -120,6 +127,7 @@ const ReadingQuiz = () => {
     setCurrentSection(0);
     setSubmitted(false);
     setSubmitResult(null);
+    setAttemptResult(null);
     setDurationUsed(0);
     setIsPaused(false);
     if (examId) {
@@ -192,7 +200,9 @@ const ReadingQuiz = () => {
 
   // ── Result screen ─────────────────────────────────────────
   if (submitted && submitResult) {
-    const { score, correctCount, totalQuestions } = submitResult;
+    const score = attemptResult?.score ?? submitResult.score;
+    const correctCount = attemptResult?.correctCount ?? submitResult.correctCount;
+    const totalQuestions = attemptResult?.totalQuestions ?? submitResult.totalQuestions;
     const pct = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
     return (
@@ -213,7 +223,7 @@ const ReadingQuiz = () => {
                 <p className="text-xs text-muted-foreground">Câu đúng / {totalQuestions}</p>
               </div>
               <div className="p-4 rounded-xl bg-muted/50 space-y-1">
-                <p className="text-3xl font-bold text-primary">{score.toFixed(1)}</p>
+                <p className="text-3xl font-bold text-primary">{(score ?? 0).toFixed(1)}</p>
                 <p className="text-xs text-muted-foreground">Điểm</p>
               </div>
               <div className="p-4 rounded-xl bg-muted/50 space-y-1">
@@ -232,9 +242,10 @@ const ReadingQuiz = () => {
                   <h3 className="font-bold text-sm text-foreground">{sec.title || `Đoạn văn ${si + 1}`}</h3>
                   {sec.questions.map((q, qi) => {
                     const globalIdx = sections.slice(0, si).reduce((s, s2) => s + s2.questions.length, 0) + qi + 1;
-                    const userAnswer = answers[q.questionId];
-                    const correctLabel = getCorrectLabel(q);
-                    const isCorrect = userAnswer === correctLabel;
+                    const answerReview = getResultAnswer(attemptResult, q.questionId);
+                    const userAnswer = answerReview?.userAnswer ?? answers[q.questionId];
+                    const correctLabel = answerReview?.correctAnswer ?? getCorrectLabel(q);
+                    const isCorrect = answerReview?.isCorrect ?? (Boolean(correctLabel) && userAnswer === correctLabel);
                     return (
                       <div key={q.questionId} className={`p-4 rounded-xl border-2 space-y-2 ${isCorrect ? "bg-emerald-50/50 border-emerald-200" : "bg-red-50/50 border-red-200"}`}>
                         <div className="flex items-start gap-2 justify-between">
@@ -249,15 +260,15 @@ const ReadingQuiz = () => {
                           <p className="text-muted-foreground">
                             Bạn chọn: <span className={`font-semibold ${isCorrect ? "text-emerald-700" : "text-red-700"}`}>{userAnswer || "Chưa trả lời"}</span>
                           </p>
-                          {!isCorrect && (
+                          {!isCorrect && correctLabel && (
                             <p className="text-muted-foreground">
                               Đáp án đúng: <span className="font-semibold text-emerald-700">{correctLabel}</span>
                             </p>
                           )}
-                          {q.explanation && (
+                          {(answerReview?.explanation || q.explanation) && (
                             <div className="mt-2 p-2.5 bg-background/50 border border-border rounded-lg">
                               <p className="font-semibold text-xs text-foreground mb-1">💡 Giải thích:</p>
-                              <p className="text-muted-foreground leading-relaxed">{q.explanation}</p>
+                              <p className="text-muted-foreground leading-relaxed">{answerReview?.explanation || q.explanation}</p>
                             </div>
                           )}
                         </div>

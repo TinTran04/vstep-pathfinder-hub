@@ -39,6 +39,35 @@ export interface ExamResponse {
   updatedAt: string | null;
 }
 
+export interface OptionResponse {
+  optionId: string;
+  label: string;
+  content: string;
+  isCorrect?: boolean;
+  orderIndex?: number;
+}
+
+export interface QuestionResponse {
+  questionId: string;
+  questionText: string;
+  explanation?: string | null;
+  options: OptionResponse[];
+  orderIndex?: number;
+}
+
+export interface SectionResponse {
+  sectionId: string;
+  title: string;
+  instruction?: string | null;
+  passageText?: string | null;
+  questions: QuestionResponse[];
+  orderIndex?: number;
+}
+
+export interface ExamDetailResponse extends ExamResponse {
+  sections: SectionResponse[];
+}
+
 export interface PagedResponse<T> {
   items: T[];
   totalCount: number;

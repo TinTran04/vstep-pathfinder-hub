@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, DollarSign, Plus, Trash2, Edit2, Search,
@@ -122,6 +122,9 @@ const Admin = () => {
   const [editExam, setEditExam] = useState<Exam | null>(null);
   const [examStep, setExamStep] = useState<"skill" | "form">("skill");
   const [examForm, setExamForm] = useState({ title: "", skill: "Listening", difficulty: "Dễ", questions: 10, status: "draft" as "active" | "draft" });
+
+  const readingDocxInputRef = useRef<HTMLInputElement | null>(null);
+  const [importingReadingDocx, setImportingReadingDocx] = useState(false);
 
   const [priceDialog, setPriceDialog] = useState(false);
   const [editPlan, setEditPlan] = useState<PricePlan | null>(null);
@@ -360,6 +363,31 @@ const Admin = () => {
       toast.success("Xóa thành công");
     } catch (err) {
       toast.error("Có lỗi xảy ra");
+    }
+  };
+
+  const importReadingDocx = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".docx")) {
+      toast.error("Vui lòng chọn file .docx");
+      return;
+    }
+
+    setImportingReadingDocx(true);
+    try {
+      const { exam, warnings } = await adminService.importReadingDocx(file, false);
+      setExams(p => [...p, exam]);
+      toast.success(warnings.length > 0
+        ? `Import thành công với ${warnings.length} cảnh báo`
+        : "Import đề Reading thành công");
+    } catch (err) {
+      const message = (err as { message?: string })?.message;
+      toast.error(message || "Import file DOCX thất bại");
+    } finally {
+      setImportingReadingDocx(false);
+      if (readingDocxInputRef.current) {
+        readingDocxInputRef.current.value = "";
+      }
     }
   };
 
@@ -1120,6 +1148,23 @@ const Admin = () => {
                         <SelectItem value="draft">Draft</SelectItem>
                       </SelectContent>
                     </Select>
+                    <input
+                      ref={readingDocxInputRef}
+                      type="file"
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={e => importReadingDocx(e.target.files?.[0])}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 shrink-0"
+                      onClick={() => readingDocxInputRef.current?.click()}
+                      disabled={importingReadingDocx}
+                    >
+                      <Upload size={14} /> {importingReadingDocx ? "Đang import..." : "Import Reading DOCX"}
+                    </Button>
                     <Button onClick={openAddExam} size="sm" className="gradient-primary text-primary-foreground gap-1.5 shrink-0">
                       <Plus size={14} /> Thêm đề
                     </Button>
