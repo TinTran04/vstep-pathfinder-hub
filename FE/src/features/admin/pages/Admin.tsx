@@ -125,6 +125,9 @@ const Admin = () => {
 
   const readingDocxInputRef = useRef<HTMLInputElement | null>(null);
   const [importingReadingDocx, setImportingReadingDocx] = useState(false);
+  const listeningAudioInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedAudioExam, setSelectedAudioExam] = useState<Exam | null>(null);
+  const [uploadingAudioExamId, setUploadingAudioExamId] = useState<string | null>(null);
 
   const [priceDialog, setPriceDialog] = useState(false);
   const [editPlan, setEditPlan] = useState<PricePlan | null>(null);
@@ -387,6 +390,36 @@ const Admin = () => {
       setImportingReadingDocx(false);
       if (readingDocxInputRef.current) {
         readingDocxInputRef.current.value = "";
+      }
+    }
+  };
+
+  const openListeningAudioUpload = (exam: Exam) => {
+    setSelectedAudioExam(exam);
+    listeningAudioInputRef.current?.click();
+  };
+
+  const uploadListeningAudio = async (file: File | undefined) => {
+    if (!file || !selectedAudioExam) return;
+    const isAudioFile = file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|aac)$/i.test(file.name);
+    if (!isAudioFile) {
+      toast.error("Vui lòng chọn file audio");
+      return;
+    }
+
+    setUploadingAudioExamId(selectedAudioExam.id);
+    try {
+      const updated = await adminService.uploadListeningAudio(selectedAudioExam, file);
+      setExams(p => p.map(e => e.id === updated.id ? updated : e));
+      toast.success("Upload audio Listening thành công");
+    } catch (err) {
+      const message = (err as { message?: string })?.message;
+      toast.error(message || "Upload audio thất bại");
+    } finally {
+      setUploadingAudioExamId(null);
+      setSelectedAudioExam(null);
+      if (listeningAudioInputRef.current) {
+        listeningAudioInputRef.current.value = "";
       }
     }
   };
@@ -1155,6 +1188,13 @@ const Admin = () => {
                       className="hidden"
                       onChange={e => importReadingDocx(e.target.files?.[0])}
                     />
+                    <input
+                      ref={listeningAudioInputRef}
+                      type="file"
+                      accept="audio/*"
+                      className="hidden"
+                      onChange={e => uploadListeningAudio(e.target.files?.[0])}
+                    />
                     <Button
                       type="button"
                       variant="outline"
@@ -1223,6 +1263,18 @@ const Admin = () => {
                               <TableCell className="text-xs text-muted-foreground">{e.uploadedAt}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-0.5">
+                                  {e.skill === "Listening" && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      onClick={() => openListeningAudioUpload(e)}
+                                      disabled={uploadingAudioExamId === e.id}
+                                      title="Thêm audio Listening"
+                                    >
+                                      <FileAudio size={13} />
+                                    </Button>
+                                  )}
                                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditExam(e)}><Edit2 size={13} /></Button>
                                   <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteExam(e.id)}><Trash2 size={13} /></Button>
                                 </div>

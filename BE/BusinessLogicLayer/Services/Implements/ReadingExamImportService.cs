@@ -10,7 +10,7 @@ using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace BusinessLogicLayer.Services.Implements;
 
-public class ReadingExamImportService : IReadingExamImportService
+public class ReadingExamImportService : IReadingExamImportService, IListeningExamImportService
 {
     private static readonly Regex DurationRegex = new(@"Time\s+permitted\s*:\s*(\d+)\s*minutes?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PassageRegex = new(@"^\s*PASSAGE\s+(\d+)\b.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -82,6 +82,76 @@ public class ReadingExamImportService : IReadingExamImportService
         {
             ExamId = exam.ExamId,
             Title = exam.Title,
+            TotalSections = exam.Sections.Count,
+            TotalQuestions = totalQuestions,
+            Warnings = warnings
+        };
+    }
+
+    public async Task<ImportListeningExamResponse> ImportAsync(Stream docxStream, string fileName, string? audioUrl, bool isPublished)
+    {
+        if (docxStream.CanSeek && docxStream.Length == 0)
+        {
+            throw new InvalidOperationException("File is empty.");
+        }
+
+        if (!string.Equals(Path.GetExtension(fileName), ".docx", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Only .docx files are supported.");
+        }
+
+        var lines = ReadParagraphLines(docxStream);
+        if (lines.Count == 0)
+        {
+            throw new InvalidOperationException("The DOCX file does not contain readable text.");
+        }
+
+        var answerKeyIndex = lines.FindIndex(IsAnswerKeyHeader);
+        var contentLines = answerKeyIndex >= 0 ? lines.Take(answerKeyIndex).ToList() : lines;
+        var answerLines = answerKeyIndex >= 0 ? lines.Skip(answerKeyIndex + 1).ToList() : new List<string>();
+        var answerKey = ParseAnswerKey(answerLines);
+
+        var title = contentLines.FirstOrDefault(line => !IsMetadataLine(line) && !PassageRegex.IsMatch(line)) ?? "Listening Exam";
+        var durationMinutes = ParseDurationMinutes(contentLines);
+        var warnings = new List<ImportReadingWarningResponse>();
+        var sections = ParseSections(contentLines, answerKey, warnings);
+        var normalizedAudioUrl = NormalizeNullable(audioUrl);
+
+        if (sections.Count == 0)
+        {
+            throw new InvalidOperationException("No passage found in the listening DOCX file.");
+        }
+
+        var totalQuestions = sections.Sum(section => section.Questions.Count);
+        if (totalQuestions == 0)
+        {
+            throw new InvalidOperationException("No questions found in the listening DOCX file.");
+        }
+
+        foreach (var section in sections.Where(section => string.IsNullOrWhiteSpace(section.AudioUrl)))
+        {
+            section.AudioUrl = normalizedAudioUrl;
+        }
+
+        var exam = new Exam
+        {
+            Title = title.Trim(),
+            SkillType = "listening",
+            Description = "Imported from DOCX",
+            DurationMinutes = durationMinutes,
+            AudioUrl = normalizedAudioUrl,
+            IsPublished = isPublished,
+            Sections = sections
+        };
+
+        await _unitOfWork.Exams.AddAsync(exam);
+        await _unitOfWork.SaveChangesAsync();
+
+        return new ImportListeningExamResponse
+        {
+            ExamId = exam.ExamId,
+            Title = exam.Title,
+            AudioUrl = exam.AudioUrl,
             TotalSections = exam.Sections.Count,
             TotalQuestions = totalQuestions,
             Warnings = warnings
@@ -490,6 +560,11 @@ public class ReadingExamImportService : IReadingExamImportService
     private static string JoinLines(IEnumerable<string> lines)
     {
         return string.Join(Environment.NewLine, lines.Where(line => !string.IsNullOrWhiteSpace(line)).Select(line => line.Trim()));
+    }
+
+    private static string? NormalizeNullable(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static string NormalizeWhitespace(string value)

@@ -13,11 +13,19 @@ public class ExamsController : ControllerBase
 {
     private readonly IExamService _examService;
     private readonly IReadingExamImportService _readingExamImportService;
+    private readonly IListeningExamImportService _listeningExamImportService;
+    private readonly IListeningAudioService _listeningAudioService;
 
-    public ExamsController(IExamService examService, IReadingExamImportService readingExamImportService)
+    public ExamsController(
+        IExamService examService,
+        IReadingExamImportService readingExamImportService,
+        IListeningExamImportService listeningExamImportService,
+        IListeningAudioService listeningAudioService)
     {
         _examService = examService;
         _readingExamImportService = readingExamImportService;
+        _listeningExamImportService = listeningExamImportService;
+        _listeningAudioService = listeningAudioService;
     }
 
     /// <summary>
@@ -122,6 +130,73 @@ public class ExamsController : ControllerBase
             await using var stream = file.OpenReadStream();
             var response = await _readingExamImportService.ImportAsync(stream, file.FileName, isPublished);
             return StatusCode(StatusCodes.Status201Created, ApiResponse<ImportReadingExamResponse>.Ok(response, "Import reading exam successfully."));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Import de Listening tu file DOCX va gan URL audio neu co; chi admin va staff duoc thuc hien.
+    /// </summary>
+    /// <param name="file">File DOCX chua de Listening theo dinh dang passage, cau hoi va dap an.</param>
+    /// <param name="audioUrl">URL audio Listening da upload len storage, neu co.</param>
+    /// <param name="isPublished">Trang thai publish cua de sau khi import, mac dinh la false.</param>
+    [HttpPost("import-listening-docx")]
+    [Authorize(Roles = "admin,staff")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<ImportListeningExamResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ImportListeningDocx(IFormFile file, [FromForm] string? audioUrl = null, [FromForm] bool isPublished = false)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<object>.Fail("File is required."));
+        }
+
+        if (!string.Equals(Path.GetExtension(file.FileName), ".docx", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(ApiResponse<object>.Fail("Only .docx files are supported."));
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var response = await _listeningExamImportService.ImportAsync(stream, file.FileName, audioUrl, isPublished);
+            return StatusCode(StatusCodes.Status201Created, ApiResponse<ImportListeningExamResponse>.Ok(response, "Import listening exam successfully."));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Tao presigned URL de upload audio Listening len Cloudflare R2; chi admin va staff duoc thuc hien.
+    /// </summary>
+    /// <param name="request">Thong tin content type, duoi file va exam id neu da co.</param>
+    [HttpPost("listening-audio/upload-url")]
+    [Authorize(Roles = "admin,staff")]
+    [ProducesResponseType(typeof(ApiResponse<ListeningAudioUploadUrlResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> CreateListeningAudioUploadUrl([FromBody] CreateListeningAudioUploadUrlRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+        }
+
+        try
+        {
+            var response = await _listeningAudioService.CreateUploadUrlAsync(request);
+            return Ok(ApiResponse<ListeningAudioUploadUrlResponse>.Ok(response, "Create listening audio upload URL successfully."));
         }
         catch (InvalidOperationException exception)
         {

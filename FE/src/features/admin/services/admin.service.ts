@@ -49,6 +49,21 @@ interface ImportReadingExamResponse {
   warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
 }
 
+interface ListeningAudioUploadUrlResponse {
+  uploadUrl: string;
+  audioObjectKey: string;
+  audioUrl: string;
+  expiresAt: string;
+}
+
+function getDurationMinutes(skillType: string): number {
+  if (skillType === "listening") return 40;
+  if (skillType === "reading") return 60;
+  if (skillType === "writing") return 60;
+  if (skillType === "speaking") return 12;
+  return 45;
+}
+
 // --- Mappers ---
 function toUser(u: BEUserResponse): User {
   let planName = "Miễn phí";
@@ -92,6 +107,7 @@ function toExam(e: BEExamResponse): Exam {
     questions: questions,
     status: e.isPublished ? "active" : "draft",
     uploadedAt: e.createdAt ? e.createdAt.replace("T", " ").slice(0, 16) : new Date().toISOString().replace("T", " ").slice(0, 16),
+    audioUrl: e.audioUrl,
   };
 }
 
@@ -185,11 +201,7 @@ export const adminService = {
   // Exam CRUD
   async createExam(payload: Omit<Exam, "id" | "uploadedAt">): Promise<Exam> {
     const skillType = payload.skill.toLowerCase();
-    let durationMinutes = 45;
-    if (skillType === "listening") durationMinutes = 40;
-    else if (skillType === "reading") durationMinutes = 60;
-    else if (skillType === "writing") durationMinutes = 60;
-    else if (skillType === "speaking") durationMinutes = 12;
+    const durationMinutes = getDurationMinutes(skillType);
 
     const bePayload = {
       title: payload.title,
@@ -197,7 +209,7 @@ export const adminService = {
       description: payload.title,
       durationMinutes,
       isPublished: payload.status === "active",
-      audioUrl: null,
+      audioUrl: payload.audioUrl ?? null,
       imageUrl: null,
     };
 
@@ -207,11 +219,7 @@ export const adminService = {
 
   async updateExam(examId: string, payload: Partial<Exam>): Promise<Exam> {
     const skillType = payload.skill?.toLowerCase() || "listening";
-    let durationMinutes = 45;
-    if (skillType === "listening") durationMinutes = 40;
-    else if (skillType === "reading") durationMinutes = 60;
-    else if (skillType === "writing") durationMinutes = 60;
-    else if (skillType === "speaking") durationMinutes = 12;
+    const durationMinutes = getDurationMinutes(skillType);
 
     const bePayload = {
       title: payload.title || "",
@@ -219,7 +227,7 @@ export const adminService = {
       description: payload.title || "",
       durationMinutes,
       isPublished: payload.status === "active",
-      audioUrl: null,
+      audioUrl: payload.audioUrl ?? null,
       imageUrl: null,
     };
 
@@ -250,6 +258,35 @@ export const adminService = {
       },
       warnings: res.warnings ?? [],
     };
+  },
+
+  async uploadListeningAudio(exam: Exam, file: File): Promise<Exam> {
+    const contentType = file.type || "audio/mpeg";
+    const dotIndex = file.name.lastIndexOf(".");
+    const fileExtension = dotIndex >= 0 ? file.name.slice(dotIndex) : ".mp3";
+
+    const uploadInfo = await apiClient.post<ListeningAudioUploadUrlResponse>("/exams/listening-audio/upload-url", {
+      examId: Number(exam.id),
+      contentType,
+      fileExtension,
+    });
+
+    const uploadRes = await fetch(uploadInfo.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": contentType,
+      },
+      body: file,
+    });
+
+    if (!uploadRes.ok) {
+      throw new Error(`Upload audio failed: HTTP ${uploadRes.status}`);
+    }
+
+    return this.updateExam(exam.id, {
+      ...exam,
+      audioUrl: uploadInfo.audioUrl,
+    });
   },
 
   // Price Plan CRUD
