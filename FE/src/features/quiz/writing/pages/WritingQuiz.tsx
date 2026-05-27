@@ -122,6 +122,8 @@ const WritingQuiz = () => {
   // ── Mock-test saving ──
   const [mockSaving, setMockSaving] = useState(false);
 
+  const groupId = searchParams.get("groupId") ?? "";
+
   // ── Load exams ──────────────────────────────────────────────
   useEffect(() => {
     let active = true;
@@ -139,6 +141,26 @@ const WritingQuiz = () => {
           setApiExamIds([examIdParam]);
           setTasks([examToTask({ id: examIdParam, title: "Writing Task", description: "", duration: "60 phút", skillType: "writing" }, 0)]);
           setWritings({ 1: "" });
+        } else if (groupId) {
+          const exams = await examService.getExamsBySkill("writing");
+          if (!active) return;
+          const matched = exams.filter(e => {
+            const groupMatch = e.description?.match(/group:([^;|\n]+)/);
+            return groupMatch && groupMatch[1] === groupId;
+          });
+          if (matched.length === 0) {
+            setNoExams(true);
+            setLoading(false);
+            return;
+          }
+          // Sort matched exams by title so Task 1 is first and Task 2 is second
+          matched.sort((a, b) => a.title.localeCompare(b.title));
+          const mapped = matched.map((e, i) => examToTask(e, i));
+          setTasks(mapped);
+          setApiExamIds(matched.map(e => e.id));
+          const initialWritings: Record<number, string> = {};
+          mapped.forEach((_, i) => { initialWritings[i + 1] = ""; });
+          setWritings(initialWritings);
         } else {
           const exams = await examService.getExamsBySkill("writing");
           if (!active) return;
@@ -164,7 +186,7 @@ const WritingQuiz = () => {
     };
     load();
     return () => { active = false; };
-  }, [examIdParam]);
+  }, [examIdParam, groupId]);
 
   // ── Timer ───────────────────────────────────────────────────
   useEffect(() => {
@@ -615,7 +637,7 @@ const WritingQuiz = () => {
                 <Type size={18} className="text-primary" />
                 <span className="font-semibold text-foreground text-sm">Bài viết của bạn</span>
               </div>
-              <span className="text-xs text-muted-foreground">Khuyến nghị: {task.recommendedWords}</span>
+              <span className="text-xs text-muted-foreground">{task.title}</span>
             </div>
             <Textarea
               className="flex-1 min-h-[400px] resize-none text-sm leading-relaxed rounded-xl"

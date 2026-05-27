@@ -17,6 +17,7 @@ import type { StartPracticeResponse, SubmitPracticeResponse } from "../services/
 import type { SectionResponse, QuestionResponse } from "@/features/quiz/services/practice.api-service";
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
+import { attemptsService } from "@/features/attempts/services/attempts.service";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -134,6 +135,13 @@ const ListeningQuiz = () => {
         durationUsed
       );
       setSubmitResult(res);
+      if (isMockSession) {
+        await attemptsService.saveSkillAttempt("listening", {
+          score: res.score,
+          totalQuestions: res.totalQuestions,
+          answers: answers,
+        });
+      }
       setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
@@ -390,14 +398,12 @@ const ListeningQuiz = () => {
 
         {/* Main content */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col" style={{ height: "calc(100vh - 230px)" }}>
-          {/* Section header */}
           <div className="px-5 py-3 border-b border-border bg-muted/30">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-foreground text-sm">{section?.title || `Phần ${currentSection + 1}`}</h3>
                 {section?.instruction && <p className="text-xs text-muted-foreground">{section.instruction}</p>}
               </div>
-              <Badge variant="outline" className="text-xs">{section?.questions.length ?? 0} câu</Badge>
             </div>
           </div>
 

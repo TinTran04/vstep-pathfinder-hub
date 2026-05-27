@@ -49,8 +49,8 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 md:px-8 h-16 md:h-18">
         {/* Logo */}
         <a href="#" className="flex items-center gap-2">
-          <img src={logoImg} alt="VSTEPPro" className="w-9 h-9 rounded-xl object-contain" />
-          <span className="font-bold text-xl text-foreground tracking-tight">VSTEP<span className="text-gradient">Pro</span></span>
+          <img src={logoImg} alt="VstepUp" className="w-9 h-9 rounded-xl object-contain" />
+          <span className="font-bold text-xl text-foreground tracking-tight">Vstep<span className="text-gradient">Up</span></span>
         </a>
 
         {/* Desktop nav */}

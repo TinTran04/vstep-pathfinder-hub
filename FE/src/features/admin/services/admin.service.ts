@@ -49,6 +49,15 @@ interface ImportReadingExamResponse {
   warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
 }
 
+interface ImportListeningExamResponse {
+  examId: number;
+  title: string;
+  audioUrl: string | null;
+  totalSections: number;
+  totalQuestions: number;
+  warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
+}
+
 interface ListeningAudioUploadUrlResponse {
   uploadUrl: string;
   audioObjectKey: string;
@@ -99,6 +108,16 @@ function toExam(e: BEExamResponse): Exam {
   else if (lowerSkill === "writing") questions = 2;
   else if (lowerSkill === "speaking") questions = 3;
 
+  let groupId: string | undefined = undefined;
+  let groupTitle: string | undefined = undefined;
+  if (e.description) {
+    const groupMatch = e.description.match(/group:([^;|\n]+)/);
+    if (groupMatch) groupId = groupMatch[1];
+    
+    const titleMatch = e.description.match(/groupTitle:([^;|\n]+)/);
+    if (titleMatch) groupTitle = titleMatch[1];
+  }
+
   return {
     id: e.examId.toString(),
     title: e.title,
@@ -108,6 +127,9 @@ function toExam(e: BEExamResponse): Exam {
     status: e.isPublished ? "active" : "draft",
     uploadedAt: e.createdAt ? e.createdAt.replace("T", " ").slice(0, 16) : new Date().toISOString().replace("T", " ").slice(0, 16),
     audioUrl: e.audioUrl,
+    mode: e.description && e.description.includes("mode:mock_test") ? "mock_test" : "practice",
+    groupId,
+    groupTitle,
   };
 }
 
@@ -203,10 +225,13 @@ export const adminService = {
     const skillType = payload.skill.toLowerCase();
     const durationMinutes = getDurationMinutes(skillType);
 
+    const groupSegment = payload.groupId ? `;group:${payload.groupId}` : "";
+    const groupTitleSegment = payload.groupTitle ? `;groupTitle:${payload.groupTitle}` : "";
+
     const bePayload = {
       title: payload.title,
       skillType: skillType,
-      description: payload.title,
+      description: `${payload.title} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
       audioUrl: payload.audioUrl ?? null,
@@ -221,10 +246,13 @@ export const adminService = {
     const skillType = payload.skill?.toLowerCase() || "listening";
     const durationMinutes = getDurationMinutes(skillType);
 
+    const groupSegment = payload.groupId ? `;group:${payload.groupId}` : "";
+    const groupTitleSegment = payload.groupTitle ? `;groupTitle:${payload.groupTitle}` : "";
+
     const bePayload = {
       title: payload.title || "",
       skillType: skillType,
-      description: payload.title || "",
+      description: `${payload.title || ""} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
       audioUrl: payload.audioUrl ?? null,
@@ -255,6 +283,30 @@ export const adminService = {
         questions: res.totalQuestions,
         status: isPublished ? "active" : "draft",
         uploadedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+      },
+      warnings: res.warnings ?? [],
+    };
+  },
+
+  async importListeningDocx(file: File, audioUrl?: string | null, isPublished = false): Promise<{ exam: Exam; warnings: ImportListeningExamResponse["warnings"] }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (audioUrl) {
+      formData.append("audioUrl", audioUrl);
+    }
+    formData.append("isPublished", String(isPublished));
+
+    const res = await apiClient.upload<ImportListeningExamResponse>("/exams/import-listening-docx", formData);
+    return {
+      exam: {
+        id: res.examId.toString(),
+        title: res.title,
+        skill: "Listening",
+        difficulty: "Trung bình",
+        questions: res.totalQuestions,
+        status: isPublished ? "active" : "draft",
+        uploadedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+        audioUrl: res.audioUrl,
       },
       warnings: res.warnings ?? [],
     };

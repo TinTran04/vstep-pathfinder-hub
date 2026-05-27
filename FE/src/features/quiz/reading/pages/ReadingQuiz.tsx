@@ -19,6 +19,8 @@ import type { SectionResponse, QuestionResponse } from "@/features/quiz/services
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { examService } from "@/features/quiz/services/exam.service";
+import { attemptsService } from "@/features/attempts/services/attempts.service";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -43,7 +45,9 @@ const ReadingQuiz = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const modeParam = searchParams.get("mode") ?? "practice";
-  const examId = searchParams.get("examId") ?? "";
+  const examIdParam = searchParams.get("examId") ?? "";
+  const groupId = searchParams.get("groupId") ?? "";
+  const [resolvedExamId, setResolvedExamId] = useState(examIdParam);
   const session = searchParams.get("session") ?? "";
   const isMockSession = modeParam === "mock_test" && session === "mock";
   const perms = getPermissions(modeParam);
@@ -65,16 +69,40 @@ const ReadingQuiz = () => {
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
+  // ── Resolve examId from groupId if needed ──────────────────
+  useEffect(() => {
+    if (!resolvedExamId && groupId) {
+      examService.getExamsBySkill("reading")
+        .then((exams) => {
+          const matched = exams.find(e => {
+            const groupMatch = e.description?.match(/group:([^;|\n]+)/);
+            return groupMatch && groupMatch[1] === groupId;
+          });
+          if (matched) {
+            setResolvedExamId(matched.id);
+          } else {
+            setStartError("Không tìm thấy đề thi Reading cho nhóm thi thử này.");
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          setStartError("Không thể tải thông tin đề thi Reading.");
+          setLoading(false);
+        });
+    }
+  }, [resolvedExamId, groupId]);
+
   // ── Start practice on mount ───────────────────────────────
   useEffect(() => {
-    if (!examId) {
+    if (!resolvedExamId) {
+      if (groupId) return; // Wait for resolving
       setStartError("Không tìm thấy đề thi. Vui lòng quay lại trang Quiz.");
       setLoading(false);
       return;
     }
     let active = true;
     readingService
-      .start(examId)
+      .start(resolvedExamId)
       .then((res) => {
         if (!active) return;
         setPracticeData(res);
@@ -88,7 +116,7 @@ const ReadingQuiz = () => {
         setLoading(false);
       });
     return () => { active = false; };
-  }, [examId]);
+  }, [resolvedExamId, groupId]);
 
   // ── Timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -113,6 +141,13 @@ const ReadingQuiz = () => {
       setSubmitResult(res);
       const result = await readingService.getResult(practiceData.attemptId);
       setAttemptResult(result);
+      if (isMockSession) {
+        await attemptsService.saveSkillAttempt("reading", {
+          score: result?.score ?? res.score,
+          totalQuestions: result?.totalQuestions ?? res.totalQuestions,
+          answers: answers,
+        });
+      }
       setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
@@ -382,7 +417,7 @@ const ReadingQuiz = () => {
           <ScrollArea className="h-[calc(100vh-140px)]">
             <div className="p-6 space-y-6">
               <h3 className="font-semibold text-foreground">
-                Câu hỏi – {section?.title || `Bài ${currentSection + 1}`} ({section?.questions.length ?? 0} câu)
+                Câu hỏi – {section?.title || `Bài ${currentSection + 1}`}
               </h3>
               {(section?.questions ?? []).map((q, qi) => {
                 const globalIdx = sectionOffset + qi + 1;

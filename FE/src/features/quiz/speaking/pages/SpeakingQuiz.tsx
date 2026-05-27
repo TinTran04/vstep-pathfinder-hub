@@ -94,6 +94,8 @@ const SpeakingQuiz = () => {
   const [aiFeedback, setAiFeedback] = useState<Record<number, FeedbackState>>({});
   const [pollingStatus, setPollingStatus] = useState("");
 
+  const groupId = searchParams.get("groupId") ?? "";
+
   // ── Load exams ──────────────────────────────────────────────
   useEffect(() => {
     let active = true;
@@ -108,16 +110,33 @@ const SpeakingQuiz = () => {
       try {
         const exams = await examService.getExamsBySkill("speaking");
         if (!active) return;
-        if (exams.length === 0) {
+
+        let matched = exams;
+        if (groupId) {
+          matched = exams.filter(e => {
+            const groupMatch = e.description?.match(/group:([^;|\n]+)/);
+            return groupMatch && groupMatch[1] === groupId;
+          });
+          if (matched.length === 0) {
+            setNoExams(true);
+            setLoading(false);
+            return;
+          }
+          // Sort speaking exams by title so Part 1, 2, 3 are in order
+          matched.sort((a, b) => a.title.localeCompare(b.title));
+        }
+
+        if (matched.length === 0) {
           setNoExams(true);
           setLoading(false);
           return;
         }
-        const mapped = exams.slice(0, 3).map((e, i) =>
+
+        const mapped = matched.slice(0, 3).map((e, i) =>
           examToPart(e.id, e.title, e.description, i)
         );
         setPartsData(mapped);
-        const t = exams.length > 0 ? exams.length * 5 * 60 : MOCK_TOTAL_TIME;
+        const t = matched.length > 0 ? Math.min(matched.length, 3) * 5 * 60 : MOCK_TOTAL_TIME;
         setTotalTime(t);
         setTimeLeft(t);
       } catch (err) {
@@ -130,7 +149,7 @@ const SpeakingQuiz = () => {
     };
     load();
     return () => { active = false; };
-  }, []);
+  }, [groupId]);
 
   // ── Timer ──
   useEffect(() => {
@@ -357,11 +376,17 @@ const SpeakingQuiz = () => {
       setPollingStatus("Đang xử lý bài...");
       try {
         if (IS_API_MODE) {
+          const uploadedRecordings: Record<number, string> = {};
           for (const [partIdStr, blob] of Object.entries(recordingBlobs)) {
             const partId = Number(partIdStr);
             setPollingStatus(`Đang tải Part ${partId}...`);
-            await uploadAndSubmitRecording(partId, blob);
+            const res = await uploadAndSubmitRecording(partId, blob);
+            if (res?.audioUrl) {
+              uploadedRecordings[partId] = res.audioUrl;
+            }
           }
+          await attemptsService.saveSkillAttempt("speaking", { recordings: uploadedRecordings });
+          await attemptsService.finishMockTest();
         } else {
           const attemptId = await getOrCreateAttemptId();
           await uploadAndResolveRecordings(attemptId);

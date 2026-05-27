@@ -22,6 +22,15 @@ export interface Exam {
   status: "active" | "draft";
   uploadedAt: string;
   audioUrl?: string | null;
+  mode?: "practice" | "mock_test";
+  duration?: number;
+  writingTask1?: string;
+  writingTask2?: string;
+  speakingPart1?: string;
+  speakingPart2?: string;
+  speakingPart3?: string;
+  groupId?: string;
+  groupTitle?: string;
 }
 
 export interface PricePlan {
