@@ -14,7 +14,7 @@ const branches = [
       { icon: Headphones, label: "Listening", desc: "Nghe hiểu – 3 phần, 35 câu, 40 phút" },
       { icon: BookOpen, label: "Reading", desc: "Đọc hiểu – 4 phần, 40 câu, 60 phút" },
       { icon: PenTool, label: "Writing", desc: "Viết – 2 phần, viết thư & bài luận, 60 phút" },
-      { icon: Mic, label: "Speaking", desc: "Nói – 3 phần, phỏng vấn trực tiếp, 12 phút" },
+      { icon: Mic, label: "Speaking", desc: "Nói – 3 phần, phỏng vấn trực tiếp, 12–15 phút" },
     ],
     color: "bg-accent/10 text-accent",
   },

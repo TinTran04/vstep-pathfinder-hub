@@ -491,6 +491,11 @@ public class ReadingExamImportService : IReadingExamImportService
         return string.Join(Environment.NewLine, lines.Where(line => !string.IsNullOrWhiteSpace(line)).Select(line => line.Trim()));
     }
 
+    private static string? NormalizeNullable(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
     private static string NormalizeWhitespace(string value)
     {
         return Regex.Replace(value, @"\s+", " ").Trim();

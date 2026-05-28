@@ -84,9 +84,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setIsLoggedIn(false);
           setUser(null);
         }
+        setIsInitialising(false);
       });
+    } else {
+      setIsInitialising(false);
     }
-    setIsInitialising(false);
   }, []);
 
   // ── Login ─────────────────────────────────────────────────────

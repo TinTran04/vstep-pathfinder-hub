@@ -13,7 +13,7 @@ export interface WritingTask {
 export const tasks: WritingTask[] = [
   {
     id: 1,
-    title: "Task 1 – Writing Letter / Email",
+    title: "Task 1 – Viết thư/Email hoặc Tóm tắt",
     type: "Viết thư / Email",
     duration: "20 phút",
     minWords: 120,
@@ -33,7 +33,7 @@ export const tasks: WritingTask[] = [
     type: "Viết bài luận",
     duration: "40 phút",
     minWords: 250,
-    recommendedWords: "270–300 từ",
+    recommendedWords: "250–300 từ",
     scoreWeight: "2/3 tổng điểm (~6.7/10)",
     prompt: "Some people believe that technology has made our lives more complicated, while others think it has made life easier and more convenient.\n\nDiscuss both views and give your own opinion.\n\nWrite at least 250 words. Support your arguments with reasons and examples.",
     instructions: [

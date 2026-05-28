@@ -65,23 +65,38 @@ type TabType = "overview" | "rewards" | "settings" | "vocabulary";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, updateUser, logout, changePassword } = useAuth();
+  const { user, updateUser, logout, changePassword, isInitialising, isLoggedIn } = useAuth();
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isInitialising) return;
+
+    if (!isLoggedIn) {
+      toast.error("Vui lòng đăng nhập để tiếp tục.");
+      navigate("/auth");
+      return;
+    }
+
     let isMounted = true;
     dashboardService.getDashboardData().then((data) => {
       if (isMounted) {
         setDashboardData(data);
         setLoading(false);
       }
+    }).catch((err) => {
+      console.error(err);
+      if (isMounted) {
+        toast.error("Không thể kết nối đến máy chủ.");
+        setLoading(false);
+      }
     });
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isInitialising, isLoggedIn, navigate]);
 
   const weeklyData = dashboardData?.weeklyData || [];
   const recentScores = dashboardData?.recentScores || [];
@@ -129,6 +144,21 @@ const Dashboard = () => {
       setAvatarPreview(user.avatar || "");
     }
   }, [user?.name, user?.email, user?.avatar]);
+
+  if (isInitialising) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+          <p className="text-muted-foreground text-sm">Đang tải cấu hình phiên học...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   if (loading) {
     return (

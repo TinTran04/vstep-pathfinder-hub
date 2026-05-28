@@ -14,16 +14,22 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 import { readingService } from "../services/reading.service";
-import type { StartPracticeResponse, SubmitPracticeResponse } from "../services/reading.service";
+import type { AttemptResultResponse, StartPracticeResponse, SubmitPracticeResponse } from "../services/reading.service";
 import type { SectionResponse, QuestionResponse } from "@/features/quiz/services/practice.api-service";
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { examService } from "@/features/quiz/services/exam.service";
+import { attemptsService } from "@/features/attempts/services/attempts.service";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
 function getCorrectLabel(q: QuestionResponse): string {
   return q.options.find((o) => o.isCorrect)?.label ?? "";
+}
+
+function getResultAnswer(result: AttemptResultResponse | null, questionId: string) {
+  return result?.answers?.find((answer) => answer.questionId === questionId);
 }
 
 function countAllQuestions(sections: SectionResponse[]): number {
@@ -39,7 +45,9 @@ const ReadingQuiz = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const modeParam = searchParams.get("mode") ?? "practice";
-  const examId = searchParams.get("examId") ?? "";
+  const examIdParam = searchParams.get("examId") ?? "";
+  const groupId = searchParams.get("groupId") ?? "";
+  const [resolvedExamId, setResolvedExamId] = useState(examIdParam);
   const session = searchParams.get("session") ?? "";
   const isMockSession = modeParam === "mock_test" && session === "mock";
   const perms = getPermissions(modeParam);
@@ -56,20 +64,45 @@ const ReadingQuiz = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitResult, setSubmitResult] = useState<SubmitPracticeResponse | null>(null);
+  const [attemptResult, setAttemptResult] = useState<AttemptResultResponse | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
+  // ── Resolve examId from groupId if needed ──────────────────
+  useEffect(() => {
+    if (!resolvedExamId && groupId) {
+      examService.getExamsBySkill("reading")
+        .then((exams) => {
+          const matched = exams.find(e => {
+            const groupMatch = e.description?.match(/group:([^;|\n]+)/);
+            return groupMatch && groupMatch[1] === groupId;
+          });
+          if (matched) {
+            setResolvedExamId(matched.id);
+          } else {
+            setStartError("Không tìm thấy đề thi Reading cho nhóm thi thử này.");
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          setStartError("Không thể tải thông tin đề thi Reading.");
+          setLoading(false);
+        });
+    }
+  }, [resolvedExamId, groupId]);
+
   // ── Start practice on mount ───────────────────────────────
   useEffect(() => {
-    if (!examId) {
+    if (!resolvedExamId) {
+      if (groupId) return; // Wait for resolving
       setStartError("Không tìm thấy đề thi. Vui lòng quay lại trang Quiz.");
       setLoading(false);
       return;
     }
     let active = true;
     readingService
-      .start(examId)
+      .start(resolvedExamId)
       .then((res) => {
         if (!active) return;
         setPracticeData(res);
@@ -83,7 +116,7 @@ const ReadingQuiz = () => {
         setLoading(false);
       });
     return () => { active = false; };
-  }, [examId]);
+  }, [resolvedExamId, groupId]);
 
   // ── Timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -106,6 +139,15 @@ const ReadingQuiz = () => {
     try {
       const res = await readingService.submit(practiceData.attemptId, answers, durationUsed);
       setSubmitResult(res);
+      const result = await readingService.getResult(practiceData.attemptId);
+      setAttemptResult(result);
+      if (isMockSession) {
+        await attemptsService.saveSkillAttempt("reading", {
+          score: result?.score ?? res.score,
+          totalQuestions: result?.totalQuestions ?? res.totalQuestions,
+          answers: answers,
+        });
+      }
       setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
@@ -120,6 +162,7 @@ const ReadingQuiz = () => {
     setCurrentSection(0);
     setSubmitted(false);
     setSubmitResult(null);
+    setAttemptResult(null);
     setDurationUsed(0);
     setIsPaused(false);
     if (examId) {
@@ -192,7 +235,9 @@ const ReadingQuiz = () => {
 
   // ── Result screen ─────────────────────────────────────────
   if (submitted && submitResult) {
-    const { score, correctCount, totalQuestions } = submitResult;
+    const score = attemptResult?.score ?? submitResult.score;
+    const correctCount = attemptResult?.correctCount ?? submitResult.correctCount;
+    const totalQuestions = attemptResult?.totalQuestions ?? submitResult.totalQuestions;
     const pct = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
     return (
@@ -213,7 +258,7 @@ const ReadingQuiz = () => {
                 <p className="text-xs text-muted-foreground">Câu đúng / {totalQuestions}</p>
               </div>
               <div className="p-4 rounded-xl bg-muted/50 space-y-1">
-                <p className="text-3xl font-bold text-primary">{score.toFixed(1)}</p>
+                <p className="text-3xl font-bold text-primary">{(score ?? 0).toFixed(1)}</p>
                 <p className="text-xs text-muted-foreground">Điểm</p>
               </div>
               <div className="p-4 rounded-xl bg-muted/50 space-y-1">
@@ -232,9 +277,10 @@ const ReadingQuiz = () => {
                   <h3 className="font-bold text-sm text-foreground">{sec.title || `Đoạn văn ${si + 1}`}</h3>
                   {sec.questions.map((q, qi) => {
                     const globalIdx = sections.slice(0, si).reduce((s, s2) => s + s2.questions.length, 0) + qi + 1;
-                    const userAnswer = answers[q.questionId];
-                    const correctLabel = getCorrectLabel(q);
-                    const isCorrect = userAnswer === correctLabel;
+                    const answerReview = getResultAnswer(attemptResult, q.questionId);
+                    const userAnswer = answerReview?.userAnswer ?? answers[q.questionId];
+                    const correctLabel = answerReview?.correctAnswer ?? getCorrectLabel(q);
+                    const isCorrect = answerReview?.isCorrect ?? (Boolean(correctLabel) && userAnswer === correctLabel);
                     return (
                       <div key={q.questionId} className={`p-4 rounded-xl border-2 space-y-2 ${isCorrect ? "bg-emerald-50/50 border-emerald-200" : "bg-red-50/50 border-red-200"}`}>
                         <div className="flex items-start gap-2 justify-between">
@@ -249,15 +295,15 @@ const ReadingQuiz = () => {
                           <p className="text-muted-foreground">
                             Bạn chọn: <span className={`font-semibold ${isCorrect ? "text-emerald-700" : "text-red-700"}`}>{userAnswer || "Chưa trả lời"}</span>
                           </p>
-                          {!isCorrect && (
+                          {!isCorrect && correctLabel && (
                             <p className="text-muted-foreground">
                               Đáp án đúng: <span className="font-semibold text-emerald-700">{correctLabel}</span>
                             </p>
                           )}
-                          {q.explanation && (
+                          {(answerReview?.explanation || q.explanation) && (
                             <div className="mt-2 p-2.5 bg-background/50 border border-border rounded-lg">
                               <p className="font-semibold text-xs text-foreground mb-1">💡 Giải thích:</p>
-                              <p className="text-muted-foreground leading-relaxed">{q.explanation}</p>
+                              <p className="text-muted-foreground leading-relaxed">{answerReview?.explanation || q.explanation}</p>
                             </div>
                           )}
                         </div>
@@ -371,7 +417,7 @@ const ReadingQuiz = () => {
           <ScrollArea className="h-[calc(100vh-140px)]">
             <div className="p-6 space-y-6">
               <h3 className="font-semibold text-foreground">
-                Câu hỏi – {section?.title || `Bài ${currentSection + 1}`} ({section?.questions.length ?? 0} câu)
+                Câu hỏi – {section?.title || `Bài ${currentSection + 1}`}
               </h3>
               {(section?.questions ?? []).map((q, qi) => {
                 const globalIdx = sectionOffset + qi + 1;

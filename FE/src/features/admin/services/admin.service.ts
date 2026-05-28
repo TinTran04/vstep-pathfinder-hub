@@ -1,4 +1,4 @@
-import { apiClient } from "@/services/api-client";
+﻿import { apiClient } from "@/services/api-client";
 import {
   User, Exam, PricePlan,
   initialPlans,
@@ -54,28 +54,39 @@ export interface ListeningAudioUploadUrlResponse {
   expiresAt: string;
 }
 
+interface ImportReadingExamResponse {
+  examId: number;
+  title: string;
+  totalSections: number;
+  totalQuestions: number;
+  warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
+}
+
 export interface ImportListeningExamResponse {
   examId: number;
   title: string;
   audioUrl: string | null;
   totalSections: number;
   totalQuestions: number;
-  warnings: Array<{
-    code: string;
-    message: string;
-    questionNumber?: number | null;
-    sectionNumber?: number | null;
-  }>;
+  warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
+}
+
+function getDurationMinutes(skillType: string): number {
+  if (skillType === "listening") return 40;
+  if (skillType === "reading") return 60;
+  if (skillType === "writing") return 60;
+  if (skillType === "speaking") return 12;
+  return 45;
 }
 
 // --- Mappers ---
 function toUser(u: BEUserResponse): User {
-  let planName = "Miễn phí";
+  let planName = "Miá»…n phÃ­";
   const plan = u.subscriptionPlan?.toLowerCase();
   if (plan === "weekly") {
-    planName = "Gói Tuần";
+    planName = "GÃ³i Tuáº§n";
   } else if (plan === "monthly") {
-    planName = "Gói Tháng";
+    planName = "GÃ³i ThÃ¡ng";
   }
 
   return {
@@ -87,7 +98,7 @@ function toUser(u: BEUserResponse): User {
     createdAt: u.createdAt ? u.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
     examsCompleted: 0,
     plan: planName,
-    lastActive: "Vừa xong",
+    lastActive: "Vá»«a xong",
     points: 0,
     streak: 0,
   };
@@ -103,24 +114,29 @@ function toExam(e: BEExamResponse): Exam {
   else if (lowerSkill === "writing") questions = 2;
   else if (lowerSkill === "speaking") questions = 3;
 
+  let groupId: string | undefined = undefined;
+  let groupTitle: string | undefined = undefined;
+  if (e.description) {
+    const groupMatch = e.description.match(/group:([^;|\n]+)/);
+    if (groupMatch) groupId = groupMatch[1];
+    
+    const titleMatch = e.description.match(/groupTitle:([^;|\n]+)/);
+    if (titleMatch) groupTitle = titleMatch[1];
+  }
+
   return {
     id: e.examId.toString(),
     title: e.title,
     skill: skill,
-    difficulty: "Trung bình",
+    difficulty: "Trung bÃ¬nh",
     questions: questions,
     status: e.isPublished ? "active" : "draft",
     uploadedAt: e.createdAt ? e.createdAt.replace("T", " ").slice(0, 16) : new Date().toISOString().replace("T", " ").slice(0, 16),
     audioUrl: e.audioUrl,
+    mode: e.description && e.description.includes("mode:mock_test") ? "mock_test" : "practice",
+    groupId,
+    groupTitle,
   };
-}
-
-function getDurationMinutes(skillType: string): number {
-  if (skillType === "listening") return 40;
-  if (skillType === "reading") return 60;
-  if (skillType === "writing") return 60;
-  if (skillType === "speaking") return 12;
-  return 45;
 }
 
 export const adminService = {
@@ -149,12 +165,12 @@ export const adminService = {
       totalRevenue: 4850000,
       monthlyGrowth: 23,
       recentActivities: [
-        { text: "Võ Thị F hoàn thành Speaking #1 — 8.0/10", time: "2 phút trước", type: "exam" as const },
-        { text: "Đề thi Reading #2 được thêm mới", time: "1 giờ trước", type: "add" as const },
-        { text: "Trần Thị B đăng ký Gói Tháng", time: "2 giờ trước", type: "payment" as const },
-        { text: "Hoàng Minh E đạt 8.5/10 Writing #1", time: "3 giờ trước", type: "exam" as const },
-        { text: "Nguyễn Văn A hoàn thành Listening #2", time: "4 giờ trước", type: "exam" as const },
-        { text: "Đặng Quốc G đăng ký tài khoản mới", time: "5 giờ trước", type: "user" as const },
+        { text: "VÃµ Thá»‹ F hoÃ n thÃ nh Speaking #1 â€” 8.0/10", time: "2 phÃºt trÆ°á»›c", type: "exam" as const },
+        { text: "Äá» thi Reading #2 Ä‘Æ°á»£c thÃªm má»›i", time: "1 giá» trÆ°á»›c", type: "add" as const },
+        { text: "Tráº§n Thá»‹ B Ä‘Äƒng kÃ½ GÃ³i ThÃ¡ng", time: "2 giá» trÆ°á»›c", type: "payment" as const },
+        { text: "HoÃ ng Minh E Ä‘áº¡t 8.5/10 Writing #1", time: "3 giá» trÆ°á»›c", type: "exam" as const },
+        { text: "Nguyá»…n VÄƒn A hoÃ n thÃ nh Listening #2", time: "4 giá» trÆ°á»›c", type: "exam" as const },
+        { text: "Äáº·ng Quá»‘c G Ä‘Äƒng kÃ½ tÃ i khoáº£n má»›i", time: "5 giá» trÆ°á»›c", type: "user" as const },
       ],
       weeklyData: [12, 18, 8, 22, 15, 28, 20],
     };
@@ -164,9 +180,9 @@ export const adminService = {
   async createUser(payload: Omit<User, "id" | "createdAt" | "examsCompleted" | "lastActive" | "points" | "streak">): Promise<User> {
     const roleId = payload.role === "admin" ? 1 : 3;
     let subscriptionPlanId = 1;
-    if (payload.plan === "Gói Tuần") {
+    if (payload.plan === "GÃ³i Tuáº§n") {
       subscriptionPlanId = 2;
-    } else if (payload.plan === "Gói Tháng") {
+    } else if (payload.plan === "GÃ³i ThÃ¡ng") {
       subscriptionPlanId = 3;
     }
     const emailConfirmed = payload.status === "active";
@@ -187,9 +203,9 @@ export const adminService = {
   async updateUser(userId: string, payload: Partial<User>): Promise<User> {
     const roleId = payload.role === "admin" ? 1 : 3;
     let subscriptionPlanId = 1;
-    if (payload.plan === "Gói Tuần") {
+    if (payload.plan === "GÃ³i Tuáº§n") {
       subscriptionPlanId = 2;
-    } else if (payload.plan === "Gói Tháng") {
+    } else if (payload.plan === "GÃ³i ThÃ¡ng") {
       subscriptionPlanId = 3;
     }
     const emailConfirmed = payload.status === "active";
@@ -215,10 +231,13 @@ export const adminService = {
     const skillType = payload.skill.toLowerCase();
     const durationMinutes = getDurationMinutes(skillType);
 
+    const groupSegment = payload.groupId ? `;group:${payload.groupId}` : "";
+    const groupTitleSegment = payload.groupTitle ? `;groupTitle:${payload.groupTitle}` : "";
+
     const bePayload = {
       title: payload.title,
       skillType: skillType,
-      description: payload.title,
+      description: `${payload.title} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
       audioUrl: payload.audioUrl ?? null,
@@ -233,10 +252,13 @@ export const adminService = {
     const skillType = payload.skill?.toLowerCase() || "listening";
     const durationMinutes = getDurationMinutes(skillType);
 
+    const groupSegment = payload.groupId ? `;group:${payload.groupId}` : "";
+    const groupTitleSegment = payload.groupTitle ? `;groupTitle:${payload.groupTitle}` : "";
+
     const bePayload = {
       title: payload.title || "",
       skillType: skillType,
-      description: payload.title || "",
+      description: `${payload.title || ""} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
       audioUrl: payload.audioUrl ?? undefined,
@@ -261,6 +283,26 @@ export const adminService = {
     );
   },
 
+  async importReadingDocx(file: File, isPublished = false): Promise<{ exam: Exam; warnings: ImportReadingExamResponse["warnings"] }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("isPublished", String(isPublished));
+
+    const res = await apiClient.upload<ImportReadingExamResponse>("/exams/import-reading-docx", formData);
+    return {
+      exam: {
+        id: res.examId.toString(),
+        title: res.title,
+        skill: "Reading",
+        difficulty: "Trung bình",
+        questions: res.totalQuestions,
+        status: isPublished ? "active" : "draft",
+        uploadedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+      },
+      warnings: res.warnings ?? [],
+    };
+  },
+
   async uploadListeningAudioToR2(
     uploadUrl: string,
     file: File,
@@ -279,25 +321,54 @@ export const adminService = {
 
   async importListeningDocx(
     file: File,
-    audioUrl: string,
-    isPublished: boolean
-  ): Promise<ImportListeningExamResponse> {
+    audioUrl?: string | null,
+    isPublished = false
+  ): Promise<{ exam: Exam; warnings: ImportListeningExamResponse["warnings"] }> {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("audioUrl", audioUrl);
+    if (audioUrl) {
+      formData.append("audioUrl", audioUrl);
+    }
     formData.append("isPublished", String(isPublished));
 
-    return apiClient.upload<ImportListeningExamResponse>(
-      "/exams/import-listening-docx",
-      formData
-    );
+    const res = await apiClient.upload<ImportListeningExamResponse>("/exams/import-listening-docx", formData);
+    return {
+      exam: {
+        id: res.examId.toString(),
+        title: res.title,
+        skill: "Listening",
+        difficulty: "Trung bình",
+        questions: res.totalQuestions,
+        status: isPublished ? "active" : "draft",
+        uploadedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+        audioUrl: res.audioUrl,
+      },
+      warnings: res.warnings ?? [],
+    };
+  },
+
+  async uploadListeningAudio(exam: Exam, file: File): Promise<Exam> {
+    const contentType = file.type || "audio/mpeg";
+    const fileExtension = file.name.split(".").pop()?.toLowerCase() ?? "mp3";
+    const uploadInfo = await this.createListeningAudioUploadUrl({
+      examId: Number(exam.id),
+      contentType,
+      fileExtension,
+    });
+
+    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, file, contentType);
+
+    return this.updateExam(exam.id, {
+      ...exam,
+      audioUrl: uploadInfo.audioUrl,
+    });
   },
 
   async uploadAudioAndImportListeningDocx(
     docxFile: File,
     audioFile: File,
     isPublished: boolean
-  ): Promise<ImportListeningExamResponse> {
+  ): Promise<{ exam: Exam; warnings: ImportListeningExamResponse["warnings"] }> {
     const contentType = audioFile.type || "audio/mpeg";
     const fileExtension = audioFile.name.split(".").pop()?.toLowerCase() ?? "mp3";
     const uploadInfo = await this.createListeningAudioUploadUrl({
@@ -309,7 +380,6 @@ export const adminService = {
     await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, audioFile, contentType);
     return this.importListeningDocx(docxFile, uploadInfo.audioUrl, isPublished);
   },
-
   // Price Plan CRUD
   async createPricePlan(payload: Omit<PricePlan, "id">): Promise<PricePlan> {
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -403,3 +473,4 @@ export const adminService = {
 };
 
 export default adminService;
+
