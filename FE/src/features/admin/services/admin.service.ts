@@ -41,6 +41,33 @@ interface BEExamResponse {
   createdAt: string;
 }
 
+export interface ListeningAudioUploadUrlRequest {
+  examId?: number | null;
+  contentType: string;
+  fileExtension?: string | null;
+}
+
+export interface ListeningAudioUploadUrlResponse {
+  uploadUrl: string;
+  audioObjectKey: string;
+  audioUrl: string;
+  expiresAt: string;
+}
+
+export interface ImportListeningExamResponse {
+  examId: number;
+  title: string;
+  audioUrl: string | null;
+  totalSections: number;
+  totalQuestions: number;
+  warnings: Array<{
+    code: string;
+    message: string;
+    questionNumber?: number | null;
+    sectionNumber?: number | null;
+  }>;
+}
+
 // --- Mappers ---
 function toUser(u: BEUserResponse): User {
   let planName = "Miễn phí";
@@ -84,7 +111,16 @@ function toExam(e: BEExamResponse): Exam {
     questions: questions,
     status: e.isPublished ? "active" : "draft",
     uploadedAt: e.createdAt ? e.createdAt.replace("T", " ").slice(0, 16) : new Date().toISOString().replace("T", " ").slice(0, 16),
+    audioUrl: e.audioUrl,
   };
+}
+
+function getDurationMinutes(skillType: string): number {
+  if (skillType === "listening") return 40;
+  if (skillType === "reading") return 60;
+  if (skillType === "writing") return 60;
+  if (skillType === "speaking") return 12;
+  return 45;
 }
 
 export const adminService = {
@@ -177,11 +213,7 @@ export const adminService = {
   // Exam CRUD
   async createExam(payload: Omit<Exam, "id" | "uploadedAt">): Promise<Exam> {
     const skillType = payload.skill.toLowerCase();
-    let durationMinutes = 45;
-    if (skillType === "listening") durationMinutes = 40;
-    else if (skillType === "reading") durationMinutes = 60;
-    else if (skillType === "writing") durationMinutes = 60;
-    else if (skillType === "speaking") durationMinutes = 12;
+    const durationMinutes = getDurationMinutes(skillType);
 
     const bePayload = {
       title: payload.title,
@@ -189,7 +221,7 @@ export const adminService = {
       description: payload.title,
       durationMinutes,
       isPublished: payload.status === "active",
-      audioUrl: null,
+      audioUrl: payload.audioUrl ?? null,
       imageUrl: null,
     };
 
@@ -199,11 +231,7 @@ export const adminService = {
 
   async updateExam(examId: string, payload: Partial<Exam>): Promise<Exam> {
     const skillType = payload.skill?.toLowerCase() || "listening";
-    let durationMinutes = 45;
-    if (skillType === "listening") durationMinutes = 40;
-    else if (skillType === "reading") durationMinutes = 60;
-    else if (skillType === "writing") durationMinutes = 60;
-    else if (skillType === "speaking") durationMinutes = 12;
+    const durationMinutes = getDurationMinutes(skillType);
 
     const bePayload = {
       title: payload.title || "",
@@ -211,7 +239,7 @@ export const adminService = {
       description: payload.title || "",
       durationMinutes,
       isPublished: payload.status === "active",
-      audioUrl: null,
+      audioUrl: payload.audioUrl ?? undefined,
       imageUrl: null,
     };
 
@@ -222,6 +250,64 @@ export const adminService = {
   async deleteExam(examId: string): Promise<boolean> {
     await apiClient.delete(`/exams/${examId}`);
     return true;
+  },
+
+  async createListeningAudioUploadUrl(
+    request: ListeningAudioUploadUrlRequest
+  ): Promise<ListeningAudioUploadUrlResponse> {
+    return apiClient.post<ListeningAudioUploadUrlResponse>(
+      "/exams/listening-audio/upload-url",
+      request
+    );
+  },
+
+  async uploadListeningAudioToR2(
+    uploadUrl: string,
+    file: File,
+    contentType: string
+  ): Promise<void> {
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: file,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Upload audio failed: HTTP ${res.status}`);
+    }
+  },
+
+  async importListeningDocx(
+    file: File,
+    audioUrl: string,
+    isPublished: boolean
+  ): Promise<ImportListeningExamResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("audioUrl", audioUrl);
+    formData.append("isPublished", String(isPublished));
+
+    return apiClient.upload<ImportListeningExamResponse>(
+      "/exams/import-listening-docx",
+      formData
+    );
+  },
+
+  async uploadAudioAndImportListeningDocx(
+    docxFile: File,
+    audioFile: File,
+    isPublished: boolean
+  ): Promise<ImportListeningExamResponse> {
+    const contentType = audioFile.type || "audio/mpeg";
+    const fileExtension = audioFile.name.split(".").pop()?.toLowerCase() ?? "mp3";
+    const uploadInfo = await this.createListeningAudioUploadUrl({
+      examId: null,
+      contentType,
+      fileExtension,
+    });
+
+    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, audioFile, contentType);
+    return this.importListeningDocx(docxFile, uploadInfo.audioUrl, isPublished);
   },
 
   // Price Plan CRUD

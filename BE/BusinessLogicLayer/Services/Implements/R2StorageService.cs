@@ -42,6 +42,34 @@ public class R2StorageService : IR2StorageService
         return Task.FromResult((uploadUrl, objectKey, expiresAt));
     }
 
+    public Task<(string UploadUrl, string ObjectKey, DateTime ExpiresAt)> CreateListeningAudioUploadUrlAsync(
+        int? examId,
+        string contentType,
+        string? fileExtension)
+    {
+        EnsureConfigured();
+
+        var expiresAt = DateTime.UtcNow.AddMinutes(UploadUrlMinutes);
+        var safeContentType = string.IsNullOrWhiteSpace(contentType) ? "audio/mpeg" : contentType.Trim();
+        var safeExtension = NormalizeAudioExtension(fileExtension, safeContentType);
+        var objectId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        var examSegment = examId is > 0 ? examId.Value.ToString() : "unassigned";
+        var objectKey = $"listening/{examSegment}/{objectId}.{safeExtension}";
+
+        using var client = CreateClient();
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _settings.BucketName,
+            Key = objectKey,
+            Verb = HttpVerb.PUT,
+            Expires = expiresAt,
+            ContentType = safeContentType
+        };
+
+        var uploadUrl = client.GetPreSignedURL(request);
+        return Task.FromResult((uploadUrl, objectKey, expiresAt));
+    }
+
     public string GetObjectUrl(string objectKey)
     {
         EnsureConfigured();
@@ -52,12 +80,15 @@ public class R2StorageService : IR2StorageService
 
     private AmazonS3Client CreateClient()
     {
+        AWSConfigsS3.UseSignatureVersion4 = true;
+
         var credentials = new BasicAWSCredentials(_settings.AccessKey, _settings.SecretKey);
         var config = new AmazonS3Config
         {
             ServiceURL = _settings.Endpoint,
             ForcePathStyle = true,
-            AuthenticationRegion = RegionEndpoint.USEast1.SystemName
+            AuthenticationRegion = "auto",
+            SignatureVersion = "V4"
         };
 
         return new AmazonS3Client(credentials, config);
@@ -72,5 +103,41 @@ public class R2StorageService : IR2StorageService
         {
             throw new InvalidOperationException("Cloudflare R2 settings are not configured.");
         }
+    }
+
+    private static string NormalizeAudioExtension(string? fileExtension, string contentType)
+    {
+        var extension = string.IsNullOrWhiteSpace(fileExtension)
+            ? ContentTypeToExtension(contentType)
+            : fileExtension.Trim().TrimStart('.').ToLowerInvariant();
+
+        return extension switch
+        {
+            "mp3" => "mp3",
+            "mpeg" => "mp3",
+            "wav" => "wav",
+            "webm" => "webm",
+            "ogg" => "ogg",
+            "m4a" => "m4a",
+            "mp4" => "m4a",
+            _ => "mp3"
+        };
+    }
+
+    private static string ContentTypeToExtension(string contentType)
+    {
+        return contentType.Trim().ToLowerInvariant() switch
+        {
+            "audio/mpeg" => "mp3",
+            "audio/mp3" => "mp3",
+            "audio/wav" => "wav",
+            "audio/wave" => "wav",
+            "audio/x-wav" => "wav",
+            "audio/webm" => "webm",
+            "audio/ogg" => "ogg",
+            "audio/mp4" => "m4a",
+            "audio/x-m4a" => "m4a",
+            _ => "mp3"
+        };
     }
 }

@@ -21,6 +21,7 @@ export interface Exam {
   questions: number;
   status: "active" | "draft";
   uploadedAt: string;
+  audioUrl?: string | null;
 }
 
 export interface PricePlan {

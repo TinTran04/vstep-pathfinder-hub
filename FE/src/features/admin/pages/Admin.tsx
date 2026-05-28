@@ -64,6 +64,27 @@ const skillColors: Record<string, string> = {
   Speaking: "bg-purple-500/10 text-purple-600",
 };
 
+const MAX_LISTENING_AUDIO_SIZE = 50 * 1024 * 1024;
+const LISTENING_AUDIO_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/x-m4a",
+]);
+const LISTENING_AUDIO_EXTENSIONS = new Set(["mp3", "wav", "webm", "ogg", "m4a"]);
+
+function getFileExtension(file: File): string {
+  return file.name.split(".").pop()?.toLowerCase() ?? "";
+}
+
+function isValidListeningAudio(file: File): boolean {
+  const extension = getFileExtension(file);
+  return LISTENING_AUDIO_TYPES.has(file.type) || LISTENING_AUDIO_EXTENSIONS.has(extension);
+}
+
 const Admin = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -122,6 +143,10 @@ const Admin = () => {
   const [editExam, setEditExam] = useState<Exam | null>(null);
   const [examStep, setExamStep] = useState<"skill" | "form">("skill");
   const [examForm, setExamForm] = useState({ title: "", skill: "Listening", difficulty: "Dễ", questions: 10, status: "draft" as "active" | "draft" });
+
+  const [listeningDocxFile, setListeningDocxFile] = useState<File | null>(null);
+  const [listeningAudioFile, setListeningAudioFile] = useState<File | null>(null);
+  const [isImportingListening, setIsImportingListening] = useState(false);
 
   const [priceDialog, setPriceDialog] = useState(false);
   const [editPlan, setEditPlan] = useState<PricePlan | null>(null);
@@ -327,11 +352,63 @@ const Admin = () => {
   };
 
   // Exam CRUD — step-based
-  const openAddExam = () => { setEditExam(null); setExamStep("skill"); setExamForm({ title: "", skill: "Listening", difficulty: "Dễ", questions: 10, status: "draft" }); setExamDialog(true); };
+  const resetListeningImportFiles = () => {
+    setListeningDocxFile(null);
+    setListeningAudioFile(null);
+  };
+
+  const openAddExam = () => { setEditExam(null); setExamStep("skill"); setExamForm({ title: "", skill: "Listening", difficulty: "Dễ", questions: 10, status: "draft" }); resetListeningImportFiles(); setExamDialog(true); };
   const openEditExam = (e: Exam) => { setEditExam(e); setExamStep("form"); setExamForm({ title: e.title, skill: e.skill, difficulty: e.difficulty, questions: e.questions, status: e.status }); setExamDialog(true); };
-  const selectSkillForExam = (skill: string) => { setExamForm(p => ({ ...p, skill })); setExamStep("form"); };
+  const selectSkillForExam = (skill: string) => { resetListeningImportFiles(); setExamForm(p => ({ ...p, skill, questions: skill === "Listening" ? 35 : p.questions })); setExamStep("form"); };
   
   const saveExam = async () => {
+    if (!editExam && examForm.skill === "Listening") {
+      if (!listeningDocxFile) {
+        toast.error("Vui lòng chọn file DOCX đề Listening");
+        return;
+      }
+      if (!listeningDocxFile.name.toLowerCase().endsWith(".docx")) {
+        toast.error("File đề Listening phải có định dạng .docx");
+        return;
+      }
+      if (!listeningAudioFile) {
+        toast.error("Vui lòng chọn file audio cho đề Listening");
+        return;
+      }
+      if (!isValidListeningAudio(listeningAudioFile)) {
+        toast.error("Audio phải là MP3, WAV, M4A, WebM hoặc OGG");
+        return;
+      }
+      if (listeningAudioFile.size > MAX_LISTENING_AUDIO_SIZE) {
+        toast.error("File audio không được vượt quá 50MB");
+        return;
+      }
+
+      setIsImportingListening(true);
+      try {
+        const result = await adminService.uploadAudioAndImportListeningDocx(
+          listeningDocxFile,
+          listeningAudioFile,
+          examForm.status === "active"
+        );
+        const fetched = await adminService.getExams();
+        setExams(fetched);
+        const warningCount = result.warnings?.length ?? 0;
+        if (warningCount > 0) {
+          toast.success(`Import Listening thành công với ${warningCount} cảnh báo`);
+        } else {
+          toast.success("Import Listening thành công");
+        }
+        resetListeningImportFiles();
+        setExamDialog(false);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Có lỗi xảy ra khi import Listening");
+      } finally {
+        setIsImportingListening(false);
+      }
+      return;
+    }
+
     if (!examForm.title) { toast.error("Vui lòng nhập tên đề thi"); return; }
     if (editExam) {
       try {
@@ -498,14 +575,44 @@ const Admin = () => {
               <Label className="text-xs">Số câu hỏi</Label>
               <Input type="number" value={examForm.questions} onChange={e => setExamForm(p => ({ ...p, questions: Number(e.target.value) }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">File Audio</Label>
-              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/40 transition-colors cursor-pointer">
-                <FileAudio size={28} className="mx-auto text-muted-foreground mb-2" />
-                <p className="text-xs text-muted-foreground">Kéo thả file MP3 hoặc nhấn để chọn</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Hỗ trợ MP3, WAV (tối đa 50MB)</p>
-              </div>
-            </div>
+            {!editExam && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">File đề Listening (.docx)</Label>
+                  <label className="block border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/40 transition-colors cursor-pointer">
+                    <Upload size={28} className="mx-auto text-muted-foreground mb-2" />
+                    <p className="text-xs font-medium text-foreground break-all">
+                      {listeningDocxFile ? listeningDocxFile.name : "Chọn file DOCX đề Listening"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Hỗ trợ .docx</p>
+                    <Input
+                      type="file"
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      disabled={isImportingListening}
+                      onChange={e => setListeningDocxFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">File Audio</Label>
+                  <label className="block border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/40 transition-colors cursor-pointer">
+                    <FileAudio size={28} className="mx-auto text-muted-foreground mb-2" />
+                    <p className="text-xs font-medium text-foreground break-all">
+                      {listeningAudioFile ? listeningAudioFile.name : "Chọn file MP3/WAV/M4A/WebM/OGG"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Hỗ trợ MP3, WAV, M4A, WebM, OGG (tối đa 50MB)</p>
+                    <Input
+                      type="file"
+                      accept="audio/mpeg,audio/mp3,audio/wav,audio/webm,audio/ogg,audio/mp4,audio/x-m4a,.mp3,.wav,.webm,.ogg,.m4a"
+                      className="hidden"
+                      disabled={isImportingListening}
+                      onChange={e => setListeningAudioFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
+              </>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Thời gian nghe (phút)</Label>
               <Input type="number" placeholder="45" />
@@ -1502,7 +1609,9 @@ const Admin = () => {
                 {renderSkillForm()}
                 <DialogFooter className="pt-4">
                   <Button variant="outline" onClick={() => setExamDialog(false)}>Hủy</Button>
-                  <Button onClick={saveExam} className="gradient-primary text-primary-foreground gap-1.5"><Save size={14} /> Lưu</Button>
+                  <Button onClick={saveExam} disabled={isImportingListening} className="gradient-primary text-primary-foreground gap-1.5">
+                    <Save size={14} /> {isImportingListening ? "Đang import..." : "Lưu"}
+                  </Button>
                 </DialogFooter>
               </>
             )}
