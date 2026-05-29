@@ -22,5 +22,9 @@ public interface IUnitOfWork
 
     IUserVocabularyRepository UserVocabularies { get; }
 
+    IPaymentTransactionRepository PaymentTransactions { get; }
+
     Task<int> SaveChangesAsync();
+
+    Task ExecuteInTransactionAsync(Func<Task> operation);
 }

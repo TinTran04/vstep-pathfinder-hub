@@ -20,7 +20,7 @@ public class WritingPracticeController : ControllerBase
     }
 
     /// <summary>
-    /// Nop bai Writing de Worker Service cham diem bat dong bo sau do.
+    /// Nop bai Writing va goi OpenRouter de cham diem bang AI.
     /// </summary>
     [HttpPost("{examId:int}/submit")]
     [ProducesResponseType(typeof(ApiResponse<WritingSubmissionResponse>), StatusCodes.Status202Accepted)]
@@ -38,7 +38,7 @@ public class WritingPracticeController : ControllerBase
         try
         {
             var response = await _writingPracticeService.SubmitAsync(GetUserId(), examId, request);
-            return StatusCode(StatusCodes.Status202Accepted, ApiResponse<WritingSubmissionResponse>.Ok(response, "Writing submission queued for grading."));
+            return StatusCode(StatusCodes.Status202Accepted, ApiResponse<WritingSubmissionResponse>.Ok(response, "Writing submission graded by AI."));
         }
         catch (InvalidOperationException exception)
         {

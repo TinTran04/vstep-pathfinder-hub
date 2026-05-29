@@ -18,6 +18,8 @@ public class User
 
     public SubscriptionPlan SubscriptionPlan { get; set; } = null!;
 
+    public DateTime? SubscriptionExpiresAt { get; set; }
+
     public string? RefreshToken { get; set; }
 
     public DateTime? RefreshTokenExpiryTime { get; set; }
@@ -45,4 +47,6 @@ public class User
     public ICollection<SpeakingSubmission> SpeakingSubmissions { get; set; } = new List<SpeakingSubmission>();
 
     public ICollection<UserVocabulary> UserVocabularies { get; set; } = new List<UserVocabulary>();
+
+    public ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
 }

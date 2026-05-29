@@ -15,6 +15,7 @@ public class AuthMappingProfile : Profile
             .ForMember(destination => destination.Role, options => options.Ignore())
             .ForMember(destination => destination.SubscriptionPlanId, options => options.Ignore())
             .ForMember(destination => destination.SubscriptionPlan, options => options.Ignore())
+            .ForMember(destination => destination.SubscriptionExpiresAt, options => options.Ignore())
             .ForMember(destination => destination.RefreshToken, options => options.Ignore())
             .ForMember(destination => destination.RefreshTokenExpiryTime, options => options.Ignore())
             .ForMember(destination => destination.IsDeleted, options => options.Ignore())

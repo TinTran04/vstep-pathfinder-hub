@@ -36,12 +36,14 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<UserVocabulary> UserVocabularies => Set<UserVocabulary>();
 
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTime.UtcNow;
 
         foreach (var entry in ChangeTracker.Entries()
-            .Where(entry => entry.Entity is User or Role or SubscriptionPlan or Exam or ExamSection or ExamQuestion or ExamAttempt or WritingSubmission or SpeakingSubmission))
+            .Where(entry => entry.Entity is User or Role or SubscriptionPlan or Exam or ExamSection or ExamQuestion or ExamAttempt or WritingSubmission or SpeakingSubmission or PaymentTransaction))
         {
             if (entry.State == EntityState.Added)
             {
@@ -114,6 +116,8 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(user => user.SubscriptionPlanId)
                 .HasDefaultValue(1);
+
+            entity.Property(user => user.SubscriptionExpiresAt);
 
             entity.Property(user => user.RefreshToken)
                 .HasMaxLength(512);
@@ -262,7 +266,7 @@ public class ApplicationDbContext : DbContext
                     SubscriptionPlanId = 2,
                     Name = "weekly",
                     Description = "Weekly plan",
-                    Price = 0,
+                    Price = 49000,
                     DurationDays = 7,
                     DailyPracticeLimit = null,
                     CanStoreSpeakingAudioForever = true,
@@ -276,7 +280,7 @@ public class ApplicationDbContext : DbContext
                     SubscriptionPlanId = 3,
                     Name = "monthly",
                     Description = "Monthly plan",
-                    Price = 0,
+                    Price = 199000,
                     DurationDays = 30,
                     DailyPracticeLimit = null,
                     CanStoreSpeakingAudioForever = true,
@@ -678,6 +682,68 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasQueryFilter(item => item.User != null && !item.User.IsDeleted);
+        });
+
+        modelBuilder.Entity<PaymentTransaction>(entity =>
+        {
+            entity.ToTable("PaymentTransactions");
+
+            entity.HasKey(transaction => transaction.PaymentTransactionId);
+
+            entity.Property(transaction => transaction.PaymentTransactionId)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(transaction => transaction.Provider)
+                .HasMaxLength(30)
+                .HasDefaultValue("payos")
+                .IsRequired();
+
+            entity.Property(transaction => transaction.Status)
+                .HasMaxLength(30)
+                .HasDefaultValue("pending")
+                .IsRequired();
+
+            entity.Property(transaction => transaction.Description)
+                .HasMaxLength(25)
+                .IsRequired();
+
+            entity.Property(transaction => transaction.PaymentLinkId)
+                .HasMaxLength(100);
+
+            entity.Property(transaction => transaction.CheckoutUrl)
+                .HasMaxLength(1000);
+
+            entity.Property(transaction => transaction.QrCode)
+                .HasMaxLength(4000);
+
+            entity.Property(transaction => transaction.PayosReference)
+                .HasMaxLength(100);
+
+            entity.Property(transaction => transaction.RawWebhookPayload)
+                .HasColumnType("jsonb");
+
+            entity.Property(transaction => transaction.CreatedAt)
+                .IsRequired();
+
+            entity.Property(transaction => transaction.UpdatedAt)
+                .IsRequired();
+
+            entity.HasIndex(transaction => transaction.OrderCode)
+                .IsUnique();
+
+            entity.HasIndex(transaction => new { transaction.UserId, transaction.Status, transaction.CreatedAt });
+
+            entity.HasOne(transaction => transaction.User)
+                .WithMany(user => user.PaymentTransactions)
+                .HasForeignKey(transaction => transaction.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(transaction => transaction.SubscriptionPlan)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.SubscriptionPlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(transaction => transaction.User != null && !transaction.User.IsDeleted);
         });
     }
 }

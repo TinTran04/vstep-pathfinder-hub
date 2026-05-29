@@ -10,11 +10,16 @@ public class WritingPracticeService : IWritingPracticeService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly IOpenRouterGradingService _openRouterGradingService;
 
-    public WritingPracticeService(IUnitOfWork unitOfWork, IMapper mapper)
+    public WritingPracticeService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        IOpenRouterGradingService openRouterGradingService)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _openRouterGradingService = openRouterGradingService;
     }
 
     public async Task<WritingSubmissionResponse> SubmitAsync(int userId, int examId, SubmitWritingRequest request)
@@ -33,8 +38,21 @@ public class WritingPracticeService : IWritingPracticeService
             ExamId = exam.ExamId,
             Prompt = request.Prompt.Trim(),
             EssayText = request.EssayText.Trim(),
-            Status = "pending"
+            Status = "processing"
         };
+
+        try
+        {
+            var scoreResult = await _openRouterGradingService.GradeWritingAsync(submission.Prompt, submission.EssayText);
+            submission.Score = scoreResult.Score;
+            submission.Feedback = scoreResult.Feedback;
+            submission.Status = "scored";
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            submission.Status = "failed";
+            submission.Feedback = "AI grading failed. Please try again later.";
+        }
 
         await _unitOfWork.WritingSubmissions.AddAsync(submission);
         await _unitOfWork.SaveChangesAsync();
