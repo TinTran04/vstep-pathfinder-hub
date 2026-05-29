@@ -18,5 +18,9 @@ public interface IUnitOfWork
 
     ISpeakingSubmissionRepository SpeakingSubmissions { get; }
 
+    IDictionaryEntryRepository DictionaryEntries { get; }
+
+    IUserVocabularyRepository UserVocabularies { get; }
+
     Task<int> SaveChangesAsync();
 }

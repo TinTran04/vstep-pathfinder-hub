@@ -43,4 +43,6 @@ public class User
     public ICollection<WritingSubmission> WritingSubmissions { get; set; } = new List<WritingSubmission>();
 
     public ICollection<SpeakingSubmission> SpeakingSubmissions { get; set; } = new List<SpeakingSubmission>();
+
+    public ICollection<UserVocabulary> UserVocabularies { get; set; } = new List<UserVocabulary>();
 }

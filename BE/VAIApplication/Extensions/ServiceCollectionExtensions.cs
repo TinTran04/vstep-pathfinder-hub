@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.Configure<OtpSettings>(configuration.GetSection("Otp"));
         services.Configure<R2Settings>(configuration.GetSection("R2"));
         services.Configure<SupabaseSettings>(configuration.GetSection("Supabase"));
+        services.Configure<MyMemorySettings>(configuration.GetSection("MyMemory"));
 
         services.AddAutoMapper(typeof(AuthMappingProfile).Assembly);
 
@@ -28,6 +29,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IExamAttemptRepository, ExamAttemptRepository>();
         services.AddScoped<IWritingSubmissionRepository, WritingSubmissionRepository>();
         services.AddScoped<ISpeakingSubmissionRepository, SpeakingSubmissionRepository>();
+        services.AddScoped<IDictionaryEntryRepository, DictionaryEntryRepository>();
+        services.AddScoped<IUserVocabularyRepository, UserVocabularyRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IAuthService, AuthService>();
@@ -41,6 +44,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISpeakingPracticeService, SpeakingPracticeService>();
         services.AddScoped<IR2StorageService, R2StorageService>();
         services.AddScoped<ISupabaseStorageService, SupabaseStorageService>();
+        services.AddScoped<IDictionaryService, DictionaryService>();
+
+        services.AddHttpClient<IDictionaryApiService, DictionaryApiService>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.dictionaryapi.dev/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+
+        services.AddHttpClient<ITranslationService, TranslationService>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.mymemory.translated.net/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
 
         return services;
     }

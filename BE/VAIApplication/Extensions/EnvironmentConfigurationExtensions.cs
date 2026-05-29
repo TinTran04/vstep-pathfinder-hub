@@ -20,6 +20,7 @@ public static class EnvironmentConfigurationExtensions
         SetIfPresent(configuration, "R2_SECRET_KEY", "R2:SecretKey");
         SetIfPresent(configuration, "R2_BUCKET_NAME", "R2:BucketName");
         SetIfPresent(configuration, "R2_ENDPOINT", "R2:Endpoint");
+        SetIfPresent(configuration, "MYMEMORY_EMAIL", "MyMemory:Email");
         SetIfPresent(configuration, "SUPABASE_URL", "Supabase:Url");
         SetIfPresent(configuration, "SUPABASE_ANON_KEY", "Supabase:AnonKey");
         SetIfPresent(configuration, "SUPABASE_SERVICE_ROLE_KEY", "Supabase:ServiceRoleKey");

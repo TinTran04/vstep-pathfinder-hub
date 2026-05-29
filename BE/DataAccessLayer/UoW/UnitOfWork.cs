@@ -15,7 +15,9 @@ public class UnitOfWork : IUnitOfWork
         IExamRepository exams,
         IExamAttemptRepository examAttempts,
         IWritingSubmissionRepository writingSubmissions,
-        ISpeakingSubmissionRepository speakingSubmissions)
+        ISpeakingSubmissionRepository speakingSubmissions,
+        IDictionaryEntryRepository dictionaryEntries,
+        IUserVocabularyRepository userVocabularies)
     {
         _context = context;
         Users = users;
@@ -25,6 +27,8 @@ public class UnitOfWork : IUnitOfWork
         ExamAttempts = examAttempts;
         WritingSubmissions = writingSubmissions;
         SpeakingSubmissions = speakingSubmissions;
+        DictionaryEntries = dictionaryEntries;
+        UserVocabularies = userVocabularies;
     }
 
     public IUserRepository Users { get; }
@@ -40,6 +44,10 @@ public class UnitOfWork : IUnitOfWork
     public IWritingSubmissionRepository WritingSubmissions { get; }
 
     public ISpeakingSubmissionRepository SpeakingSubmissions { get; }
+
+    public IDictionaryEntryRepository DictionaryEntries { get; }
+
+    public IUserVocabularyRepository UserVocabularies { get; }
 
     public Task<int> SaveChangesAsync()
     {
