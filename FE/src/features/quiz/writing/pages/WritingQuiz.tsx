@@ -243,7 +243,7 @@ const WritingQuiz = () => {
           status: result.status,
         };
         setFeedbacks(prev => ({ ...prev, [taskIndex]: fb }));
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks });
+        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks, writingExamIds: apiExamIds });
       } else {
         // Mock mode
         const task = tasks[taskIndex];
@@ -259,7 +259,7 @@ const WritingQuiz = () => {
           fb = { source: "mock", ...base, errors };
         }
         setFeedbacks(prev => ({ ...prev, [taskIndex]: fb }));
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks });
+        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks, writingExamIds: apiExamIds });
       }
     } catch (e) {
       console.error("[WritingQuiz] AI feedback error", e);
@@ -274,7 +274,7 @@ const WritingQuiz = () => {
   const handleSubmit = async () => {
     setMockSaving(true);
     try {
-      await attemptsService.saveSkillAttempt("writing", { writings });
+      await attemptsService.saveSkillAttempt("writing", { writings, writingExamIds: apiExamIds });
       await new Promise(r => setTimeout(r, 300));
     } finally {
       setMockSaving(false);

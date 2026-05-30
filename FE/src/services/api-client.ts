@@ -11,7 +11,7 @@
 // Auth token can be injected by setting apiClient.authToken before any call.
 // ============================================================
 
-const DEFAULT_BASE_URL = "/api/v1";
+const DEFAULT_BASE_URL = "/api";
 
 // ----------------------------------------------------------------
 // Types

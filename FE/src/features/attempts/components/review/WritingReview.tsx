@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import AnnotatedText from "@/features/quiz/writing/components/AnnotatedText";
-import { writingService } from "@/features/quiz/writing/services/writing.service";
+import { writingService, type WritingApiFeedbackItem } from "@/features/quiz/writing/services/writing.service";
 import { tasks } from "@/features/quiz/writing/mocks/writing.mock";
 import type { SkillAttempt, WritingFeedbackResult } from "../../types";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
@@ -16,7 +16,7 @@ interface Props {
 const WritingReview = ({ attempt }: Props) => {
   const { writings = {} } = attempt;
   const [activeTask, setActiveTask] = useState(0);
-  const [feedback, setFeedback] = useState<Record<number, WritingFeedbackResult>>(
+  const [feedback, setFeedback] = useState<Record<number, WritingFeedbackResult | WritingApiFeedbackItem>>(
     attempt.writingFeedback ?? {}
   );
   const [loading, setLoading] = useState(false);
@@ -27,7 +27,10 @@ const WritingReview = ({ attempt }: Props) => {
   const handleGenerateFeedback = async () => {
     setLoading(true);
     try {
-      const result = await writingService.generateWritingFeedback(writings);
+      const result = await writingService.generateWritingFeedback(
+        writings,
+        attempt.writingExamIds
+      );
       setFeedback(result as Record<number, WritingFeedbackResult>);
       setFeedbackGenerated(true);
     } catch (e) {
@@ -60,7 +63,13 @@ const WritingReview = ({ attempt }: Props) => {
               {t.title.split(" – ")[0]}
               {feedbackGenerated && feedback[t.id] && (
                 <Badge className="ml-2 text-xs bg-primary/20 text-primary border-none">
-                  {feedback[t.id].score}
+                  {(() => {
+                    const fb = feedback[t.id];
+                    if ('source' in fb && fb.source === "api") {
+                      return fb.score !== null ? `${fb.score}/10` : "Đang xử lý...";
+                    }
+                    return fb.score;
+                  })()}
                 </Badge>
               )}
             </button>
@@ -102,7 +111,7 @@ const WritingReview = ({ attempt }: Props) => {
             </div>
             <ScrollArea className="h-[calc(100%-40px)]">
               <div className="p-4">
-                {activeFb && activeFb.errors.length > 0 ? (
+                {activeFb && !('source' in activeFb) && activeFb.errors && activeFb.errors.length > 0 ? (
                   <AnnotatedText text={text} errors={activeFb.errors} />
                 ) : text ? (
                   <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{text}</p>
@@ -120,17 +129,32 @@ const WritingReview = ({ attempt }: Props) => {
             </div>
             <ScrollArea className="h-[calc(100%-40px)]">
               <div className="p-4 space-y-3">
-                {activeFb ? (
+                {activeFb && (activeFb as any).source === "api" ? (
                   <>
                     <div className="text-center p-3 bg-muted/50 rounded-xl">
                       <p className="text-xs text-muted-foreground">Điểm tổng</p>
-                      <p className="text-2xl font-bold text-primary">{activeFb.score}</p>
+                      <p className="text-2xl font-bold text-primary">
+                        {(activeFb as any).score !== null ? `${(activeFb as any).score}/10` : "Đang xử lý..."}
+                      </p>
+                    </div>
+                    {(activeFb as any).feedback && (
+                      <div className="bg-card rounded-lg p-3 border border-border">
+                        <p className="text-xs font-semibold text-foreground mb-1">📋 Nhận xét của AI</p>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{(activeFb as any).feedback}</p>
+                      </div>
+                    )}
+                  </>
+                ) : activeFb ? (
+                  <>
+                    <div className="text-center p-3 bg-muted/50 rounded-xl">
+                      <p className="text-xs text-muted-foreground">Điểm tổng</p>
+                      <p className="text-2xl font-bold text-primary">{(activeFb as WritingFeedbackResult).score}</p>
                     </div>
                     {[
-                      { label: "📋 Task Achievement", value: activeFb.taskAchievement },
-                      { label: "🔗 Coherence", value: activeFb.coherence },
-                      { label: "📚 Lexical", value: activeFb.lexical },
-                      { label: "📝 Grammar", value: activeFb.grammar },
+                      { label: "📋 Task Achievement", value: (activeFb as WritingFeedbackResult).taskAchievement },
+                      { label: "🔗 Coherence", value: (activeFb as WritingFeedbackResult).coherence },
+                      { label: "📚 Lexical", value: (activeFb as WritingFeedbackResult).lexical },
+                      { label: "📝 Grammar", value: (activeFb as WritingFeedbackResult).grammar },
                     ].map((item) => (
                       <div key={item.label} className="bg-card rounded-lg p-3 border border-border">
                         <p className="text-xs font-semibold text-foreground mb-1">{item.label}</p>
@@ -140,7 +164,7 @@ const WritingReview = ({ attempt }: Props) => {
                     <div>
                       <p className="text-xs font-semibold text-foreground mb-2">💡 Gợi ý</p>
                       <ul className="space-y-1.5">
-                        {activeFb.tips.map((tip, i) => (
+                        {(activeFb as WritingFeedbackResult).tips.map((tip, i) => (
                           <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
                             <span className="text-primary shrink-0">•</span>{tip}
                           </li>

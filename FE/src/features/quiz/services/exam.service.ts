@@ -122,6 +122,10 @@ export const examService = {
 
     return (res.items ?? []).map(toExamItem);
   },
+
+  async getExamById(id: number): Promise<ExamResponse> {
+    return apiClient.get<ExamResponse>(`/exams/${id}`);
+  },
 };
 
 export default examService;
