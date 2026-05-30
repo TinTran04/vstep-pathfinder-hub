@@ -17,6 +17,7 @@ import MockTestTransition from "@/features/attempts/components/MockTestTransitio
 import { toast } from "sonner";
 import { examService } from "@/features/quiz/services/exam.service";
 import { speakingApiService, type SpeakingResultResponse } from "../services/speaking.api-service";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -25,7 +26,7 @@ const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
 
 interface ApiFeedbackState {
   source: "api";
-  submissionId: string;
+  submissionId: number;  // BE returns int
   score: number | null;
   feedback: string | null;
   status: string;
@@ -34,7 +35,7 @@ interface ApiFeedbackState {
 type FeedbackState = SpeakingFeedback & { source: "mock" } | ApiFeedbackState;
 
 // Convert ExamItem to a SpeakingPart shape
-function examToPart(examId: string, title: string, description: string, index: number): SpeakingPart & { examId: string } {
+function examToPart(examId: number, title: string, description: string, index: number): SpeakingPart & { examId: number } {
   return {
     examId,
     id: index + 1,
@@ -62,7 +63,7 @@ const SpeakingQuiz = () => {
   // ── Exam / quiz data ──
   const [loading, setLoading] = useState(true);
   const [noExams, setNoExams] = useState(false);
-  const [partsData, setPartsData] = useState<(SpeakingPart & { examId?: string })[]>(mockParts);
+  const [partsData, setPartsData] = useState<(SpeakingPart & { examId?: number })[]>(mockParts);
   const [totalTime, setTotalTime] = useState(MOCK_TOTAL_TIME);
   const parts = useMemo(() => partsData, [partsData]);
 
@@ -256,9 +257,9 @@ const SpeakingQuiz = () => {
   const uploadAndSubmitRecording = async (
     partId: number,
     blob: Blob
-  ): Promise<{ submissionId: string; audioUrl: string } | null> => {
+  ): Promise<{ submissionId: number; audioUrl: string } | null> => {
     const part = parts.find(p => p.id === partId);
-    const examId = (part as SpeakingPart & { examId?: string })?.examId;
+    const examId = (part as SpeakingPart & { examId?: number })?.examId;
     if (!examId) {
       toast.error(`Không tìm thấy examId cho Part ${partId}.`);
       return null;
@@ -687,32 +688,34 @@ const SpeakingQuiz = () => {
       <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
         {/* Left: Prompt */}
         <div className="w-1/2 border-r border-border">
-          <ScrollArea className="h-[calc(100vh-64px)]">
-            <div className="p-6 space-y-6">
-              <div>
-                <h2 className="text-lg font-bold text-foreground">{part.title}</h2>
-                <Badge variant="outline" className="mt-2 text-xs">⏱ {part.duration}</Badge>
-              </div>
-              <Card className="border-border bg-muted/30">
-                <CardContent className="p-5">
-                  <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
-                  <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{part.prompt}</div>
-                </CardContent>
-              </Card>
-              {!isMockSession && (
+          <VocabularyContextMenu source="speaking">
+            <ScrollArea className="h-[calc(100vh-64px)]">
+              <div className="p-6 space-y-6">
                 <div>
-                  <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
-                  <ul className="space-y-2">
-                    {part.tips.map((t, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <span className="text-primary">•</span>{t}
-                      </li>
-                    ))}
-                  </ul>
+                  <h2 className="text-lg font-bold text-foreground">{part.title}</h2>
+                  <Badge variant="outline" className="mt-2 text-xs">⏱ {part.duration}</Badge>
                 </div>
-              )}
-            </div>
-          </ScrollArea>
+                <Card className="border-border bg-muted/30">
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
+                    <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{part.prompt}</div>
+                  </CardContent>
+                </Card>
+                {!isMockSession && (
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
+                    <ul className="space-y-2">
+                      {part.tips.map((t, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="text-primary">•</span>{t}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </VocabularyContextMenu>
         </div>
 
         {/* Right: Camera & Recording */}

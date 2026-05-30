@@ -18,6 +18,7 @@ import { attemptsService } from "@/features/attempts/services/attempts.service";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { examService, type ExamItem } from "@/features/quiz/services/exam.service";
 import { writingApiService, type WritingResultResponse } from "../services/writing.api-service";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -27,7 +28,7 @@ const TOTAL_TIME = 60 * 60;
 
 interface ApiFeedback {
   source: "api";
-  submissionId: string;
+  submissionId: number;  // BE returns int
   score: number | null;
   feedback: string | null;
   status: string;
@@ -102,8 +103,8 @@ const WritingQuiz = () => {
   const [noExams, setNoExams] = useState(false);
   const [tasks, setTasks] = useState<WritingTask[]>(mockTasks);
   const [sampleEssays, setSampleEssays] = useState<Record<number, { level: string; content: string }>>(mockSampleEssays);
-  // API mode: store examIds aligned by task index
-  const [apiExamIds, setApiExamIds] = useState<string[]>([]);
+  // API mode: store examIds aligned by task index (number, matches BE int)
+  const [apiExamIds, setApiExamIds] = useState<number[]>([]);
 
   // ── Quiz state ──
   const [currentTask, setCurrentTask] = useState(0);
@@ -138,8 +139,9 @@ const WritingQuiz = () => {
         // If examId provided in URL, treat as single-task session
         if (examIdParam) {
           // Use provided exam as task 1 only
-          setApiExamIds([examIdParam]);
-          setTasks([examToTask({ id: examIdParam, title: "Writing Task", description: "", duration: "60 phút", skillType: "writing" }, 0)]);
+          const numId = Number(examIdParam);
+          setApiExamIds([numId]);
+          setTasks([examToTask({ id: numId, title: "Writing Task", description: "", duration: "60 phút", skillType: "writing" }, 0)]);
           setWritings({ 1: "" });
         } else if (groupId) {
           const exams = await examService.getExamsBySkill("writing");
@@ -235,7 +237,7 @@ const WritingQuiz = () => {
         );
         const fb: ApiFeedback = {
           source: "api",
-          submissionId: result.writingSubmissionId,
+          submissionId: result.writingSubmissionId,  // number
           score: result.score,
           feedback: result.feedback,
           status: result.status,
@@ -603,30 +605,32 @@ const WritingQuiz = () => {
       <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
         {/* Left: Prompt */}
         <div className="w-1/2 border-r border-border">
-          <ScrollArea className="h-[calc(100vh-64px)]">
-            <div className="p-6 space-y-6">
-              <div className="flex items-center gap-2">
-                <FileText size={20} className="text-primary" />
-                <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
+          <VocabularyContextMenu source="writing">
+            <ScrollArea className="h-[calc(100vh-64px)]">
+              <div className="p-6 space-y-6">
+                <div className="flex items-center gap-2">
+                  <FileText size={20} className="text-primary" />
+                  <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
+                </div>
+                <Card className="border-border bg-muted/30">
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
+                    <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{task.prompt}</div>
+                  </CardContent>
+                </Card>
+                <div>
+                  <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
+                  <ul className="space-y-2">
+                    {task.instructions.map((inst, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <span className="text-primary mt-0.5">•</span>{inst}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <Card className="border-border bg-muted/30">
-                <CardContent className="p-5">
-                  <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
-                  <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{task.prompt}</div>
-                </CardContent>
-              </Card>
-              <div>
-                <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
-                <ul className="space-y-2">
-                  {task.instructions.map((inst, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <span className="text-primary mt-0.5">•</span>{inst}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </ScrollArea>
+            </ScrollArea>
+          </VocabularyContextMenu>
         </div>
 
         {/* Right: Editor */}

@@ -16,19 +16,19 @@ import type {
 export type { StartPracticeResponse, SubmitPracticeResponse, AttemptResultResponse };
 
 export const listeningService = {
-  async start(examId: string): Promise<StartPracticeResponse> {
+  async start(examId: number): Promise<StartPracticeResponse> {
     return practiceApiService.start("listening", examId);
   },
 
   async submit(
-    attemptId: string,
-    answers: Record<string, string>,
+    attemptId: number,
+    answers: Record<number, string>,
     durationUsedSeconds: number
   ): Promise<SubmitPracticeResponse> {
     return practiceApiService.submit("listening", attemptId, answers, durationUsedSeconds);
   },
 
-  async getResult(attemptId: string): Promise<AttemptResultResponse> {
+  async getResult(attemptId: number): Promise<AttemptResultResponse> {
     return practiceApiService.getResult("listening", attemptId);
   },
 };

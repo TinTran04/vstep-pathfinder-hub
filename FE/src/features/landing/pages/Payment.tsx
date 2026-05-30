@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { toast } from "sonner";
 import { plans } from "../mocks/landing.mock";
+import { paymentService } from "../services/payment.service";
 
 interface PlanItem {
   name: string;
@@ -52,8 +53,9 @@ const Payment = () => {
   const [selectedPlan, setSelectedPlan] = useState<PlanItem>(getInitialPlan);
   const [payStep, setPayStep] = useState<"qr" | "processing" | "success">("qr");
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [processStatus, setProcessStatus] = useState("Đang kết nối cổng VietQR...");
+  const [processStatus, setProcessStatus] = useState("Đang kết nối cổng thanh toán...");
   const [txCode] = useState(() => `VSP${Date.now().toString().slice(-8).toUpperCase()}`);
+  const [loading, setLoading] = useState(false);
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -62,33 +64,30 @@ const Payment = () => {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleConfirmPay = () => {
+  const handleConfirmPay = async () => {
     if (!isLoggedIn) {
       toast.error("Vui lòng đăng nhập để hệ thống ghi nhận kích hoạt gói VIP!");
       return;
     }
 
+    setLoading(true);
     setPayStep("processing");
+    setProcessStatus("Đang tạo link thanh toán PayOS...");
 
-    // Sequence of premium status messages
-    setTimeout(() => {
-      setProcessStatus("Đã nhận được thông tin giao dịch Vietcombank...");
-    }, 1200);
-
-    setTimeout(() => {
-      setProcessStatus("Đang xác thực thông tin đối soát chuyển khoản...");
-    }, 2400);
-
-    setTimeout(() => {
-      setProcessStatus("Kích hoạt quyền lợi học viên VIP và đồng bộ hệ thống...");
-    }, 3600);
-
-    setTimeout(() => {
-      // Update local storage / state plan
-      updateUser({ plan: selectedPlan.name });
-      setPayStep("success");
-      toast.success("Nâng cấp tài khoản thành công! 🎉");
-    }, 4800);
+    try {
+      const planId = selectedPlan.rawPrice === 49000 ? 2 : 3;
+      const res = await paymentService.createSubscriptionPayment(planId);
+      if (res.checkoutUrl) {
+        setProcessStatus("Đang chuyển hướng đến cổng thanh toán...");
+        window.location.href = res.checkoutUrl;
+      } else {
+        throw new Error("Không nhận được link thanh toán từ cổng.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Tạo liên kết thanh toán thất bại. Vui lòng thử lại.");
+      setPayStep("qr");
+      setLoading(false);
+    }
   };
 
   const formattedTransferContent = user
@@ -130,7 +129,7 @@ const Payment = () => {
                   <div className="text-sm space-y-2">
                     <p className="font-semibold">Bạn chưa đăng nhập tài khoản</p>
                     <p className="text-xs opacity-90">
-                      Hãy đăng nhập trước khi thực hiện chuyển khoản để hệ thống tự động kích hoạt quyền lợi Premium cho tài khoản của bạn ngay khi giao dịch hoàn tất.
+                      Hãy đăng nhập trước khi thực hiện thanh toán để hệ thống tự động kích hoạt quyền lợi Premium cho tài khoản của bạn ngay khi giao dịch hoàn tất.
                     </p>
                     <Button 
                       size="sm" 
@@ -144,138 +143,85 @@ const Payment = () => {
                 </div>
               )}
 
-              {/* Bank Transfer Information */}
-              <div className="bg-card border border-border rounded-2xl p-6 space-y-6 shadow-sm">
-                <div>
-                  <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                    <CreditCard size={20} className="text-primary" />
-                    Thông tin chuyển khoản
+              {/* Secure PayOS Billing Checkout Portal */}
+              <div className="bg-card border border-border rounded-2xl p-8 space-y-6 shadow-md relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5">
+                      Cổng Thanh Toán Tự Động
+                    </Badge>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold px-2 py-0.5 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+                      Mở Khóa Tức Thì
+                    </Badge>
+                  </div>
+                  <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+                    <CreditCard size={22} className="text-primary" />
+                    Thanh toán an toàn qua PayOS
                   </h2>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Quét mã QR bằng ứng dụng ngân hàng hoặc tự chuyển khoản theo thông tin bên dưới.
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Bạn sẽ được chuyển hướng an toàn tới giao diện thanh toán PayOS để quét mã VietQR hoặc chuyển khoản 24/7 từ bất kỳ ứng dụng ngân hàng nào. Quyền lợi Premium VIP sẽ tự động kích hoạt ngay sau khi giao dịch thành công.
                   </p>
                 </div>
 
-                <div className="grid sm:grid-cols-12 gap-6 items-center">
-                  
-                  {/* Visual QR Code Display */}
-                  <div className="sm:col-span-5 flex flex-col items-center justify-center p-3 border border-border rounded-xl bg-card shadow-inner relative group">
-                    {/* VietQR Header */}
-                    <div className="w-full flex justify-between items-center px-1 mb-2">
-                      <span className="text-[9px] font-extrabold text-blue-700 tracking-tighter">VietQR</span>
-                      <span className="text-[9px] font-extrabold text-red-600 tracking-tighter">Napas247</span>
+                {/* Features Highlights */}
+                <div className="grid sm:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-xl border border-border/50 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
+                      <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
                     </div>
-
-                    {/* QR Code Graphic Grid Mock */}
-                    <div className="w-36 h-36 bg-card border border-border/80 rounded-lg flex items-center justify-center relative overflow-hidden p-2">
-                      <div className="grid grid-cols-7 gap-0.5 p-1">
-                        {Array.from({ length: 49 }).map((_, i) => (
-                          <div key={i} className={`w-3.5 h-3.5 rounded-sm transition-colors duration-300 ${
-                            [0,1,2,3,4,5,6,7,8,12,13,14,20,21,27,28,34,35,36,40,41,42,43,44,45,46,47,48].includes(i)
-                              ? "bg-foreground"
-                              : [10,16,18,23,25,30,32,38].includes(i) ? "bg-foreground/90" : "bg-transparent"
-                          }`} />
-                        ))}
-                      </div>
-                      
-                      {/* Brand Logo in center of QR */}
-                      <div className="absolute inset-0 m-auto w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-black text-xs shadow-md border-2 border-card">
-                        VP
-                      </div>
-                    </div>
-
-                    <div className="w-full text-center mt-2.5">
-                      <span className="text-[10px] text-muted-foreground font-medium">Tự động nhận diện số tiền</span>
+                    <div>
+                      <p className="font-bold text-foreground">Xử lý tự động 100%</p>
+                      <p className="text-[10px] text-muted-foreground">Kích hoạt gói trong 5s</p>
                     </div>
                   </div>
-
-                  {/* Manual details */}
-                  <div className="sm:col-span-7 space-y-4">
-                    
-                    {/* Bank Name */}
-                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                      <div>
-                        <p className="text-[10px] uppercase text-muted-foreground font-semibold">Ngân hàng</p>
-                        <p className="text-sm font-bold text-foreground">Vietcombank (VCB)</p>
-                      </div>
-                      <Badge variant="secondary" className="text-[10px]">Miễn phí chuyển khoản</Badge>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-500/10 flex items-center justify-center shrink-0">
+                      <ShieldCheck size={14} className="text-blue-600 dark:text-blue-400" />
                     </div>
-
-                    {/* STK */}
-                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                      <div>
-                        <p className="text-[10px] uppercase text-muted-foreground font-semibold">Số tài khoản</p>
-                        <p className="text-sm font-mono font-bold text-foreground tracking-wide">1234 5678 9012</p>
-                      </div>
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => handleCopy("123456789012", "Số tài khoản")}
-                      >
-                        {copiedField === "Số tài khoản" ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                      </Button>
+                    <div>
+                      <p className="font-bold text-foreground">Bảo mật tuyệt đối</p>
+                      <p className="text-[10px] text-muted-foreground">Hỗ trợ bởi cổng Napas</p>
                     </div>
-
-                    {/* Owner */}
-                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                      <div>
-                        <p className="text-[10px] uppercase text-muted-foreground font-semibold">Chủ tài khoản</p>
-                        <p className="text-sm font-semibold text-foreground">CONG TY VSTEPPRO</p>
-                      </div>
-                    </div>
-
-                    {/* Amount */}
-                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                      <div>
-                        <p className="text-[10px] uppercase text-muted-foreground font-semibold">Số tiền</p>
-                        <p className="text-base font-extrabold text-primary">{selectedPlan.price}</p>
-                      </div>
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => handleCopy(selectedPlan.rawPrice.toString(), "Số tiền")}
-                      >
-                        {copiedField === "Số tiền" ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                      </Button>
-                    </div>
-
-                    {/* Message Content */}
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-[10px] uppercase text-muted-foreground font-semibold">Nội dung chuyển khoản</p>
-                        <p className="text-xs font-mono font-bold text-primary tracking-wide bg-primary/5 px-2 py-1 rounded border border-primary/10 mt-1">
-                          {formattedTransferContent}
-                        </p>
-                      </div>
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-8 w-8 text-muted-foreground hover:text-primary mt-4"
-                        onClick={() => handleCopy(formattedTransferContent, "Nội dung")}
-                      >
-                        {copiedField === "Nội dung" ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                      </Button>
-                    </div>
-
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-border/60 flex flex-col sm:flex-row gap-3">
+                {/* Action Buttons */}
+                <div className="pt-2 flex flex-col sm:flex-row gap-3">
                   <Button 
-                    className="flex-1 gradient-primary text-primary-foreground font-semibold h-11 shadow-md hover:opacity-90"
+                    className="flex-1 gradient-primary text-primary-foreground font-bold h-12 shadow-lg hover:opacity-95 transition-all text-sm gap-2 shrink-0 group relative overflow-hidden"
                     onClick={handleConfirmPay}
+                    disabled={loading}
                   >
-                    Xác nhận đã thanh toán
+                    {loading ? (
+                      <span className="w-5 h-5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin shrink-0" />
+                    ) : (
+                      <>
+                        <Zap size={16} className="text-primary-foreground animate-pulse" />
+                        <span>Thanh toán ngay bằng PayOS</span>
+                      </>
+                    )}
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="h-11 font-medium"
+                    className="h-12 font-semibold text-xs transition-colors shrink-0"
                     onClick={() => navigate("/")}
+                    disabled={loading}
                   >
                     Hủy giao dịch
                   </Button>
+                </div>
+
+                <div className="pt-4 border-t border-border/60 flex items-center justify-center gap-6 text-[10px] text-muted-foreground font-medium">
+                  <div className="flex items-center gap-1">
+                    <Lock size={12} className="text-muted-foreground" />
+                    <span>Mã hóa SSL 256-bit</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <RefreshCw size={12} className="text-muted-foreground" />
+                    <span>Hỗ trợ hoàn tiền 24h</span>
+                  </div>
                 </div>
               </div>
             </div>

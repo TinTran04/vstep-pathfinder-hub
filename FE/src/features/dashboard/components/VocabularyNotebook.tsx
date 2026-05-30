@@ -77,7 +77,7 @@ const VocabularyNotebook = () => {
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Những từ bạn đã lưu khi luyện tập và thi thử
+          Những từ bạn đã lưu khi luyện tập và thi thử cả 4 kỹ năng (Nghe, Đọc, Viết, Nói)
         </p>
       </CardHeader>
       <CardContent>

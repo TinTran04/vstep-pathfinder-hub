@@ -1,4 +1,4 @@
-﻿import { apiClient } from "@/services/api-client";
+import { apiClient } from "@/services/api-client";
 import {
   User, Exam, PricePlan,
   initialPlans,
@@ -81,12 +81,12 @@ function getDurationMinutes(skillType: string): number {
 
 // --- Mappers ---
 function toUser(u: BEUserResponse): User {
-  let planName = "Miá»…n phÃ­";
+  let planName = "Miễn phí";
   const plan = u.subscriptionPlan?.toLowerCase();
   if (plan === "weekly") {
-    planName = "GÃ³i Tuáº§n";
+    planName = "Gói Tuần";
   } else if (plan === "monthly") {
-    planName = "GÃ³i ThÃ¡ng";
+    planName = "Gói Tháng";
   }
 
   return {
@@ -98,7 +98,7 @@ function toUser(u: BEUserResponse): User {
     createdAt: u.createdAt ? u.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
     examsCompleted: 0,
     plan: planName,
-    lastActive: "Vá»«a xong",
+    lastActive: "Vừa xong",
     points: 0,
     streak: 0,
   };
@@ -128,7 +128,7 @@ function toExam(e: BEExamResponse): Exam {
     id: e.examId.toString(),
     title: e.title,
     skill: skill,
-    difficulty: "Trung bÃ¬nh",
+    difficulty: "Trung bình",
     questions: questions,
     status: e.isPublished ? "active" : "draft",
     uploadedAt: e.createdAt ? e.createdAt.replace("T", " ").slice(0, 16) : new Date().toISOString().replace("T", " ").slice(0, 16),
@@ -165,12 +165,12 @@ export const adminService = {
       totalRevenue: 4850000,
       monthlyGrowth: 23,
       recentActivities: [
-        { text: "VÃµ Thá»‹ F hoÃ n thÃ nh Speaking #1 â€” 8.0/10", time: "2 phÃºt trÆ°á»›c", type: "exam" as const },
-        { text: "Äá» thi Reading #2 Ä‘Æ°á»£c thÃªm má»›i", time: "1 giá» trÆ°á»›c", type: "add" as const },
-        { text: "Tráº§n Thá»‹ B Ä‘Äƒng kÃ½ GÃ³i ThÃ¡ng", time: "2 giá» trÆ°á»›c", type: "payment" as const },
-        { text: "HoÃ ng Minh E Ä‘áº¡t 8.5/10 Writing #1", time: "3 giá» trÆ°á»›c", type: "exam" as const },
-        { text: "Nguyá»…n VÄƒn A hoÃ n thÃ nh Listening #2", time: "4 giá» trÆ°á»›c", type: "exam" as const },
-        { text: "Äáº·ng Quá»‘c G Ä‘Äƒng kÃ½ tÃ i khoáº£n má»›i", time: "5 giá» trÆ°á»›c", type: "user" as const },
+        { text: "Võ Thị F hoàn thành Speaking #1 — 8.0/10", time: "2 phút trước", type: "exam" as const },
+        { text: "Đề thi Reading #2 được thêm mới", time: "1 giờ trước", type: "add" as const },
+        { text: "Trần Thị B đăng ký Gói Tháng", time: "2 giờ trước", type: "payment" as const },
+        { text: "Hoàng Minh E đạt 8.5/10 Writing #1", time: "3 giờ trước", type: "exam" as const },
+        { text: "Nguyễn Văn A hoàn thành Listening #2", time: "4 giờ trước", type: "exam" as const },
+        { text: "Đặng Quốc G đăng ký tài khoản mới", time: "5 giờ trước", type: "user" as const },
       ],
       weeklyData: [12, 18, 8, 22, 15, 28, 20],
     };
@@ -180,9 +180,9 @@ export const adminService = {
   async createUser(payload: Omit<User, "id" | "createdAt" | "examsCompleted" | "lastActive" | "points" | "streak">): Promise<User> {
     const roleId = payload.role === "admin" ? 1 : 3;
     let subscriptionPlanId = 1;
-    if (payload.plan === "GÃ³i Tuáº§n") {
+    if (payload.plan === "Gói Tuần") {
       subscriptionPlanId = 2;
-    } else if (payload.plan === "GÃ³i ThÃ¡ng") {
+    } else if (payload.plan === "Gói Tháng") {
       subscriptionPlanId = 3;
     }
     const emailConfirmed = payload.status === "active";
@@ -203,9 +203,9 @@ export const adminService = {
   async updateUser(userId: string, payload: Partial<User>): Promise<User> {
     const roleId = payload.role === "admin" ? 1 : 3;
     let subscriptionPlanId = 1;
-    if (payload.plan === "GÃ³i Tuáº§n") {
+    if (payload.plan === "Gói Tuần") {
       subscriptionPlanId = 2;
-    } else if (payload.plan === "GÃ³i ThÃ¡ng") {
+    } else if (payload.plan === "Gói Tháng") {
       subscriptionPlanId = 3;
     }
     const emailConfirmed = payload.status === "active";

@@ -18,6 +18,7 @@ import type { SectionResponse, QuestionResponse } from "@/features/quiz/services
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -409,33 +410,35 @@ const ListeningQuiz = () => {
 
           {/* Questions */}
           <div className="flex-1 overflow-y-auto">
-            <div className="p-5 space-y-4">
-              {(section?.questions ?? []).map((q, i) => {
-                const globalIdx = sectionOffset + i + 1;
-                return (
-                  <div key={q.questionId} className={`rounded-xl border-2 p-4 transition-colors ${answers[q.questionId] !== undefined ? "border-primary/30 bg-primary/5" : "border-border"}`}>
-                    <h4 className="text-sm font-semibold text-foreground mb-3">
-                      <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
-                    </h4>
-                    <RadioGroup
-                      value={answers[q.questionId] ?? ""}
-                      onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-2"
-                    >
-                      {q.options.map((opt) => (
-                        <label key={opt.optionId} className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer text-sm transition-all ${answers[q.questionId] === opt.label ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 hover:bg-muted/50"}`}>
-                          <RadioGroupItem value={opt.label} id={`lq-${q.questionId}-${opt.optionId}`} />
-                          <Label htmlFor={`lq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1">
-                            <span className="font-medium text-muted-foreground mr-1.5">{opt.label}.</span>
-                            <span className="text-foreground">{opt.content}</span>
-                          </Label>
-                        </label>
-                      ))}
-                    </RadioGroup>
-                  </div>
-                );
-              })}
-            </div>
+            <VocabularyContextMenu source="listening">
+              <div className="p-5 space-y-4">
+                {(section?.questions ?? []).map((q, i) => {
+                  const globalIdx = sectionOffset + i + 1;
+                  return (
+                    <div key={q.questionId} className={`rounded-xl border-2 p-4 transition-colors ${answers[q.questionId] !== undefined ? "border-primary/30 bg-primary/5" : "border-border"}`}>
+                      <h4 className="text-sm font-semibold text-foreground mb-3">
+                        <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
+                      </h4>
+                      <RadioGroup
+                        value={answers[q.questionId] ?? ""}
+                        onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                      >
+                        {q.options.map((opt) => (
+                          <label key={opt.optionId} className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer text-sm transition-all ${answers[q.questionId] === opt.label ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 hover:bg-muted/50"}`}>
+                            <RadioGroupItem value={opt.label} id={`lq-${q.questionId}-${opt.optionId}`} />
+                            <Label htmlFor={`lq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1">
+                              <span className="font-medium text-muted-foreground mr-1.5">{opt.label}.</span>
+                              <span className="text-foreground">{opt.content}</span>
+                            </Label>
+                          </label>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  );
+                })}
+              </div>
+            </VocabularyContextMenu>
           </div>
 
           {/* Audio player */}

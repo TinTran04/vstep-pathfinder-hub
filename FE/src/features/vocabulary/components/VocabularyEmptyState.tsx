@@ -8,7 +8,7 @@ const VocabularyEmptyState = () => (
     </div>
     <h3 className="font-semibold text-foreground">Sổ tay đang trống</h3>
     <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-      Bạn chưa lưu từ nào. Hãy <strong>bôi đen từ</strong> trong bài đọc hoặc phần review rồi{" "}
+      Bạn chưa lưu từ nào. Hãy <strong>bôi đen từ</strong> ở 4 kỹ năng (Nghe, Đọc, Viết, Nói) hoặc phần xem lại rồi{" "}
       <strong>click chuột phải</strong> để lưu vào đây.
     </p>
   </div>

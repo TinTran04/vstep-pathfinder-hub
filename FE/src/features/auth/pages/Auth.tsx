@@ -88,6 +88,9 @@ const Auth = () => {
 
   // ── Redirect after login/verify ────────────────────────────────
   const redirectAfterAuth = (role?: string) => {
+    if (import.meta.env.DEV) {
+      console.log("[FE-PERF] redirect start");
+    }
     if (role === "admin") {
       navigate("/admin");
     } else {
@@ -100,6 +103,9 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+    if (import.meta.env.DEV) {
+      sessionStorage.setItem("login_start_time", Date.now().toString());
+    }
     setLoading(true);
     const result = await login(form.email, form.password);
     setLoading(false);

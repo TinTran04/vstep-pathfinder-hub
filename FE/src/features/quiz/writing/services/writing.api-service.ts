@@ -23,10 +23,10 @@ export interface SubmitWritingRequest {
 }
 
 export interface WritingSubmissionResponse {
-  writingSubmissionId: string;
-  userId: string;
-  examId: string;
-  attemptId: string | null;
+  writingSubmissionId: number;  // BE returns int
+  userId: number;
+  examId: number;
+  attemptId: number | null;
   prompt: string;
   status: string; // "pending" | "processing" | "graded" | "failed"
   score: number | null;
@@ -52,7 +52,7 @@ export const writingApiService = {
    * Trả về submissionId ngay lập tức (202 Accepted).
    */
   async submit(
-    examId: string,
+    examId: number,
     prompt: string,
     essayText: string
   ): Promise<WritingSubmissionResponse> {
@@ -66,7 +66,7 @@ export const writingApiService = {
   /**
    * Lấy kết quả một lần (GET).
    */
-  async getSubmission(submissionId: string): Promise<WritingResultResponse> {
+  async getSubmission(submissionId: number): Promise<WritingResultResponse> {
     return apiClient.get<WritingResultResponse>(
       `/writing-practice/submissions/${submissionId}`
     );
@@ -77,7 +77,7 @@ export const writingApiService = {
    * Gọi onStatusChange(status) mỗi khi có cập nhật mới.
    */
   async pollUntilGraded(
-    submissionId: string,
+    submissionId: number,
     onStatusChange?: (status: string) => void
   ): Promise<WritingResultResponse> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;

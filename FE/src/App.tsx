@@ -23,6 +23,7 @@ import AttemptReview from "@/features/attempts/pages/AttemptReview";
 import AttemptResult from "@/features/attempts/pages/AttemptResult";
 import MockTestReviewRedirect from "@/features/attempts/components/MockTestReviewRedirect";
 import Payment from "@/features/landing/pages/Payment";
+import PaymentReturn from "@/features/landing/pages/PaymentReturn";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const AnimatedRoutes = () => {
         <Route path="/attempts/:attemptId/review" element={<PageTransition><AttemptReview /></PageTransition>} />
         <Route path="/mock-test/review" element={<PageTransition><MockTestReviewRedirect /></PageTransition>} />
         <Route path="/payment" element={<PageTransition><Payment /></PageTransition>} />
+        <Route path="/payment/return" element={<PageTransition><PaymentReturn /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>

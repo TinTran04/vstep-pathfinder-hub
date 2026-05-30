@@ -71,6 +71,17 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[FE-PERF] dashboard mounted");
+      const startTimeStr = sessionStorage.getItem("login_start_time");
+      if (startTimeStr) {
+        const elapsed = Date.now() - parseInt(startTimeStr, 10);
+        console.log(`[FE-PERF] Time from login submit to dashboard mounted: ${elapsed}ms`);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (isInitialising) return;
 
     if (!isLoggedIn) {
@@ -82,6 +93,18 @@ const Dashboard = () => {
     let isMounted = true;
     dashboardService.getDashboardData().then((data) => {
       if (isMounted) {
+        if (import.meta.env.DEV) {
+          console.log("[FE-PERF] dashboard data loaded");
+          const startTimeStr = sessionStorage.getItem("login_start_time");
+          if (startTimeStr) {
+            const elapsed = Date.now() - parseInt(startTimeStr, 10);
+            console.log(`[FE-PERF] LOGIN_TOTAL_FE: ${elapsed}ms (from login submit to dashboard data loaded)`);
+            sessionStorage.removeItem("login_start_time");
+            try {
+              console.timeEnd("LOGIN_TOTAL_FE");
+            } catch (e) {}
+          }
+        }
         setDashboardData(data);
         setLoading(false);
       }

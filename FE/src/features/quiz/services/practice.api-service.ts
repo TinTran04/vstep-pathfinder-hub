@@ -29,8 +29,8 @@ export type { ExamDetailResponse, SectionResponse, QuestionResponse, OptionRespo
 // ─── BE Response types ────────────────────────────────────────
 
 export interface StartPracticeResponse {
-  attemptId: string;
-  examId: string;
+  attemptId: number;
+  examId: number;
   skillType: string;
   status: string;
   startedAt: string;
@@ -38,12 +38,12 @@ export interface StartPracticeResponse {
 }
 
 export interface SubmitAnswerPayload {
-  questionId: string; // GUID string
+  questionId: number; // GUID or number
   userAnswer: string; // Label of chosen option e.g. "A", "B", or free text
 }
 
 export interface SubmitPracticeResponse {
-  attemptId: string;
+  attemptId: number;
   status: string;
   score: number;
   totalQuestions: number;
@@ -52,8 +52,8 @@ export interface SubmitPracticeResponse {
 }
 
 export interface AttemptAnswerResponse {
-  answerId: string;
-  questionId: string;
+  answerId: number;
+  questionId: number;
   userAnswer: string;
   isCorrect: boolean;
   score: number;
@@ -62,8 +62,8 @@ export interface AttemptAnswerResponse {
 }
 
 export interface AttemptResultResponse {
-  attemptId: string;
-  examId: string;
+  attemptId: number;
+  examId: number;
   skillType: string;
   status: string;
   score: number | null;
@@ -127,7 +127,7 @@ function sortByOrder<T extends { orderIndex?: number }>(items: T[]): T[] {
 function normalizeOption(raw: unknown, index: number): OptionResponse {
   if (!isRecord(raw)) {
     return {
-      optionId: String(index),
+      optionId: index,
       label: OPTION_LABELS[index] ?? String(index + 1),
       content: String(raw ?? ""),
       orderIndex: index,
@@ -136,7 +136,7 @@ function normalizeOption(raw: unknown, index: number): OptionResponse {
 
   const label = getString(raw, ["label", "optionLabel", "letter"], OPTION_LABELS[index] ?? String(index + 1));
   return {
-    optionId: getString(raw, ["optionId", "id", "answerOptionId"], `${label}-${index}`),
+    optionId: getNumber(raw, ["optionId", "id", "answerOptionId"]) ?? index,
     label,
     content: getString(raw, ["content", "optionText", "text", "value", "answerText"]),
     isCorrect: getBoolean(raw, ["isCorrect", "correct"]),
@@ -152,7 +152,7 @@ function normalizeQuestion(raw: unknown, index: number): QuestionResponse | null
   );
 
   return {
-    questionId: getString(raw, ["questionId", "id", "questionGuid"], String(index)),
+    questionId: getNumber(raw, ["questionId", "id", "questionGuid"]) ?? index,
     questionText: getString(raw, ["questionText", "text", "content", "prompt"]),
     explanation: getString(raw, ["explanation", "explain"], ""),
     options,
@@ -170,7 +170,7 @@ function normalizeSection(raw: unknown, index: number): SectionResponse | null {
   const questions = sortByOrder([...directQuestions, ...nestedQuestions].map(normalizeQuestion).filter(Boolean) as QuestionResponse[]);
 
   return {
-    sectionId: getString(raw, ["sectionId", "id", "passageId"], String(index)),
+    sectionId: getNumber(raw, ["sectionId", "id", "passageId"]) ?? index,
     title: getString(raw, ["title", "name"], `Passage ${index + 1}`),
     instruction: getString(raw, ["instruction", "instructions", "direction", "directions"], ""),
     passageText: getString(raw, ["passageText", "passage", "content", "text", "readingText"], ""),
@@ -180,7 +180,7 @@ function normalizeSection(raw: unknown, index: number): SectionResponse | null {
 }
 
 function getUniqueSortedQuestions(sections: SectionResponse[]): QuestionResponse[] {
-  const byId = new Map<string, QuestionResponse>();
+  const byId = new Map<number, QuestionResponse>();
 
   for (const question of sections.flatMap((section) => section.questions)) {
     byId.set(question.questionId, question);
@@ -227,7 +227,7 @@ function normalizeExam(rawExam: ExamDetailResponse): ExamDetailResponse {
     const questions = sortByOrder(getArray(raw, ["questions", "questionResponses"]).map(normalizeQuestion).filter(Boolean) as QuestionResponse[]);
     if (questions.length > 0) {
       sections.push({
-        sectionId: `${rawExam.examId}-section-1`,
+        sectionId: rawExam.examId,
         title: rawExam.title,
         instruction: "",
         passageText: getString(raw, ["passageText", "passage", "content", "text", "readingText", "description"], rawExam.description ?? ""),
@@ -254,8 +254,8 @@ function normalizeAttemptAnswer(raw: unknown, index: number): AttemptAnswerRespo
   if (!isRecord(raw)) return null;
 
   return {
-    answerId: getString(raw, ["answerId", "attemptAnswerId", "id"], String(index)),
-    questionId: getString(raw, ["questionId", "questionGuid", "id"]),
+    answerId: getNumber(raw, ["answerId", "attemptAnswerId", "id"]) ?? index,
+    questionId: getNumber(raw, ["questionId", "questionGuid", "id"]) ?? 0,
     userAnswer: getString(raw, ["userAnswer", "selectedAnswer", "selectedOptionLabel", "answer"]),
     isCorrect: getBoolean(raw, ["isCorrect", "correct"]) ?? false,
     score: getNumber(raw, ["score", "point", "points"]) ?? 0,
@@ -284,7 +284,7 @@ export const practiceApiService = {
    */
   async start(
     skill: PracticeSkill,
-    examId: string
+    examId: number
   ): Promise<StartPracticeResponse> {
     const res = await apiClient.post<StartPracticeResponse>(
       `/${skill}-practice/${examId}/start`
@@ -294,18 +294,18 @@ export const practiceApiService = {
 
   /**
    * Nộp bài luyện tập.
-   * @param answers Map<questionId(GUID), userAnswer(string label e.g. "A")>
+   * @param answers Map<questionId(number), userAnswer(string label e.g. "A")>
    */
   async submit(
     skill: PracticeSkill,
-    attemptId: string,
-    answers: Record<string, string>,
+    attemptId: number,
+    answers: Record<number, string>,
     durationUsedSeconds: number
   ): Promise<SubmitPracticeResponse> {
     const payload = {
       durationUsedSeconds,
       answers: Object.entries(answers).map(([questionId, userAnswer]) => ({
-        questionId,
+        questionId: Number(questionId),
         userAnswer,
       })),
     };
@@ -320,7 +320,7 @@ export const practiceApiService = {
    */
   async getResult(
     skill: PracticeSkill,
-    attemptId: string
+    attemptId: number
   ): Promise<AttemptResultResponse> {
     const res = await apiClient.get<AttemptResultResponse>(
       `/${skill}-practice/attempts/${attemptId}/result`

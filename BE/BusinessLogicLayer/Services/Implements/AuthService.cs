@@ -9,6 +9,7 @@ using BusinessLogicLayer.Integrations.Email;
 using BusinessLogicLayer.Services.Interfaces;
 using DataAccessLayer.Entities;
 using DataAccessLayer.UoW;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -26,19 +27,22 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly JwtSettings _jwtSettings;
     private readonly OtpSettings _otpSettings;
+    private readonly Microsoft.Extensions.Logging.ILogger<AuthService> _logger;
 
     public AuthService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IEmailService emailService,
         IOptions<JwtSettings> jwtOptions,
-        IOptions<OtpSettings> otpOptions)
+        IOptions<OtpSettings> otpOptions,
+        Microsoft.Extensions.Logging.ILogger<AuthService> logger)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _emailService = emailService;
         _jwtSettings = jwtOptions.Value;
         _otpSettings = otpOptions.Value;
+        _logger = logger;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -84,23 +88,56 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
+        var email = request.Email ?? string.Empty;
+        string maskedEmail = email;
+        int atIndex = email.IndexOf('@');
+        if (atIndex > 1)
+        {
+            maskedEmail = email[0] + "***" + email[atIndex..];
+        }
+        _logger.LogInformation("LOGIN_START for email: {Email}", maskedEmail);
+        var totalTimer = System.Diagnostics.Stopwatch.StartNew();
+
+        var dbTimer = System.Diagnostics.Stopwatch.StartNew();
         var normalizedEmail = NormalizeEmail(request.Email);
         var user = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
+        dbTimer.Stop();
+        _logger.LogInformation("LOGIN_DB_QUERY took {Ms}ms", dbTimer.ElapsedMilliseconds);
 
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        var verifyTimer = System.Diagnostics.Stopwatch.StartNew();
+        var isPasswordValid = user is not null && BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+        verifyTimer.Stop();
+        _logger.LogInformation("LOGIN_PASSWORD_VERIFY took {Ms}ms", verifyTimer.ElapsedMilliseconds);
+
+        if (!isPasswordValid)
         {
+            totalTimer.Stop();
+            _logger.LogWarning("LOGIN_FAILED: Invalid email or password. Total time: {Ms}ms", totalTimer.ElapsedMilliseconds);
             throw new UnauthorizedAccessException("Invalid email or password.");
         }
 
         if (!user.EmailConfirmed)
         {
+            totalTimer.Stop();
+            _logger.LogWarning("LOGIN_FAILED: Email is not verified. Total time: {Ms}ms", totalTimer.ElapsedMilliseconds);
             throw new UnauthorizedAccessException("Email is not verified.");
         }
 
+        var saveTimer = System.Diagnostics.Stopwatch.StartNew();
         SetRefreshToken(user);
         await _unitOfWork.SaveChangesAsync();
+        saveTimer.Stop();
+        _logger.LogInformation("LOGIN_DB_SAVE_REFRESH_TOKEN took {Ms}ms", saveTimer.ElapsedMilliseconds);
 
-        return BuildAuthResponse(user);
+        var mapJwtTimer = System.Diagnostics.Stopwatch.StartNew();
+        var response = BuildAuthResponse(user);
+        mapJwtTimer.Stop();
+        _logger.LogInformation("LOGIN_JWT_GENERATE_AND_MAP took {Ms}ms", mapJwtTimer.ElapsedMilliseconds);
+
+        totalTimer.Stop();
+        _logger.LogInformation("LOGIN_TOTAL took {Ms}ms", totalTimer.ElapsedMilliseconds);
+
+        return response;
     }
 
     public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)

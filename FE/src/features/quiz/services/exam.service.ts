@@ -27,7 +27,7 @@ import { apiClient } from "@/services/api-client";
 // ─── BE response types ───────────────────────────────────────
 
 export interface ExamResponse {
-  examId: string;
+  examId: number;   // BE returns int
   title: string;
   skillType: string; // "listening" | "reading" | "writing" | "speaking"
   description: string;
@@ -40,7 +40,7 @@ export interface ExamResponse {
 }
 
 export interface OptionResponse {
-  optionId: string;
+  optionId: number;  // BE returns int
   label: string;
   content: string;
   isCorrect?: boolean;
@@ -48,7 +48,7 @@ export interface OptionResponse {
 }
 
 export interface QuestionResponse {
-  questionId: string;
+  questionId: number;  // BE returns int
   questionText: string;
   explanation?: string | null;
   options: OptionResponse[];
@@ -56,7 +56,7 @@ export interface QuestionResponse {
 }
 
 export interface SectionResponse {
-  sectionId: string;
+  sectionId: number;  // BE returns int
   title: string;
   instruction?: string | null;
   passageText?: string | null;
@@ -79,7 +79,7 @@ export interface PagedResponse<T> {
 // ─── FE-friendly shape used in Quiz.tsx ──────────────────────
 
 export interface ExamItem {
-  id: string;            // examId (GUID)
+  id: number;            // examId (int from BE)
   title: string;
   description: string;
   duration: string;      // e.g. "30 phút"
@@ -90,7 +90,7 @@ export interface ExamItem {
 
 function toExamItem(r: ExamResponse): ExamItem {
   return {
-    id: r.examId,
+    id: r.examId,  // number (int)
     title: r.title,
     description: r.description,
     duration: `${r.durationMinutes} phút`,

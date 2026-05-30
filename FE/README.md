@@ -239,7 +239,7 @@ npm run dev
 Mở trình duyệt tại `http://localhost:8080`
 
 ### ⚙️ Cấu hình Môi trường (Environment Variables)
-Ứng dụng hỗ trợ chuyển đổi giữa dữ liệu **Mock** (chạy Local) và dữ liệu **API thật** bằng cách cấu hình các tệp `.env.local`:
+Ứng dụng hỗ trợ chuyển đổi giữa dữ liệu **Mock** (chạy Local) và dữ liệu **API thật** bằng cách cấu hình tệp `.env`:
 ```bash
 # Nguồn dữ liệu sử dụng: "mock" hoặc "api"
 VITE_DATA_SOURCE=mock
