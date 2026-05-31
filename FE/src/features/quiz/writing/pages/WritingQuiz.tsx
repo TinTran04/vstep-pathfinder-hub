@@ -16,9 +16,10 @@ import { type WritingTask, tasks as mockTasks, sampleEssays as mockSampleEssays,
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
-import { examService, type ExamItem } from "@/features/quiz/services/exam.service";
+import { examService, type ExamItem, type ExamDetailResponse } from "@/features/quiz/services/exam.service";
 import { writingApiService, type WritingResultResponse } from "../services/writing.api-service";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { cleanDescription } from "@/lib/utils";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -48,18 +49,22 @@ interface MockFeedback {
 type FeedbackResult = ApiFeedback | MockFeedback;
 
 // Derive a WritingTask shape from ExamItem for API mode
-function examToTask(exam: ExamItem, index: number): WritingTask {
+function examToTask(exam: ExamDetailResponse, index: number): WritingTask {
+  const section = exam.sections?.[0];
+  const prompt = section?.passageText || section?.instruction || cleanDescription(exam.description) || exam.title;
   return {
     id: index + 1,
     title: exam.title,
     type: exam.skillType,
-    duration: exam.duration,
+    duration: `${exam.durationMinutes} phút`,
     minWords: index === 0 ? 120 : 250,
     recommendedWords: index === 0 ? "150–200 từ" : "270–300 từ",
     scoreWeight: index === 0 ? "1/3 tổng điểm" : "2/3 tổng điểm",
-    prompt: exam.description,
+    prompt,
     instructions: [
-      "Đọc kỹ yêu cầu đề bài trước khi viết",
+      section?.instruction && section.instruction !== (section?.passageText || "")
+        ? section.instruction
+        : "Đọc kỹ yêu cầu đề bài trước khi viết",
       `Tối thiểu ${index === 0 ? "120" : "250"} từ`,
       "Kiểm tra ngữ pháp và chính tả trước khi nộp",
     ],
@@ -141,7 +146,9 @@ const WritingQuiz = () => {
           // Use provided exam as task 1 only
           const numId = Number(examIdParam);
           setApiExamIds([numId]);
-          setTasks([examToTask({ id: numId, title: "Writing Task", description: "", duration: "60 phút", skillType: "writing" }, 0)]);
+          const detail = await examService.getExamDetail(numId);
+          if (!active) return;
+          setTasks([examToTask(detail, 0)]);
           setWritings({ 1: "" });
         } else if (groupId) {
           const exams = await examService.getExamsBySkill("writing");
@@ -157,7 +164,11 @@ const WritingQuiz = () => {
           }
           // Sort matched exams by title so Task 1 is first and Task 2 is second
           matched.sort((a, b) => a.title.localeCompare(b.title));
-          const mapped = matched.map((e, i) => examToTask(e, i));
+          const details = await Promise.all(
+            matched.map(e => examService.getExamDetail(e.id))
+          );
+          if (!active) return;
+          const mapped = details.map((d, i) => examToTask(d, i));
           setTasks(mapped);
           setApiExamIds(matched.map(e => e.id));
           const initialWritings: Record<number, string> = {};
@@ -171,9 +182,14 @@ const WritingQuiz = () => {
             setLoading(false);
             return;
           }
-          const mapped = exams.slice(0, 2).map((e, i) => examToTask(e, i));
+          const slice = exams.slice(0, 2);
+          const details = await Promise.all(
+            slice.map(e => examService.getExamDetail(e.id))
+          );
+          if (!active) return;
+          const mapped = details.map((d, i) => examToTask(d, i));
           setTasks(mapped);
-          setApiExamIds(exams.slice(0, 2).map(e => e.id));
+          setApiExamIds(slice.map(e => e.id));
           const initialWritings: Record<number, string> = {};
           mapped.forEach((_, i) => { initialWritings[i + 1] = ""; });
           setWritings(initialWritings);
@@ -242,8 +258,9 @@ const WritingQuiz = () => {
           feedback: result.feedback,
           status: result.status,
         };
-        setFeedbacks(prev => ({ ...prev, [taskIndex]: fb }));
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks, writingExamIds: apiExamIds });
+        const updatedFeedbacks = { ...feedbacks, [taskIndex]: fb };
+        setFeedbacks(updatedFeedbacks);
+        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
       } else {
         // Mock mode
         const task = tasks[taskIndex];
@@ -258,8 +275,9 @@ const WritingQuiz = () => {
           const base = writingFeedbackAITemplates[task.id];
           fb = { source: "mock", ...base, errors };
         }
-        setFeedbacks(prev => ({ ...prev, [taskIndex]: fb }));
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks, writingExamIds: apiExamIds });
+        const updatedFeedbacks = { ...feedbacks, [taskIndex]: fb };
+        setFeedbacks(updatedFeedbacks);
+        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
       }
     } catch (e) {
       console.error("[WritingQuiz] AI feedback error", e);
