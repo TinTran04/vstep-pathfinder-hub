@@ -17,21 +17,21 @@ export interface SpeakingFeedback {
 export const parts: SpeakingPart[] = [
   {
     id: 1,
-    title: "Part 1 – Social Interaction",
+    title: "Part 1 – Tương tác xã hội",
     duration: "3 phút",
     prompt: "Let's talk about your hometown.\n\n1. Where is your hometown?\n2. What do you like most about living there?\n3. Has your hometown changed much in recent years? How?",
     tips: ["Trả lời tự nhiên, không học thuộc lòng", "Mỗi câu nên trả lời 3-4 câu", "Sử dụng thì phù hợp"],
   },
   {
     id: 2,
-    title: "Part 2 – Solution Discussion",
+    title: "Part 2 – Thảo luận giải pháp",
     duration: "4 phút",
     prompt: "Your university is planning to improve the campus facilities. Here are some suggestions:\n\n• Build a new library\n• Upgrade the sports center\n• Create more green spaces\n\nDiscuss the advantages and disadvantages of each suggestion and decide which improvement would benefit students the most.",
     tips: ["Thảo luận cả ưu và nhược điểm", "Đưa ra lý do cho lựa chọn của bạn", "Sử dụng từ nối logic"],
   },
   {
     id: 3,
-    title: "Part 3 – Topic Development",
+    title: "Part 3 – Phát triển chủ đề",
     duration: "5 phút",
     prompt: "Topic: The impact of social media on young people\n\nYou should:\n• Describe how social media affects young people's daily lives\n• Discuss both positive and negative effects\n• Give your opinion on how to use social media responsibly\n• Suggest what parents and schools can do",
     tips: ["Trình bày có cấu trúc: mở bài, thân bài, kết", "Đưa ra ví dụ cụ thể", "Thể hiện quan điểm cá nhân rõ ràng", "Nói ít nhất 2 phút"],

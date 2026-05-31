@@ -1,882 +1,260 @@
-# AGENT.md — VAI Backend Coding Guide
-
-
+# AGENTS.md - VAI Backend Coding Guide
 
 ## 1. Project Overview
 
+VAIApplication is the ASP.NET Core backend for a VSTEP practice platform.
 
+Core capabilities:
+- Auth with JWT access token, refresh token, email OTP verification.
+- User CRUD with role and subscription plan relationships.
+- Exam management and Reading/Listening DOCX import.
+- Reading and Listening practice.
+- Writing and Speaking submission with OpenRouter AI grading.
+- Personal Dictionary with PostgreSQL cache for dictionary and translation data.
+- Subscription payment through payOS.
+- Supabase PostgreSQL, Supabase Storage, and Cloudflare R2.
 
-Dự án **VAIApplication** là backend cho hệ thống web ôn luyện thi tiếng Anh VSTEP tích hợp AI.
-
-
-
-Mục tiêu chính:
-
-
-
-- Luyện tập và tự động chấm điểm 3 kỹ năng: **Reading, Writing, Speaking**.
-
-- Tối ưu chi phí vận hành hạ tầng và chi phí API AI ở mức tối đa.
-
-- Backend xây dựng theo kiến trúc **N-Layer**.
-
-
-
-## 2. Technology Stack
-
-
-
-- **Backend:** C# — ASP.NET Core Web API
-
-- **Architecture:** N-Layer gồm API Layer, Business Logic Layer, Data Access Layer
-
-- **Database:** Supabase PostgreSQL
-
-- **ORM:** Entity Framework Core
-
-- **Authentication:** JWT Access Token + Refresh Token + Email OTP Verification
-- **Mapping:** AutoMapper
-- **Configuration:** `.env` for local secrets via DotNetEnv, environment variables/Docker secrets for production
-
-- **Storage:**
-
-  - Supabase Storage: lưu file tĩnh, hình ảnh đề thi, tài nguyên đọc/nghe
-
-  - Cloudflare R2: lưu audio Speaking qua Presigned URL
-
-- **Realtime:** SignalR/WebSocket
-
-- **Payment:** VNPay / MoMo
-
-- **AI Model:** Chỉ dùng `gemini-1.5-flash`
-
-- **Background Jobs:** Worker Service
-- **Soft Delete:** Enabled for entities that should not be physically deleted
-- **Deployment:** Docker / Docker Compose
-
-
-
-## 3. Current Solution Structure
-
-
+The architecture is strictly N-Layer:
 
 ```txt
-
-VAIApplication.sln
-
-├── VAIApplication              # API Layer
-
-├── BusinessLogicLayer          # BLL
-
-└── DataAccessLayer             # DAL
-
-```
-
-
-
-## 4. Project Layer Responsibilities
-
-
-
-### 4.1 VAIApplication — API Layer
-
-
-
-Chỉ chịu trách nhiệm tiếp nhận request, validate đầu vào cơ bản, gọi service ở BLL và trả response.
-
-
-
-Thư mục chính:
-
-
-
-```txt
-
-VAIApplication
-
-├── Controllers
-
-├── Extensions
-
-├── Hubs
-
-├── Middlewares
-
-├── Program.cs
-
-├── appsettings.json
-
-└── Dockerfile
-
-```
-
-
-
-Quy tắc:
-
-
-
-- Controller không chứa business logic.
-
-- Controller không gọi trực tiếp DbContext hoặc Repository.
-
-- Controller chỉ gọi interface service từ BLL.
-
-- Không trả Entity trực tiếp ra API.
-
-- Luôn dùng DTO cho request/response.
-
-- Các phần đăng ký service nên tách vào `Extensions/` để giữ `Program.cs` gọn.
-
-
-
-Ví dụ luồng đúng:
-
-
-
-```txt
-
-Controller -> IService trong BLL -> Repository/UoW trong DAL -> Database
-
-```
-
-
-
-Ví dụ không được làm:
-
-
-
-```txt
-
-Controller -> DbContext
-
-Controller -> Repository
-
-Controller -> Gemini API
-
-Controller -> R2 Client
-
-```
-
-
-
-### 4.2 BusinessLogicLayer — BLL
-
-
-
-Chứa toàn bộ logic nghiệp vụ của hệ thống.
-
-
-
-Thư mục chính:
-
-
-
-```txt
-
-BusinessLogicLayer
-
-├── Core
-
-├── DTOs
-
-├── Integrations
-
-└── Services
-
-    ├── Implements
-
-    └── Interfaces
-
-```
-
-
-
-Quy tắc:
-
-
-
-- Service xử lý logic nghiệp vụ.
-
-- Service nhận DTO request và trả DTO response.
-
-- Service không trả Entity ra ngoài API.
-
-- Service được phép gọi Repository/UoW thông qua interface.
-
-- Service được phép gọi các integration service như AI, Storage, Payment.
-
-- Không viết SQL hoặc truy vấn EF Core trực tiếp trong Controller.
-
-
-
-Nên chia DTO theo từng feature:
-
-
-
-```txt
-
-DTOs
-
-├── Auth
-
-├── Exam
-
-├── Reading
-
-├── Writing
-
-├── Speaking
-
-├── Payment
-
-└── Common
-
-```
-
-
-
-Nên chia service theo từng feature:
-
-
-
-```txt
-
-Services
-
-├── Interfaces
-
-│   ├── IAuthService.cs
-
-│   ├── IExamService.cs
-
-│   ├── IWritingService.cs
-
-│   ├── ISpeakingService.cs
-
-│   └── IPaymentService.cs
-
-└── Implements
-
-    ├── AuthService.cs
-
-    ├── ExamService.cs
-
-    ├── WritingService.cs
-
-    ├── SpeakingService.cs
-
-    └── PaymentService.cs
-
-```
-
-
-
-### 4.3 DataAccessLayer — DAL
-
-
-
-Chỉ chịu trách nhiệm thao tác database.
-
-
-
-Thư mục chính:
-
-
-
-```txt
-
-DataAccessLayer
-
-├── Context
-
-├── Core
-
-├── Entities
-
-├── Repositories
-
-└── UoW
-
-```
-
-
-
-Quy tắc:
-
-
-
-- DAL chứa Entity, DbContext, Repository, Unit of Work.
-
-- DAL không gọi BLL.
-
-- DAL không chứa business logic cấp cao.
-
-- Repository chỉ xử lý truy vấn database.
-
-- UoW quản lý transaction và `SaveChangesAsync()`.
-
-- Không expose `IQueryable` tùy tiện lên BLL nếu không cần thiết.
-
-
-
-## 5. Dependency Rules
-
-
-
-Luồng phụ thuộc bắt buộc:
-
-
-
-```txt
-
 VAIApplication -> BusinessLogicLayer -> DataAccessLayer
-
 ```
 
+Do not convert this project to Clean Architecture. Do not add a Domain Layer.
 
-
-Không được tạo dependency ngược:
-
-
+## 2. Solution Structure
 
 ```txt
-
-DataAccessLayer -> BusinessLogicLayer     # Sai
-
-DataAccessLayer -> VAIApplication         # Sai
-
-BusinessLogicLayer -> VAIApplication      # Sai
-
+BE
++-- VAIApplication       # API Layer
++-- BusinessLogicLayer   # BLL
++-- DataAccessLayer      # DAL
 ```
 
-## 5.1 Database Identity Rules
+API Layer:
+- Controllers
+- Extensions
+- Middlewares
+- Program.cs
 
-Project hiện tại đã refactor hoàn toàn sang int identity IDs.
+BLL:
+- DTOs
+- Services/Interfaces
+- Services/Implements
+- Core/Settings
+- Core/Mappings
+- Integrations
 
-Tất cả primary key và foreign key phải dùng:
+DAL:
+- Context
+- Entities
+- Repositories/Interfaces
+- Repositories/Implements
+- UoW
+- Migrations
+
+## 3. Dependency Rules
+
+Allowed:
+
+```txt
+VAIApplication -> BusinessLogicLayer -> DataAccessLayer
+```
+
+Forbidden:
+
+```txt
+Controller -> DbContext
+Controller -> Repository
+DataAccessLayer -> BusinessLogicLayer
+DataAccessLayer -> VAIApplication
+BusinessLogicLayer -> VAIApplication
+```
+
+Controllers must call only BLL service interfaces. Controllers must not contain business logic.
+
+## 4. Technology Stack
+
+- .NET 8 ASP.NET Core Web API
+- EF Core + Npgsql
+- Supabase PostgreSQL
+- Repository Pattern + Unit of Work
+- DTO pattern
+- AutoMapper for common mapping only
+- JWT auth + refresh token
+- BCrypt for password and OTP hash
+- DotNetEnv for local `.env`
+- HttpClient for external APIs
+- Cloudflare R2 for audio upload via presigned URL
+- Supabase Storage for static/light assets
+- OpenRouter for Writing/Speaking AI grading
+- payOS for subscription payments
+- PostgreSQL-backed cache for Personal Dictionary
+
+## 5. Identity and Database Rules
+
+All primary keys and foreign keys use auto-increment `int`.
+
+Correct:
 
 ```csharp
-public int Id { get; set; }
-
-Không dùng:
-
-Guid
-UUID
-string ID
-
-Ví dụ đúng:
-
 public int UserId { get; set; }
-
 public int RoleId { get; set; }
-
 public int SubscriptionPlanId { get; set; }
-
 public int ExamId { get; set; }
+```
 
-DbContext phải dùng:
+Forbidden for primary/foreign keys:
+- `Guid`
+- `UUID`
+- string IDs
 
+EF identity columns must use:
+
+```csharp
 .ValueGeneratedOnAdd()
+```
 
-cho identity columns.
+Routes must use int constraints:
 
-Route API phải dùng int constraint:
-
+```csharp
 [HttpGet("{id:int}")]
-
-Không dùng Guid route.
-
-
-## 6. Repository Pattern Rules
-
-
-
-Sử dụng Repository Pattern để tách logic truy vấn khỏi service.
-
-
-
-Có thể dùng Generic Repository cho thao tác cơ bản:
-
-
-
-```csharp
-
-Task<T?> GetByIdAsync(int id);
-
-Task AddAsync(T entity);
-
-void Update(T entity);
-
-void Delete(T entity);
-
 ```
 
+Do not use `{id:guid}`.
 
+## 6. Current Core Entities
 
-Nhưng với truy vấn nghiệp vụ quan trọng, ưu tiên Specific Repository.
+Important entities:
+- `User`
+- `Role`
+- `SubscriptionPlan`
+- `Exam`
+- `ExamSection`
+- `ExamQuestion`
+- `ExamOption`
+- `ExamAttempt`
+- `ExamAttemptAnswer`
+- `WritingSubmission`
+- `SpeakingSubmission`
+- `DictionaryEntry`
+- `UserVocabulary`
+- `PaymentTransaction`
 
-
-
-Ví dụ:
-
-
-
-```csharp
-
-public interface IUserRepository
-
-{
-
-    Task<User?> GetByEmailAsync(string email);
-
-    Task<bool> IsEmailExistsAsync(string email);
-
-}
-
-```
-
-
-
-```csharp
-
-public interface IExamRepository
-
-{
-
-    Task<Exam?> GetExamDetailAsync(int examId);
-
-    Task<List<Exam>> GetPublishedExamsAsync(int page, int pageSize);
-
-}
-
-```
-
-
-
-Quy tắc tối ưu EF Core:
-
-
-
-- Chỉ `Select` đúng cột cần dùng.
-
-- Không `Include` bừa bãi.
-
-- Dùng `AsNoTracking()` cho query chỉ đọc.
-
-- Dùng phân trang cho danh sách lớn.
-
-- Không load Entity lớn nếu chỉ cần vài field.
-
-- Không trả toàn bộ bảng về memory rồi mới filter.
-
-
-
-## 7. Unit of Work Rules
-
-
-
-Bắt buộc dùng Unit of Work cho các luồng cần transaction.
-
-
-
-Đặc biệt:
-
-
-
-- Thanh toán VNPay/MoMo
-
-- Cập nhật ví / điểm / gói VIP
-
-- Tạo attempt bài thi kèm nhiều bảng con
-
-- Lưu kết quả chấm Writing/Speaking
-
-
-
-Ví dụ luồng payment:
-
-
+Roles:
 
 ```txt
-
-Verify payment callback
-
--> Check transaction exists
-
--> Update payment status
-
--> Update user balance/subscription
-
--> SaveChangesAsync trong cùng transaction
-
+1 = admin
+2 = staff
+3 = user
 ```
 
-
-
-Không được cập nhật payment và ví ở hai transaction rời nhau.
-
-
-
-## 8. DTO Rules
-
-
-
-Tất cả API input/output phải dùng DTO.
-
-
-
-Không được trả Entity trực tiếp:
-
-
-
-```csharp
-
-return Ok(user); // Sai nếu user là Entity
-
-```
-
-
-
-Nên trả DTO:
-
-
-
-```csharp
-
-return Ok(userProfileResponse);
-
-```
-
-
-
-DTO nên ngắn gọn, chỉ chứa field cần thiết để giảm payload.
-
-
-
-Ví dụ:
-
-
-
-```csharp
-
-public class WritingScoreResponse
-
-{
-
-    public decimal Score { get; set; }
-
-    public string Feedback { get; set; } = string.Empty;
-
-}
-
-```
-
-
-
-## 9. AI Integration Rules
-
-
-
-Chỉ sử dụng model:
-
-
+Subscription plans:
 
 ```txt
-
-gemini-1.5-flash
-
+1 = free    price 0      duration 0 days
+2 = weekly  price 49000  duration 7 days
+3 = monthly price 199000 duration 30 days
 ```
 
+User defaults:
 
-
-Không tự ý đổi sang model đắt hơn nếu không có yêu cầu rõ ràng.
-
-
-
-### Writing AI Optimization
-
-
-
-- Prompt phải ngắn.
-
-- Không gửi dữ liệu dư thừa.
-
-- Output bắt buộc là JSON ngắn.
-
-- Chỉ trả điểm và 1–2 câu nhận xét cốt lõi.
-
-
-
-Ví dụ output schema:
-
-
-
-```json
-
-{
-
-  "score": 7.0,
-
-  "feedback": "Good organization, but grammar errors reduce clarity."
-
-}
-
+```csharp
+RoleId = 3
+SubscriptionPlanId = 1
 ```
 
+Users must not store role/subscription names as strings. Use relationships:
 
-
-Không yêu cầu AI trả feedback dài nếu không cần.
-
-
-
-### Speaking AI Optimization
-
-
-
-- Không gọi AI nhiều lần cho từng câu nhỏ.
-
-- Gom toàn bộ bài Speaking thành một file/luồng.
-
-- Chỉ gọi AI chấm một lần duy nhất ở cuối bài.
-
-- Client phải nén audio sang Opus/WebM khoảng 16kbps trước khi upload.
-
-
-
-## 10. Storage Rules
-
-
-
-### Supabase Storage
-
-
-
-Dùng cho:
-
-
-
-- Hình ảnh đề thi
-
-- File tĩnh
-
-- Tài nguyên Reading/Listening
-
-- Avatar hoặc asset nhỏ
-
-
-
-Yêu cầu:
-
-
-
-- Áp dụng RLS nếu file cần bảo vệ.
-
-- Không lưu audio Speaking dung lượng lớn ở Supabase nếu có thể dùng R2.
-
-
-
-### Cloudflare R2
-
-
-
-Dùng cho:
-
-
-
-- Audio bài Speaking
-
-
-
-Quy tắc:
-
-
-
-- Client upload trực tiếp lên R2 bằng Presigned URL.
-
-- Backend chỉ sinh Presigned URL, không nhận file audio lớn qua API nếu không cần.
-
-- Tận dụng Zero Egress Fee của R2 để giảm chi phí.
-
-- Có cronjob dọn file tài khoản Free sau 7–14 ngày.
-
-- Tài khoản VIP có thể giữ file lâu dài hoặc vĩnh viễn tùy business rule.
-
-
-
-## 11. Payment Rules
-
-
-
-PaymentService phải xử lý qua Unit of Work.
-
-
-
-Các rule bắt buộc:
-
-
-
-- Validate callback từ VNPay/MoMo.
-
-- Kiểm tra giao dịch đã xử lý chưa để tránh cộng tiền/gói nhiều lần.
-
-- Update payment status và user wallet/subscription trong cùng transaction.
-
-- Log đầy đủ request/response callback.
-
-- Không tin dữ liệu amount/package từ client khi xác nhận thanh toán.
-
-- Lấy thông tin gói từ database/server-side.
-
-### Subscription Payment Rules
-
-Subscription plans hiện tại:
-
-```txt
-1 = free
-2 = weekly
-3 = monthly
-
-Pricing:
-
-free    = 0 VND
-weekly  = 49,000 VND
-monthly = 199,000 VND
-
-Duration:
-
-free    = 0 days
-weekly  = 7 days
-monthly = 30 days
-
-Payment callback phải:
-
-verify secure hash/signature
-chống double payment
-update payment status
-update subscription
-update SubscriptionExpiresAt
-lưu transaction log
-
-Không được trust:
-
-amount từ frontend
-subscription plan từ frontend khi callback
-
-Phải lấy lại dữ liệu plan từ database/server-side.
-
-
----
-
-
-
-## 12. Authentication Rules
-
-
-
-- Sử dụng JWT Access Token + Refresh Token.
-
-- Access Token sống ngắn.
-
-- Refresh Token lưu an toàn trong database.
-
-- Có cơ chế revoke refresh token khi logout.
-
-- Middleware/API phải validate user status nếu cần.
-
-- Không lưu secret trong source code.
-
-- Role hiện tại:
-  - `admin`
-  - `staff`
-  - `user`
-
-- Gói user hiện tại:
-  - `free`
-  - `weekly`
-  - `monthly`
-- Giá gói hiện tại: 
-  - `free = 0 VND` 
-  - `weekly = 49,000 VND` 
-  - `monthly = 199,000 VND`
-
-- User mới mặc định:
-  - RoleId = 3;
-  - SubscriptionPlanId = 1;
-
-  - User entity KHÔNG lưu role/subscription trực tiếp dạng string.
-
-Bắt buộc dùng relationship:
-
+```csharp
 public int RoleId { get; set; }
 public Role Role { get; set; } = null!;
 
 public int SubscriptionPlanId { get; set; }
 public SubscriptionPlan SubscriptionPlan { get; set; } = null!;
-
-JWT bắt buộc chứa role name claim:
-
-new Claim(ClaimTypes.Role, user.Role.Name)
-
-### 12.1 Email OTP Verification Rules
-
-- User bắt buộc xác thực email bằng OTP trước khi được login.
-
-- OTP gửi qua email SMTP.
-
-- OTP gồm 6 chữ số.
-
-- OTP hết hạn sau 5 phút, cấu hình qua `.env`.
-
-- Không lưu OTP plain text trong database.
-
-- Bắt buộc lưu OTP dạng hash:
-
-```csharp
-EmailOtpHash = BCrypt.Net.BCrypt.HashPassword(otp);
+public DateTime? SubscriptionExpiresAt { get; set; }
 ```
 
-- Verify OTP bằng:
+## 7. Repository Rules
+
+Repositories belong only in DAL.
+
+Rules:
+- Use specific repositories for feature queries.
+- Do not expose `IQueryable` outside DAL.
+- Use `AsNoTracking()` for read-only queries.
+- Use projection with `Select` for list/query responses.
+- Do not `Include` blindly.
+- Do not load entire tables into memory before filtering.
+- Add pagination for list endpoints.
+- Use tracked repository methods for update/delete flows.
+
+Example:
 
 ```csharp
-BCrypt.Net.BCrypt.Verify(inputOtp, user.EmailOtpHash);
+Task<User?> GetByIdAsync(int userId);          // read
+Task<User?> GetTrackedByIdAsync(int userId);   // write
 ```
 
-- Sau khi verify OTP thành công:
-  - `EmailConfirmed = true`
-  - `EmailOtpHash = null`
-  - `EmailOtpExpiryTime = null`
-  - reset số lần nhập sai OTP nếu có
+## 8. Unit of Work Rules
 
-- Không cho login nếu:
+Use `IUnitOfWork` for save and transaction boundaries.
+
+Payment/webhook flows must update transaction and subscription in one DB transaction:
+
+```txt
+verify webhook signature
+load transaction
+reject mismatch
+skip if already paid
+update PaymentTransaction
+update User.SubscriptionPlanId
+update User.SubscriptionExpiresAt
+SaveChangesAsync
+commit
+```
+
+Use:
 
 ```csharp
-user.EmailConfirmed == false
+Task ExecuteInTransactionAsync(Func<Task> operation);
 ```
 
-- Resend OTP phải tạo OTP mới và ghi đè OTP cũ.
+## 9. DTO and API Response Rules
 
-- Nên chống spam resend OTP bằng `OtpLastSentAt`.
+All API input/output must use DTOs.
 
-- Nên chống brute force OTP bằng `OtpFailedCount`.
-
-### 12.2 User Auth Entity Fields
-
-Khi thêm xác thực OTP, User entity nên có các field:
+Never return EF entities directly:
 
 ```csharp
-public bool EmailConfirmed { get; set; }
-public string? EmailOtpHash { get; set; }
-public DateTime? EmailOtpExpiryTime { get; set; }
-public int OtpFailedCount { get; set; }
-public DateTime? OtpLastSentAt { get; set; }
+return Ok(user); // forbidden if user is Entity
 ```
 
-Không dùng field `EmailOtp` lưu OTP plain text.
+Use response wrapper:
 
-### 12.3 Auth Endpoints Required
+```csharp
+ApiResponse<T>
+```
 
-AuthController cần có tối thiểu:
+Error responses should stay consistent:
+
+```json
+{
+  "success": false,
+  "message": "Invalid request",
+  "errors": {}
+}
+```
+
+Every controller action should include:
+- XML summary
+- `ProducesResponseType`
+- model validation
+- `ApiResponse<T>`
+
+## 10. Authentication Rules
+
+Auth endpoints:
 
 ```txt
 POST /api/auth/register
@@ -885,549 +263,353 @@ POST /api/auth/resend-otp
 POST /api/auth/login
 POST /api/auth/refresh-token
 POST /api/auth/logout
+POST /api/auth/change-password
+POST /api/auth/forgot-password
+POST /api/auth/verify-reset-otp
+POST /api/auth/reset-password
 ```
 
-Mọi endpoint phải trả `ApiResponse<T>` và có Swagger summary.
-
-
-
-## 13. SignalR Rules
-
-
-
-SignalR dùng cho realtime nếu cần:
-
-
-
-- Trạng thái upload/chấm điểm Speaking
-
-- Notification
-
-- Tiến trình xử lý bài thi
-
-
-
-Không dùng SignalR cho việc truyền file lớn nếu upload trực tiếp lên R2 đã đủ.
-
-
-
-## 14. Error Handling Rules
-
-
-
-- Dùng Global Exception Middleware.
-
-- Không throw exception thô ra client.
-
-- Response lỗi nên có format thống nhất.
-
-
-
-Ví dụ:
-
-
-
-```json
-
-{
-
-  "success": false,
-
-  "message": "Invalid request",
-
-  "errors": \[]
-
-}
-
-```
-
-
-
-## 15. API Response Rules
-
-
-
-Nên dùng response wrapper thống nhất:
-
-
+JWT must contain role name claim:
 
 ```csharp
-
-public class ApiResponse<T>
-
-{
-
-    public bool Success { get; set; }
-
-    public string Message { get; set; } = string.Empty;
-
-    public T? Data { get; set; }
-
-    public object? Errors { get; set; }
-
-}
-
+new Claim(ClaimTypes.Role, user.Role.Name)
 ```
 
-
-
-Không trả dữ liệu thừa.
-
-
-
-
-## 16. API Summary / Swagger Documentation Rules
-
-Tất cả API endpoint phải có **summary** rõ ràng để Swagger/OpenAPI dễ đọc và dễ test.
-
-### Controller Action Summary
-
-Mỗi action trong Controller bắt buộc có XML comment:
+Do not allow login unless:
 
 ```csharp
-/// <summary>
-/// Đăng ký tài khoản mới và gửi OTP xác thực email.
-/// </summary>
-/// <param name="request">Thông tin đăng ký tài khoản.</param>
-/// <returns>Thông tin xác thực hoặc thông báo yêu cầu xác thực OTP.</returns>
-[HttpPost("register")]
-[ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status200OK)]
-[ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-[ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
-public async Task<IActionResult> Register([FromBody] RegisterRequest request)
-{
-    ...
-}
+user.EmailConfirmed == true
 ```
 
-### Summary Content Rules
+OTP:
+- 6 digits.
+- Expiry configured by `OTP_EXPIRE_MINUTES`.
+- Store OTP hash only.
+- Use BCrypt verify.
+- Do not store plain OTP.
 
-Summary phải ngắn gọn nhưng đủ ý:
+## 11. Exam and Practice Rules
 
-- Endpoint dùng để làm gì.
-- Input chính là gì.
-- Output chính là gì.
-- Có yêu cầu authentication/role không.
-- Có side effect quan trọng không, ví dụ gửi OTP, tạo payment, tạo presigned URL upload R2.
+Exam/practice IDs are int.
 
-Ví dụ tốt:
-
-```csharp
-/// <summary>
-/// Xác thực OTP email sau khi đăng ký tài khoản.
-/// </summary>
-```
-
-Ví dụ không tốt:
-
-```csharp
-/// <summary>
-/// Verify.
-/// </summary>
-```
-
-### Swagger Response Rules
-
-Mỗi endpoint nên khai báo response status bằng `ProducesResponseType`.
-
-Tối thiểu nên có:
-
-```csharp
-[ProducesResponseType(typeof(ApiResponse<T>), StatusCodes.Status200OK)]
-[ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-[ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-[ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
-```
-
-Với endpoint tạo mới dữ liệu, dùng:
-
-```csharp
-[ProducesResponseType(typeof(ApiResponse<T>), StatusCodes.Status201Created)]
-```
-
-### Swagger Configuration
-
-API Layer phải bật XML comment trong Swagger.
-
-Trong `.csproj` của API project:
-
-```xml
-<PropertyGroup>
-  <GenerateDocumentationFile>true</GenerateDocumentationFile>
-  <NoWarn>$(NoWarn);1591</NoWarn>
-</PropertyGroup>
-```
-
-Trong Swagger extension:
-
-```csharp
-var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-options.IncludeXmlComments(xmlPath);
-```
-
-Nếu dùng annotation thì cài:
-
-```bash
-dotnet add VAIApplication package Swashbuckle.AspNetCore.Annotations
-```
-
-và bật:
-
-```csharp
-options.EnableAnnotations();
-```
-
-### Naming Convention For API Summary
-
-- Summary nên viết bằng tiếng Việt nếu document của project đang dùng tiếng Việt.
-- Không viết summary quá dài.
-- Không ghi thông tin nhạy cảm như secret, connection string, token thật trong summary.
-
-## 17. Naming Rules
-
-
-
-- Project giữ đúng N-Layer hiện tại:
-
-  - `VAIApplication`
-
-  - `BusinessLogicLayer`
-
-  - `DataAccessLayer`
-
-- Interface bắt đầu bằng `I`.
-
-- Service implement kết thúc bằng `Service`.
-
-- Repository implement kết thúc bằng `Repository`.
-
-- DTO request kết thúc bằng `Request`.
-
-- DTO response kết thúc bằng `Response`.
-
-
-
-Ví dụ:
-
-
+Routes:
 
 ```txt
-
-LoginRequest.cs
-
-LoginResponse.cs
-
-IAuthService.cs
-
-AuthService.cs
-
-IUserRepository.cs
-
-UserRepository.cs
-
-IUnitOfWork.cs
-
-UnitOfWork.cs
-
+GET  /api/exams/{id:int}
+POST /api/reading-practice/{examId:int}/start
+POST /api/listening-practice/{attemptId:int}/submit
+POST /api/writing-practice/{examId:int}/submit
+POST /api/speaking-practice/{examId:int}/submit
 ```
 
+Free-user rules:
+- Free users may be limited to one practice/submission where current service rules enforce it.
+- Check free plan via `SubscriptionPlanId == 1` or `SubscriptionPlan.Name == "free"`.
+- Do not compare a string field on `User`; no such field should exist.
 
+## 12. Reading and Listening Import Rules
 
-## 18. Environment Variables Rules
+Reading import:
 
-Không hardcode secret trong source code.
+```txt
+POST /api/exams/import-reading-docx
+```
 
-Bắt buộc dùng `.env` cho local development và environment variables/Docker secrets cho production.
+Listening import:
 
-File `.env` phải nằm ở root solution và phải được đưa vào `.gitignore`.
+```txt
+POST /api/exams/import-listening-docx
+POST /api/exams/listening-audio/upload-url
+```
 
-Không commit `.env` lên GitHub.
+Rules:
+- Reading import service and Listening import service must remain separate:
+  - `IReadingExamImportService` -> `ReadingExamImportService`
+  - `IListeningExamImportService` -> `ListeningExamImportService`
+- Listening audio is uploaded directly to R2 using a presigned PUT URL.
+- Backend stores the resulting audio URL in `Exam.AudioUrl` / `ExamSection.AudioUrl`.
 
-Local `.env` mẫu:
+## 13. Storage Rules
+
+Supabase Storage is for:
+- static files
+- images
+- small assets
+- reading/listening resources if appropriate
+
+Cloudflare R2 is for:
+- Speaking audio
+- Listening audio
+
+Rules:
+- Client uploads large audio directly to R2 through presigned URL.
+- Backend generates upload URLs only.
+- Backend should not receive large audio file bodies.
+- R2 CORS must allow the frontend origin and PUT method.
+
+## 14. OpenRouter AI Grading Rules
+
+OpenRouter is used for Writing and Speaking grading.
+
+Configuration:
 
 ```env
-ASPNETCORE_ENVIRONMENT=Development
-
-DB_CONNECTION_STRING=Host=localhost;Port=5432;Database=Vai;Username=postgres;Password=12345;Pooling=true;Trust Server Certificate=true;
-
-JWT_KEY=YOUR_SUPER_SECRET_KEY_AT_LEAST_32_CHARACTERS
-JWT_ISSUER=VAIApplication
-JWT_AUDIENCE=VAIApplicationUsers
-JWT_DURATION_MINUTES=60
-
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@gmail.com
-SMTP_PASSWORD=your_google_app_password
-SMTP_FROM_EMAIL=your_email@gmail.com
-SMTP_FROM_NAME=VAI Application
-
-OTP_EXPIRE_MINUTES=5
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=google/gemini-flash-1.5
+OPENROUTER_BASE_URL=https://openrouter.ai/
+OPENROUTER_SITE_URL=
+OPENROUTER_APP_NAME=VAIApplication
+OPENROUTER_MAX_AUDIO_BYTES=15728640
 ```
 
-Bắt buộc dùng `IOptions<T>` cho config có cấu trúc.
+Rules:
+- Use `IOpenRouterGradingService`.
+- Use `HttpClient`.
+- Do not call OpenRouter from controllers.
+- Do not hardcode API keys.
+- Output must be valid JSON and parsed server-side.
+- Store final score in `Score`.
+- Store concise feedback in `Feedback`.
+- Set submission status:
+  - `processing`
+  - `scored`
+  - `failed`
 
-Ví dụ config class:
+Writing:
+- Send prompt and essay text only.
+- Keep prompts cost-conscious.
+- Prefer rubric JSON output.
 
-```csharp
-public class SmtpSettings
-{
-    public string Host { get; set; } = string.Empty;
-    public int Port { get; set; }
-    public string Username { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
-    public string FromEmail { get; set; } = string.Empty;
-    public string FromName { get; set; } = string.Empty;
-}
+Speaking:
+- Client uploads one final compressed audio file to R2.
+- Backend may download the audio and send base64 audio to OpenRouter.
+- Do not call AI once per speaking question unless explicitly required.
+- Enforce `OPENROUTER_MAX_AUDIO_BYTES`.
+
+## 15. Personal Dictionary Rules
+
+APIs:
+
+```txt
+POST /api/dictionary/search
+GET  /api/dictionary/my-words
+PUT  /api/dictionary/note
+PUT  /api/dictionary/favorite
 ```
 
-Program.cs phải load `.env` sớm:
+Flow:
 
-```csharp
-DotNetEnv.Env.Load();
-builder.Configuration.AddEnvironmentVariables();
+```txt
+user searches word
+-> check DictionaryEntries cache
+-> if cache miss: call dictionaryapi.dev and MyMemory
+-> save DictionaryEntries
+-> save UserVocabulary
+-> return DTO
 ```
 
-Package cần dùng:
+Rules:
+- `DictionaryEntries.Word` has unique index.
+- `UserVocabulary` has unique composite index `(UserId, DictionaryEntryId)`.
+- Use PostgreSQL as cache.
+- Use `AsNoTracking()` and projection for read-only list queries.
+- Do not call dictionary/translation APIs if cache hit.
 
-```bash
-dotnet add VAIApplication package DotNetEnv
-dotnet add BusinessLogicLayer package MailKit
+Config:
+
+```env
+MYMEMORY_EMAIL=
 ```
 
-## 19. DateTime / Timezone Rules
+## 16. payOS Payment Rules
 
-PostgreSQL với Npgsql 6+ yêu cầu datetime rõ ràng khi dùng `timestamp with time zone`.
+APIs:
 
-Bắt buộc lưu database theo UTC.
+```txt
+POST /api/payments/payos/subscription
+POST /api/payments/payos/webhook
+```
 
-Tuyệt đối không dùng:
+Config:
+
+```env
+PAYOS_CLIENT_ID=
+PAYOS_API_KEY=
+PAYOS_CHECKSUM_KEY=
+PAYOS_RETURN_URL=
+PAYOS_CANCEL_URL=
+PAYOS_BASE_URL=https://api-merchant.payos.vn/
+```
+
+Rules:
+- User chooses only `SubscriptionPlanId`.
+- Backend loads plan and price from DB.
+- Do not trust amount from frontend.
+- Webhook must verify HMAC signature with checksum key.
+- Webhook must check:
+  - transaction exists
+  - provider is `payos`
+  - amount matches transaction
+  - description matches transaction
+  - transaction not already `paid`
+- On success update:
+  - `PaymentTransaction.Status = "paid"`
+  - `PaymentTransaction.PaidAt`
+  - `PaymentTransaction.RawWebhookPayload`
+  - `User.SubscriptionPlanId`
+  - `User.SubscriptionExpiresAt`
+- Use UnitOfWork transaction.
+
+## 17. Environment Variable Rules
+
+Never hardcode secrets.
+
+Local secrets go in `.env`, not in source control.
+
+Production secrets must come from environment variables or Docker secrets.
+
+All structured config must use `IOptions<T>`.
+
+Add new env mappings in:
+
+```txt
+VAIApplication/Extensions/EnvironmentConfigurationExtensions.cs
+```
+
+Register settings in:
+
+```txt
+VAIApplication/Extensions/ServiceCollectionExtensions.cs
+```
+
+Update `.env.example` whenever adding new configuration keys.
+
+## 18. DateTime Rules
+
+Store all database timestamps in UTC.
+
+Forbidden:
 
 ```csharp
 DateTime.Now
 ```
 
-Bắt buộc dùng:
+Required:
 
 ```csharp
 DateTime.UtcNow
 ```
 
-Áp dụng cho:
-
+Use UTC for:
 - `CreatedAt`
 - `UpdatedAt`
-- `DeletedAt`
-- `RefreshTokenExpiryTime`
-- `EmailOtpExpiryTime`
-- `OtpLastSentAt`
-- `PaymentTime`
-- `SubmissionTime`
-- `ExpiredAt`
-- Worker Service cleanup time
+- OTP expiry
+- refresh token expiry
+- payment time
+- submission time
+- subscription expiry
+- cleanup/retention time
 
-Chỉ convert sang giờ Việt Nam UTC+7 ở frontend hoặc response layer nếu cần hiển thị.
+Only convert to Vietnam time in frontend or presentation layer.
 
-## 20. Code Style Rules
+## 19. Migration Rules
 
+Use EF Core migrations.
 
+Commands:
 
-- Ưu tiên async/await cho database và external API.
+```bash
+dotnet ef migrations add <MigrationName> -p DataAccessLayer -s VAIApplication
+dotnet ef database update -p DataAccessLayer -s VAIApplication
+dotnet ef migrations has-pending-model-changes -p DataAccessLayer -s VAIApplication
+```
 
-- Không hardcode connection string, API key, secret.
+Do not fake migration success.
 
-- Dùng `IOptions<T>` cho cấu hình.
+If build output is locked by a running backend process, either stop the backend or build to a temp output for compile checks. Do not leave temp folders committed.
 
-- Tách config vào `appsettings.json` hoặc environment variables.
+Seed data must use fixed deterministic `DateTime`, not `DateTime.UtcNow`.
 
-- Không viết file quá dài nếu có thể chia nhỏ.
+## 20. Performance and Cost Rules
 
-- Không để Controller xử lý mapping phức tạp.
+Always prefer:
+- fewer DB queries
+- projected columns
+- pagination
+- `AsNoTracking()` for reads
+- cache hits over external calls
+- one AI call per final Writing/Speaking submission
+- direct-to-storage upload for large files
 
+Avoid:
+- loading huge graphs with `Include`
+- returning unnecessary fields
+- calling AI repeatedly for small subparts
+- streaming large audio through backend unless needed for AI grading
 
+## 21. Swagger Rules
 
-## 21. Required Service Registration
+Every endpoint should have:
+- Vietnamese or clear English XML summary
+- `ProducesResponseType`
+- proper auth attributes
+- `ApiResponse<T>`
 
+Swagger XML comments must stay enabled in `VAIApplication.csproj`.
 
+## 22. Naming Rules
 
-Trong API Layer nên có extension methods như:
-
-
+Use existing naming style:
 
 ```txt
-
-Extensions
-
-├── ServiceCollectionExtensions.cs
-
-├── AuthenticationExtensions.cs
-
-├── SwaggerExtensions.cs
-
-├── DatabaseExtensions.cs
-
-└── CorsExtensions.cs
-
+IAuthService / AuthService
+IUserRepository / UserRepository
+CreateUserRequest
+UserResponse
+PaymentTransactionRepository
 ```
 
+Request DTOs end with `Request`.
+Response DTOs end with `Response`.
+Interfaces start with `I`.
 
+## 23. What Not To Do
 
-Ví dụ trong `Program.cs`:
+Do not:
+- introduce Clean Architecture or Domain Layer
+- call DbContext from controllers
+- return entities directly from APIs
+- expose IQueryable from repositories
+- store secrets in code
+- use Guid/UUID keys
+- use `DateTime.Now`
+- trust payment amount from client
+- trust webhook without signature verification
+- upload large audio through backend when R2 presigned upload is available
+- call OpenRouter from controllers
+- change AI/payment/storage providers without explicit request
 
+## 24. Verification Checklist
 
+Before handoff after backend changes:
 
-```csharp
-
-builder.Services.AddControllers();
-
-builder.Services.AddEndpointsApiExplorer();
-
-builder.Services.AddSwaggerGen();
-
-
-
-builder.Services.AddDatabase(builder.Configuration);
-
-builder.Services.AddApplicationServices();
-
-builder.Services.AddJwtAuthentication(builder.Configuration);
-
-builder.Services.AddCorsPolicy(builder.Configuration);
-
+```bash
+dotnet restore
+dotnet build
+dotnet ef migrations has-pending-model-changes -p DataAccessLayer -s VAIApplication
 ```
 
+If schema changed:
 
-
-## 22. CRUD Rules
-
-Khi Codex được yêu cầu viết CRUD cho một feature, phải tuân thủ N-Layer:
-
-```txt
-Controller -> Service Interface -> Service Implement -> UnitOfWork/Repository -> DbContext
+```bash
+dotnet ef migrations add <Name> -p DataAccessLayer -s VAIApplication
+dotnet ef database update -p DataAccessLayer -s VAIApplication
 ```
 
-CRUD không được gọi trực tiếp DbContext trong Controller.
-
-Mỗi CRUD feature nên có:
-
-```txt
-DTOs/<Feature>/
-├── Create<Feature>Request.cs
-├── Update<Feature>Request.cs
-├── <Feature>Response.cs
-└── <Feature>ListItemResponse.cs
-
-Services/Interfaces/I<Feature>Service.cs
-Services/Implements/<Feature>Service.cs
-
-Repositories/Interfaces/I<Feature>Repository.cs
-Repositories/Implements/<Feature>Repository.cs
-
-Controllers/<Feature>Controller.cs
-```
-
-CRUD endpoint chuẩn:
-
-```txt
-GET    /api/<feature>
-GET    /api/<feature>/{id}
-POST   /api/<feature>
-PUT    /api/<feature>/{id}
-DELETE /api/<feature>/{id}
-```
-
-Quy tắc CRUD:
-
-- Tất cả request/response dùng DTO.
-- Không trả Entity trực tiếp.
-- `GET list` phải có phân trang.
-- Query read-only dùng `AsNoTracking()`.
-- Chỉ `Select` đúng cột cần trả về.
-- Delete mặc định là soft delete nếu entity có `IsDeleted`.
-- Update chỉ cập nhật các field được phép.
-- Mọi endpoint phải có XML summary và `ProducesResponseType`.
-- Response dùng `ApiResponse<T>`.
-- Dùng `DateTime.UtcNow` cho audit fields.
-- Dùng AutoMapper cho mapping phổ biến, mapping thủ công nếu cần tối ưu query projection.
-
-## 23. Cost Optimization Principles
-
-
-
-Luôn ưu tiên giải pháp tiết kiệm chi phí:
-
-
-
-- Giảm số lần gọi AI.
-
-- Giảm token gửi vào AI.
-
-- Giảm payload API.
-
-- Giảm query database dư thừa.
-
-- Client upload file trực tiếp lên storage.
-
-- Backend không stream file lớn nếu không cần.
-
-- Dùng R2 cho audio để giảm egress fee.
-
-- Cronjob dọn file không cần thiết.
-
-
-
-## 24. Things Not To Do
-
-
-
-Không được:
-
-
-
-- Chuyển kiến trúc sang Clean Architecture nếu không được yêu cầu.
-
-- Thêm Domain Layer riêng nếu project vẫn đang theo N-Layer.
-
-- Gọi trực tiếp DAL từ Controller.
-
-- Trả Entity trực tiếp ra API.
-
-- Gọi AI nhiều lần cho một bài Speaking.
-
-- Upload audio lớn qua backend nếu có thể upload thẳng lên R2.
-
-- Dùng model AI khác `gemini-1.5-flash` nếu chưa được duyệt.
-
-- Lấy dư cột/dư bảng từ database.
-
-- Viết business logic trong Controller.
-
-
-
-## 25. Pending Decisions
-
-
-
-Các thông tin sau cần được xác nhận thêm để hoàn thiện rule chi tiết:
-
-
-
-- Tên database schema chính.
-
-- Danh sách entity chính.
-
-- Quy chuẩn response API cuối cùng.
-
-- Quy chuẩn phân quyền chi tiết cho từng endpoint.
-
-- Danh sách entity chính.
-
-- Tên database schema chính.
-
-- Giới hạn cụ thể từng gói `free`, `weekly`, `monthly`.
-
-- Có dùng audit fields nâng cao không: `DeletedAt`, `CreatedBy`, `UpdatedBy`.
-
-
-
+Also verify:
+- endpoints compile and Swagger loads
+- no pending EF model changes
+- no secrets added to git
+- routes use int IDs
+- controllers stay thin
+- DTOs are used for all API responses

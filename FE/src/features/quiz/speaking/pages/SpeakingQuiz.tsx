@@ -15,8 +15,10 @@ import { attemptsService } from "@/features/attempts/services/attempts.service";
 import type { SpeakingFeedbackResult } from "@/features/attempts/types";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { toast } from "sonner";
-import { examService } from "@/features/quiz/services/exam.service";
+import { examService, type ExamDetailResponse } from "@/features/quiz/services/exam.service";
 import { speakingApiService, type SpeakingResultResponse } from "../services/speaking.api-service";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { cleanDescription } from "@/lib/utils";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -25,7 +27,7 @@ const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
 
 interface ApiFeedbackState {
   source: "api";
-  submissionId: string;
+  submissionId: number;  // BE returns int
   score: number | null;
   feedback: string | null;
   status: string;
@@ -34,13 +36,15 @@ interface ApiFeedbackState {
 type FeedbackState = SpeakingFeedback & { source: "mock" } | ApiFeedbackState;
 
 // Convert ExamItem to a SpeakingPart shape
-function examToPart(examId: string, title: string, description: string, index: number): SpeakingPart & { examId: string } {
+function examToPart(exam: ExamDetailResponse, index: number): SpeakingPart & { examId: number } {
+  const section = exam.sections?.[0];
+  const prompt = section?.passageText || section?.instruction || cleanDescription(exam.description) || exam.title;
   return {
-    examId,
+    examId: exam.examId,
     id: index + 1,
-    title,
+    title: exam.title,
     duration: "5 phút",
-    prompt: description || title,
+    prompt,
     tips: [
       "Trả lời tự nhiên, có cấu trúc rõ ràng",
       "Đưa ra ví dụ cụ thể để minh họa",
@@ -62,7 +66,7 @@ const SpeakingQuiz = () => {
   // ── Exam / quiz data ──
   const [loading, setLoading] = useState(true);
   const [noExams, setNoExams] = useState(false);
-  const [partsData, setPartsData] = useState<(SpeakingPart & { examId?: string })[]>(mockParts);
+  const [partsData, setPartsData] = useState<(SpeakingPart & { examId?: number })[]>(mockParts);
   const [totalTime, setTotalTime] = useState(MOCK_TOTAL_TIME);
   const parts = useMemo(() => partsData, [partsData]);
 
@@ -94,6 +98,8 @@ const SpeakingQuiz = () => {
   const [aiFeedback, setAiFeedback] = useState<Record<number, FeedbackState>>({});
   const [pollingStatus, setPollingStatus] = useState("");
 
+  const groupId = searchParams.get("groupId") ?? "";
+
   // ── Load exams ──────────────────────────────────────────────
   useEffect(() => {
     let active = true;
@@ -108,16 +114,37 @@ const SpeakingQuiz = () => {
       try {
         const exams = await examService.getExamsBySkill("speaking");
         if (!active) return;
-        if (exams.length === 0) {
+
+        let matched = exams;
+        if (groupId) {
+          matched = exams.filter(e => {
+            const groupMatch = e.description?.match(/group:([^;|\n]+)/);
+            return groupMatch && groupMatch[1] === groupId;
+          });
+          if (matched.length === 0) {
+            setNoExams(true);
+            setLoading(false);
+            return;
+          }
+          // Sort speaking exams by title so Part 1, 2, 3 are in order
+          matched.sort((a, b) => a.title.localeCompare(b.title));
+        }
+
+        if (matched.length === 0) {
           setNoExams(true);
           setLoading(false);
           return;
         }
-        const mapped = exams.slice(0, 3).map((e, i) =>
-          examToPart(e.id, e.title, e.description, i)
+
+        const slice = matched.slice(0, 3);
+        const details = await Promise.all(
+          slice.map(e => examService.getExamDetail(e.id))
         );
+        if (!active) return;
+
+        const mapped = details.map((d, i) => examToPart(d, i));
         setPartsData(mapped);
-        const t = exams.length > 0 ? exams.length * 5 * 60 : MOCK_TOTAL_TIME;
+        const t = slice.length * 5 * 60;
         setTotalTime(t);
         setTimeLeft(t);
       } catch (err) {
@@ -130,7 +157,7 @@ const SpeakingQuiz = () => {
     };
     load();
     return () => { active = false; };
-  }, []);
+  }, [groupId]);
 
   // ── Timer ──
   useEffect(() => {
@@ -237,9 +264,9 @@ const SpeakingQuiz = () => {
   const uploadAndSubmitRecording = async (
     partId: number,
     blob: Blob
-  ): Promise<{ submissionId: string; audioUrl: string } | null> => {
+  ): Promise<{ submissionId: number; audioUrl: string } | null> => {
     const part = parts.find(p => p.id === partId);
-    const examId = (part as SpeakingPart & { examId?: string })?.examId;
+    const examId = (part as SpeakingPart & { examId?: number })?.examId;
     if (!examId) {
       toast.error(`Không tìm thấy examId cho Part ${partId}.`);
       return null;
@@ -357,11 +384,17 @@ const SpeakingQuiz = () => {
       setPollingStatus("Đang xử lý bài...");
       try {
         if (IS_API_MODE) {
+          const uploadedRecordings: Record<number, string> = {};
           for (const [partIdStr, blob] of Object.entries(recordingBlobs)) {
             const partId = Number(partIdStr);
             setPollingStatus(`Đang tải Part ${partId}...`);
-            await uploadAndSubmitRecording(partId, blob);
+            const res = await uploadAndSubmitRecording(partId, blob);
+            if (res?.audioUrl) {
+              uploadedRecordings[partId] = res.audioUrl;
+            }
           }
+          await attemptsService.saveSkillAttempt("speaking", { recordings: uploadedRecordings });
+          await attemptsService.finishMockTest();
         } else {
           const attemptId = await getOrCreateAttemptId();
           await uploadAndResolveRecordings(attemptId);
@@ -662,32 +695,34 @@ const SpeakingQuiz = () => {
       <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
         {/* Left: Prompt */}
         <div className="w-1/2 border-r border-border">
-          <ScrollArea className="h-[calc(100vh-64px)]">
-            <div className="p-6 space-y-6">
-              <div>
-                <h2 className="text-lg font-bold text-foreground">{part.title}</h2>
-                <Badge variant="outline" className="mt-2 text-xs">⏱ {part.duration}</Badge>
-              </div>
-              <Card className="border-border bg-muted/30">
-                <CardContent className="p-5">
-                  <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
-                  <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{part.prompt}</div>
-                </CardContent>
-              </Card>
-              {!isMockSession && (
+          <VocabularyContextMenu source="speaking">
+            <ScrollArea className="h-[calc(100vh-64px)]">
+              <div className="p-6 space-y-6">
                 <div>
-                  <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
-                  <ul className="space-y-2">
-                    {part.tips.map((t, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <span className="text-primary">•</span>{t}
-                      </li>
-                    ))}
-                  </ul>
+                  <h2 className="text-lg font-bold text-foreground">{part.title}</h2>
+                  <Badge variant="outline" className="mt-2 text-xs">⏱ {part.duration}</Badge>
                 </div>
-              )}
-            </div>
-          </ScrollArea>
+                <Card className="border-border bg-muted/30">
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
+                    <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{part.prompt}</div>
+                  </CardContent>
+                </Card>
+                {!isMockSession && (
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
+                    <ul className="space-y-2">
+                      {part.tips.map((t, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="text-primary">•</span>{t}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </VocabularyContextMenu>
         </div>
 
         {/* Right: Camera & Recording */}

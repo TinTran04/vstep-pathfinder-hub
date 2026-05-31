@@ -10,7 +10,7 @@ using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace BusinessLogicLayer.Services.Implements;
 
-public class ReadingExamImportService : IReadingExamImportService, IListeningExamImportService
+public class ReadingExamImportService : IReadingExamImportService
 {
     private static readonly Regex DurationRegex = new(@"Time\s+permitted\s*:\s*(\d+)\s*minutes?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PassageRegex = new(@"^\s*PASSAGE\s+(\d+)\b.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -38,7 +38,7 @@ public class ReadingExamImportService : IReadingExamImportService, IListeningExa
             throw new InvalidOperationException("Only .docx files are supported.");
         }
 
-        var lines = ReadParagraphLines(docxStream);
+        var lines = ReadDocumentLines(docxStream);
         if (lines.Count == 0)
         {
             throw new InvalidOperationException("The DOCX file does not contain readable text.");
@@ -88,77 +88,7 @@ public class ReadingExamImportService : IReadingExamImportService, IListeningExa
         };
     }
 
-    public async Task<ImportListeningExamResponse> ImportAsync(Stream docxStream, string fileName, string? audioUrl, bool isPublished)
-    {
-        if (docxStream.CanSeek && docxStream.Length == 0)
-        {
-            throw new InvalidOperationException("File is empty.");
-        }
-
-        if (!string.Equals(Path.GetExtension(fileName), ".docx", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Only .docx files are supported.");
-        }
-
-        var lines = ReadParagraphLines(docxStream);
-        if (lines.Count == 0)
-        {
-            throw new InvalidOperationException("The DOCX file does not contain readable text.");
-        }
-
-        var answerKeyIndex = lines.FindIndex(IsAnswerKeyHeader);
-        var contentLines = answerKeyIndex >= 0 ? lines.Take(answerKeyIndex).ToList() : lines;
-        var answerLines = answerKeyIndex >= 0 ? lines.Skip(answerKeyIndex + 1).ToList() : new List<string>();
-        var answerKey = ParseAnswerKey(answerLines);
-
-        var title = contentLines.FirstOrDefault(line => !IsMetadataLine(line) && !PassageRegex.IsMatch(line)) ?? "Listening Exam";
-        var durationMinutes = ParseDurationMinutes(contentLines);
-        var warnings = new List<ImportReadingWarningResponse>();
-        var sections = ParseSections(contentLines, answerKey, warnings);
-        var normalizedAudioUrl = NormalizeNullable(audioUrl);
-
-        if (sections.Count == 0)
-        {
-            throw new InvalidOperationException("No passage found in the listening DOCX file.");
-        }
-
-        var totalQuestions = sections.Sum(section => section.Questions.Count);
-        if (totalQuestions == 0)
-        {
-            throw new InvalidOperationException("No questions found in the listening DOCX file.");
-        }
-
-        foreach (var section in sections.Where(section => string.IsNullOrWhiteSpace(section.AudioUrl)))
-        {
-            section.AudioUrl = normalizedAudioUrl;
-        }
-
-        var exam = new Exam
-        {
-            Title = title.Trim(),
-            SkillType = "listening",
-            Description = "Imported from DOCX",
-            DurationMinutes = durationMinutes,
-            AudioUrl = normalizedAudioUrl,
-            IsPublished = isPublished,
-            Sections = sections
-        };
-
-        await _unitOfWork.Exams.AddAsync(exam);
-        await _unitOfWork.SaveChangesAsync();
-
-        return new ImportListeningExamResponse
-        {
-            ExamId = exam.ExamId,
-            Title = exam.Title,
-            AudioUrl = exam.AudioUrl,
-            TotalSections = exam.Sections.Count,
-            TotalQuestions = totalQuestions,
-            Warnings = warnings
-        };
-    }
-
-    private static List<string> ReadParagraphLines(Stream docxStream)
+    private static List<string> ReadDocumentLines(Stream docxStream)
     {
         using var document = WordprocessingDocument.Open(docxStream, false);
         var body = document.MainDocumentPart?.Document?.Body;
@@ -421,7 +351,6 @@ public class ReadingExamImportService : IReadingExamImportService, IListeningExa
             return true;
         }
 
-        // Word often flattens "A. text B. text" into "A.textB.text"; allow uppercase markers after content.
         return char.IsUpper(label) && (char.IsLower(previous) || char.IsDigit(previous));
     }
 

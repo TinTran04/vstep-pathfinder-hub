@@ -32,12 +32,18 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<SpeakingSubmission> SpeakingSubmissions => Set<SpeakingSubmission>();
 
+    public DbSet<DictionaryEntry> DictionaryEntries => Set<DictionaryEntry>();
+
+    public DbSet<UserVocabulary> UserVocabularies => Set<UserVocabulary>();
+
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTime.UtcNow;
 
         foreach (var entry in ChangeTracker.Entries()
-            .Where(entry => entry.Entity is User or Role or SubscriptionPlan or Exam or ExamSection or ExamQuestion or ExamAttempt or WritingSubmission or SpeakingSubmission))
+            .Where(entry => entry.Entity is User or Role or SubscriptionPlan or Exam or ExamSection or ExamQuestion or ExamAttempt or WritingSubmission or SpeakingSubmission or PaymentTransaction))
         {
             if (entry.State == EntityState.Added)
             {
@@ -51,6 +57,22 @@ public class ApplicationDbContext : DbContext
         }
 
         foreach (var entry in ChangeTracker.Entries<ExamAttemptAnswer>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = utcNow;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<DictionaryEntry>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = utcNow;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<UserVocabulary>())
         {
             if (entry.State == EntityState.Added)
             {
@@ -94,6 +116,8 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(user => user.SubscriptionPlanId)
                 .HasDefaultValue(1);
+
+            entity.Property(user => user.SubscriptionExpiresAt);
 
             entity.Property(user => user.RefreshToken)
                 .HasMaxLength(512);
@@ -242,7 +266,7 @@ public class ApplicationDbContext : DbContext
                     SubscriptionPlanId = 2,
                     Name = "weekly",
                     Description = "Weekly plan",
-                    Price = 0,
+                    Price = 49000,
                     DurationDays = 7,
                     DailyPracticeLimit = null,
                     CanStoreSpeakingAudioForever = true,
@@ -256,7 +280,7 @@ public class ApplicationDbContext : DbContext
                     SubscriptionPlanId = 3,
                     Name = "monthly",
                     Description = "Monthly plan",
-                    Price = 0,
+                    Price = 199000,
                     DurationDays = 30,
                     DailyPracticeLimit = null,
                     CanStoreSpeakingAudioForever = true,
@@ -576,6 +600,150 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasQueryFilter(submission => !submission.IsDeleted);
+        });
+
+        modelBuilder.Entity<DictionaryEntry>(entity =>
+        {
+            entity.ToTable("DictionaryEntries");
+
+            entity.HasKey(entry => entry.Id);
+
+            entity.Property(entry => entry.Id)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(entry => entry.Word)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(entry => entry.Phonetic)
+                .HasMaxLength(200);
+
+            entity.Property(entry => entry.AudioUrl)
+                .HasMaxLength(1000);
+
+            entity.Property(entry => entry.PartOfSpeech)
+                .HasMaxLength(50);
+
+            entity.Property(entry => entry.EnglishDefinition)
+                .HasMaxLength(2000)
+                .IsRequired();
+
+            entity.Property(entry => entry.VietnameseMeaning)
+                .HasMaxLength(2000)
+                .IsRequired();
+
+            entity.Property(entry => entry.Example)
+                .HasMaxLength(2000);
+
+            entity.Property(entry => entry.ExampleVietnamese)
+                .HasMaxLength(2000);
+
+            entity.Property(entry => entry.CreatedAt)
+                .IsRequired();
+
+            entity.HasIndex(entry => entry.Word)
+                .IsUnique();
+        });
+
+        modelBuilder.Entity<UserVocabulary>(entity =>
+        {
+            entity.ToTable("UserVocabulary");
+
+            entity.HasKey(item => item.Id);
+
+            entity.Property(item => item.Id)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(item => item.PersonalNote)
+                .HasMaxLength(2000);
+
+            entity.Property(item => item.IsFavorite)
+                .HasDefaultValue(false);
+
+            entity.Property(item => item.ReviewCount)
+                .HasDefaultValue(0);
+
+            entity.Property(item => item.CreatedAt)
+                .IsRequired();
+
+            entity.HasIndex(item => new { item.UserId, item.DictionaryEntryId })
+                .IsUnique();
+
+            entity.HasIndex(item => new { item.UserId, item.IsFavorite, item.CreatedAt });
+
+            entity.HasOne(item => item.User)
+                .WithMany(user => user.UserVocabularies)
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(item => item.DictionaryEntry)
+                .WithMany(entry => entry.UserVocabularies)
+                .HasForeignKey(item => item.DictionaryEntryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(item => item.User != null && !item.User.IsDeleted);
+        });
+
+        modelBuilder.Entity<PaymentTransaction>(entity =>
+        {
+            entity.ToTable("PaymentTransactions");
+
+            entity.HasKey(transaction => transaction.PaymentTransactionId);
+
+            entity.Property(transaction => transaction.PaymentTransactionId)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(transaction => transaction.Provider)
+                .HasMaxLength(30)
+                .HasDefaultValue("payos")
+                .IsRequired();
+
+            entity.Property(transaction => transaction.Status)
+                .HasMaxLength(30)
+                .HasDefaultValue("pending")
+                .IsRequired();
+
+            entity.Property(transaction => transaction.Description)
+                .HasMaxLength(25)
+                .IsRequired();
+
+            entity.Property(transaction => transaction.PaymentLinkId)
+                .HasMaxLength(100);
+
+            entity.Property(transaction => transaction.CheckoutUrl)
+                .HasMaxLength(1000);
+
+            entity.Property(transaction => transaction.QrCode)
+                .HasMaxLength(4000);
+
+            entity.Property(transaction => transaction.PayosReference)
+                .HasMaxLength(100);
+
+            entity.Property(transaction => transaction.RawWebhookPayload)
+                .HasColumnType("jsonb");
+
+            entity.Property(transaction => transaction.CreatedAt)
+                .IsRequired();
+
+            entity.Property(transaction => transaction.UpdatedAt)
+                .IsRequired();
+
+            entity.HasIndex(transaction => transaction.OrderCode)
+                .IsUnique();
+
+            entity.HasIndex(transaction => new { transaction.UserId, transaction.Status, transaction.CreatedAt });
+
+            entity.HasOne(transaction => transaction.User)
+                .WithMany(user => user.PaymentTransactions)
+                .HasForeignKey(transaction => transaction.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(transaction => transaction.SubscriptionPlan)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.SubscriptionPlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(transaction => transaction.User != null && !transaction.User.IsDeleted);
         });
     }
 }

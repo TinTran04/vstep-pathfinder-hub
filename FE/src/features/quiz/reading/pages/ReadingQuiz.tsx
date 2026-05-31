@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Clock, CheckCircle2, XCircle, RotateCcw,
@@ -19,6 +19,8 @@ import type { SectionResponse, QuestionResponse } from "@/features/quiz/services
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { examService } from "@/features/quiz/services/exam.service";
+import { attemptsService } from "@/features/attempts/services/attempts.service";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -43,7 +45,9 @@ const ReadingQuiz = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const modeParam = searchParams.get("mode") ?? "practice";
-  const examId = searchParams.get("examId") ?? "";
+  const examIdParam = searchParams.get("examId") ?? "";
+  const groupId = searchParams.get("groupId") ?? "";
+  const [resolvedExamId, setResolvedExamId] = useState(examIdParam);
   const session = searchParams.get("session") ?? "";
   const isMockSession = modeParam === "mock_test" && session === "mock";
   const perms = getPermissions(modeParam);
@@ -65,16 +69,52 @@ const ReadingQuiz = () => {
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
+  const passageScrollRef = useRef<HTMLDivElement>(null);
+  const questionsScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    passageScrollRef.current
+      ?.querySelector("[data-radix-scroll-area-viewport]")
+      ?.scrollTo({ top: 0 });
+    questionsScrollRef.current
+      ?.querySelector("[data-radix-scroll-area-viewport]")
+      ?.scrollTo({ top: 0 });
+  }, [currentSection]);
+
+  // ── Resolve examId from groupId if needed ──────────────────
+  useEffect(() => {
+    if (!resolvedExamId && groupId) {
+      examService.getExamsBySkill("reading")
+        .then((exams) => {
+          const matched = exams.find(e => {
+            const groupMatch = e.description?.match(/group:([^;|\n]+)/);
+            return groupMatch && groupMatch[1] === groupId;
+          });
+          if (matched) {
+            setResolvedExamId(matched.id);
+          } else {
+            setStartError("Không tìm thấy đề thi Reading cho nhóm thi thử này.");
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          setStartError("Không thể tải thông tin đề thi Reading.");
+          setLoading(false);
+        });
+    }
+  }, [resolvedExamId, groupId]);
+
   // ── Start practice on mount ───────────────────────────────
   useEffect(() => {
-    if (!examId) {
+    if (!resolvedExamId) {
+      if (groupId) return; // Wait for resolving
       setStartError("Không tìm thấy đề thi. Vui lòng quay lại trang Quiz.");
       setLoading(false);
       return;
     }
     let active = true;
     readingService
-      .start(examId)
+      .start(resolvedExamId)
       .then((res) => {
         if (!active) return;
         setPracticeData(res);
@@ -88,7 +128,7 @@ const ReadingQuiz = () => {
         setLoading(false);
       });
     return () => { active = false; };
-  }, [examId]);
+  }, [resolvedExamId, groupId]);
 
   // ── Timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -113,6 +153,13 @@ const ReadingQuiz = () => {
       setSubmitResult(res);
       const result = await readingService.getResult(practiceData.attemptId);
       setAttemptResult(result);
+      if (isMockSession) {
+        await attemptsService.saveSkillAttempt("reading", {
+          score: result?.score ?? res.score,
+          totalQuestions: result?.totalQuestions ?? res.totalQuestions,
+          answers: answers,
+        });
+      }
       setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
@@ -357,60 +404,64 @@ const ReadingQuiz = () => {
       <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
         {/* Left: Passage text */}
         <div className="w-1/2 border-r border-border">
-          <ScrollArea className="h-[calc(100vh-140px)]">
-            <div className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <BookOpen size={20} className="text-primary" />
-                <h2 className="text-lg font-bold text-foreground">{section?.title || `Đoạn văn ${currentSection + 1}`}</h2>
-              </div>
-              {section?.instruction && (
-                <p className="text-sm text-muted-foreground mb-4 italic">{section.instruction}</p>
-              )}
-              <VocabularyContextMenu source="reading">
-                <div className="prose prose-sm max-w-none">
-                  {(section?.passageText ?? "Chưa có nội dung đoạn văn.").split("\n\n").map((para, i) => (
-                    <p key={i} className="text-sm text-foreground leading-relaxed mb-4">{para}</p>
-                  ))}
+          <div ref={passageScrollRef}>
+            <ScrollArea className="h-[calc(100vh-140px)]">
+              <div className="p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen size={20} className="text-primary" />
+                  <h2 className="text-lg font-bold text-foreground">{section?.title || `Đoạn văn ${currentSection + 1}`}</h2>
                 </div>
-              </VocabularyContextMenu>
-            </div>
-          </ScrollArea>
+                {section?.instruction && (
+                  <p className="text-sm text-muted-foreground mb-4 italic">{section.instruction}</p>
+                )}
+                <VocabularyContextMenu source="reading">
+                  <div className="prose prose-sm max-w-none">
+                    {(section?.passageText ?? "Chưa có nội dung đoạn văn.").split("\n\n").map((para, i) => (
+                      <p key={i} className="text-sm text-foreground leading-relaxed mb-4">{para}</p>
+                    ))}
+                  </div>
+                </VocabularyContextMenu>
+              </div>
+            </ScrollArea>
+          </div>
         </div>
 
         {/* Right: Questions */}
         <div className="w-1/2">
-          <ScrollArea className="h-[calc(100vh-140px)]">
-            <div className="p-6 space-y-6">
-              <h3 className="font-semibold text-foreground">
-                Câu hỏi – {section?.title || `Bài ${currentSection + 1}`} ({section?.questions.length ?? 0} câu)
-              </h3>
-              {(section?.questions ?? []).map((q, qi) => {
-                const globalIdx = sectionOffset + qi + 1;
-                return (
-                  <div key={q.questionId} className="space-y-3">
-                    <h4 className="text-sm font-semibold text-foreground">
-                      <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
-                    </h4>
-                    <RadioGroup
-                      value={answers[q.questionId] ?? ""}
-                      onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
-                      className="space-y-2"
-                    >
-                      {q.options.map((opt) => (
-                        <label key={opt.optionId}
-                          className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all text-sm ${answers[q.questionId] === opt.label ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
-                          <RadioGroupItem value={opt.label} id={`rq-${q.questionId}-${opt.optionId}`} />
-                          <Label htmlFor={`rq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1 text-foreground">
-                            <span className="font-medium text-muted-foreground mr-1">{opt.label}.</span>{opt.content}
-                          </Label>
-                        </label>
-                      ))}
-                    </RadioGroup>
-                  </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
+          <div ref={questionsScrollRef}>
+            <ScrollArea className="h-[calc(100vh-140px)]">
+              <div className="p-6 space-y-6">
+                <h3 className="font-semibold text-foreground">
+                  Câu hỏi – {section?.title || `Bài ${currentSection + 1}`}
+                </h3>
+                {(section?.questions ?? []).map((q, qi) => {
+                  const globalIdx = sectionOffset + qi + 1;
+                  return (
+                    <div key={q.questionId} className="space-y-3">
+                      <h4 className="text-sm font-semibold text-foreground">
+                        <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
+                      </h4>
+                      <RadioGroup
+                        value={answers[q.questionId] ?? ""}
+                        onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
+                        className="space-y-2"
+                      >
+                        {q.options.map((opt) => (
+                          <label key={opt.optionId}
+                            className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all text-sm ${answers[q.questionId] === opt.label ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
+                            <RadioGroupItem value={opt.label} id={`rq-${q.questionId}-${opt.optionId}`} />
+                            <Label htmlFor={`rq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1 text-foreground">
+                              <span className="font-medium text-muted-foreground mr-1">{opt.label}.</span>{opt.content}
+                            </Label>
+                          </label>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </div>
         </div>
       </div>
     </div>

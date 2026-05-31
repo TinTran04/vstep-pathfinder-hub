@@ -22,7 +22,7 @@ import { apiClient } from "@/services/api-client";
 // ─── Request / Response types ────────────────────────────────
 
 export interface CreateSpeakingUploadUrlRequest {
-  examId: string;
+  examId: number;       // BE expects int
   contentType: string; // e.g. "audio/webm"
 }
 
@@ -38,10 +38,10 @@ export interface SubmitSpeakingRequest {
 }
 
 export interface SpeakingSubmissionResponse {
-  speakingSubmissionId: string;
-  userId: string;
-  examId: string;
-  attemptId: string | null;
+  speakingSubmissionId: number;  // BE returns int
+  userId: number;
+  examId: number;
+  attemptId: number | null;
   audioObjectKey: string;
   audioUrl: string;
   status: string; // "pending" | "processing" | "graded" | "failed"
@@ -64,7 +64,7 @@ export const speakingApiService = {
    * Bước 1: Lấy presigned URL để upload audio lên R2.
    */
   async createUploadUrl(
-    examId: string,
+    examId: number,
     contentType = "audio/webm"
   ): Promise<SpeakingUploadUrlResponse> {
     const body: CreateSpeakingUploadUrlRequest = { examId, contentType };
@@ -97,7 +97,7 @@ export const speakingApiService = {
    * Bước 3: Nộp metadata bài Speaking và đưa vào hàng đợi chấm điểm AI.
    */
   async submit(
-    examId: string,
+    examId: number,
     audioObjectKey: string,
     audioUrl: string
   ): Promise<SpeakingSubmissionResponse> {
@@ -111,7 +111,7 @@ export const speakingApiService = {
   /**
    * Lấy kết quả một lần (GET).
    */
-  async getSubmission(submissionId: string): Promise<SpeakingResultResponse> {
+  async getSubmission(submissionId: number): Promise<SpeakingResultResponse> {
     return apiClient.get<SpeakingResultResponse>(
       `/speaking-practice/submissions/${submissionId}`
     );
@@ -121,7 +121,7 @@ export const speakingApiService = {
    * Bước 4: Poll cho đến khi status === "graded" | "failed" hoặc timeout.
    */
   async pollUntilGraded(
-    submissionId: string,
+    submissionId: number,
     onStatusChange?: (status: string) => void
   ): Promise<SpeakingResultResponse> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
@@ -145,10 +145,10 @@ export const speakingApiService = {
    * Trả về { audioObjectKey, audioUrl, submissionId } sau khi submit thành công.
    */
   async uploadAndSubmit(
-    examId: string,
+    examId: number,
     blob: Blob,
     contentType = "audio/webm"
-  ): Promise<{ audioObjectKey: string; audioUrl: string; submissionId: string }> {
+  ): Promise<{ audioObjectKey: string; audioUrl: string; submissionId: number }> {
     // 1. Get presigned URL
     const { uploadUrl, audioObjectKey } = await this.createUploadUrl(examId, contentType);
 

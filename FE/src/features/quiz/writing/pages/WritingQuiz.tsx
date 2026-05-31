@@ -16,8 +16,10 @@ import { type WritingTask, tasks as mockTasks, sampleEssays as mockSampleEssays,
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
-import { examService, type ExamItem } from "@/features/quiz/services/exam.service";
+import { examService, type ExamItem, type ExamDetailResponse } from "@/features/quiz/services/exam.service";
 import { writingApiService, type WritingResultResponse } from "../services/writing.api-service";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { cleanDescription } from "@/lib/utils";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -27,7 +29,7 @@ const TOTAL_TIME = 60 * 60;
 
 interface ApiFeedback {
   source: "api";
-  submissionId: string;
+  submissionId: number;  // BE returns int
   score: number | null;
   feedback: string | null;
   status: string;
@@ -47,18 +49,22 @@ interface MockFeedback {
 type FeedbackResult = ApiFeedback | MockFeedback;
 
 // Derive a WritingTask shape from ExamItem for API mode
-function examToTask(exam: ExamItem, index: number): WritingTask {
+function examToTask(exam: ExamDetailResponse, index: number): WritingTask {
+  const section = exam.sections?.[0];
+  const prompt = section?.passageText || section?.instruction || cleanDescription(exam.description) || exam.title;
   return {
     id: index + 1,
     title: exam.title,
     type: exam.skillType,
-    duration: exam.duration,
+    duration: `${exam.durationMinutes} phút`,
     minWords: index === 0 ? 120 : 250,
     recommendedWords: index === 0 ? "150–200 từ" : "270–300 từ",
     scoreWeight: index === 0 ? "1/3 tổng điểm" : "2/3 tổng điểm",
-    prompt: exam.description,
+    prompt,
     instructions: [
-      "Đọc kỹ yêu cầu đề bài trước khi viết",
+      section?.instruction && section.instruction !== (section?.passageText || "")
+        ? section.instruction
+        : "Đọc kỹ yêu cầu đề bài trước khi viết",
       `Tối thiểu ${index === 0 ? "120" : "250"} từ`,
       "Kiểm tra ngữ pháp và chính tả trước khi nộp",
     ],
@@ -102,8 +108,8 @@ const WritingQuiz = () => {
   const [noExams, setNoExams] = useState(false);
   const [tasks, setTasks] = useState<WritingTask[]>(mockTasks);
   const [sampleEssays, setSampleEssays] = useState<Record<number, { level: string; content: string }>>(mockSampleEssays);
-  // API mode: store examIds aligned by task index
-  const [apiExamIds, setApiExamIds] = useState<string[]>([]);
+  // API mode: store examIds aligned by task index (number, matches BE int)
+  const [apiExamIds, setApiExamIds] = useState<number[]>([]);
 
   // ── Quiz state ──
   const [currentTask, setCurrentTask] = useState(0);
@@ -122,6 +128,8 @@ const WritingQuiz = () => {
   // ── Mock-test saving ──
   const [mockSaving, setMockSaving] = useState(false);
 
+  const groupId = searchParams.get("groupId") ?? "";
+
   // ── Load exams ──────────────────────────────────────────────
   useEffect(() => {
     let active = true;
@@ -136,9 +144,36 @@ const WritingQuiz = () => {
         // If examId provided in URL, treat as single-task session
         if (examIdParam) {
           // Use provided exam as task 1 only
-          setApiExamIds([examIdParam]);
-          setTasks([examToTask({ id: examIdParam, title: "Writing Task", description: "", duration: "60 phút", skillType: "writing" }, 0)]);
+          const numId = Number(examIdParam);
+          setApiExamIds([numId]);
+          const detail = await examService.getExamDetail(numId);
+          if (!active) return;
+          setTasks([examToTask(detail, 0)]);
           setWritings({ 1: "" });
+        } else if (groupId) {
+          const exams = await examService.getExamsBySkill("writing");
+          if (!active) return;
+          const matched = exams.filter(e => {
+            const groupMatch = e.description?.match(/group:([^;|\n]+)/);
+            return groupMatch && groupMatch[1] === groupId;
+          });
+          if (matched.length === 0) {
+            setNoExams(true);
+            setLoading(false);
+            return;
+          }
+          // Sort matched exams by title so Task 1 is first and Task 2 is second
+          matched.sort((a, b) => a.title.localeCompare(b.title));
+          const details = await Promise.all(
+            matched.map(e => examService.getExamDetail(e.id))
+          );
+          if (!active) return;
+          const mapped = details.map((d, i) => examToTask(d, i));
+          setTasks(mapped);
+          setApiExamIds(matched.map(e => e.id));
+          const initialWritings: Record<number, string> = {};
+          mapped.forEach((_, i) => { initialWritings[i + 1] = ""; });
+          setWritings(initialWritings);
         } else {
           const exams = await examService.getExamsBySkill("writing");
           if (!active) return;
@@ -147,9 +182,14 @@ const WritingQuiz = () => {
             setLoading(false);
             return;
           }
-          const mapped = exams.slice(0, 2).map((e, i) => examToTask(e, i));
+          const slice = exams.slice(0, 2);
+          const details = await Promise.all(
+            slice.map(e => examService.getExamDetail(e.id))
+          );
+          if (!active) return;
+          const mapped = details.map((d, i) => examToTask(d, i));
           setTasks(mapped);
-          setApiExamIds(exams.slice(0, 2).map(e => e.id));
+          setApiExamIds(slice.map(e => e.id));
           const initialWritings: Record<number, string> = {};
           mapped.forEach((_, i) => { initialWritings[i + 1] = ""; });
           setWritings(initialWritings);
@@ -164,7 +204,7 @@ const WritingQuiz = () => {
     };
     load();
     return () => { active = false; };
-  }, [examIdParam]);
+  }, [examIdParam, groupId]);
 
   // ── Timer ───────────────────────────────────────────────────
   useEffect(() => {
@@ -213,13 +253,14 @@ const WritingQuiz = () => {
         );
         const fb: ApiFeedback = {
           source: "api",
-          submissionId: result.writingSubmissionId,
+          submissionId: result.writingSubmissionId,  // number
           score: result.score,
           feedback: result.feedback,
           status: result.status,
         };
-        setFeedbacks(prev => ({ ...prev, [taskIndex]: fb }));
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks });
+        const updatedFeedbacks = { ...feedbacks, [taskIndex]: fb };
+        setFeedbacks(updatedFeedbacks);
+        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
       } else {
         // Mock mode
         const task = tasks[taskIndex];
@@ -234,8 +275,9 @@ const WritingQuiz = () => {
           const base = writingFeedbackAITemplates[task.id];
           fb = { source: "mock", ...base, errors };
         }
-        setFeedbacks(prev => ({ ...prev, [taskIndex]: fb }));
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: feedbacks });
+        const updatedFeedbacks = { ...feedbacks, [taskIndex]: fb };
+        setFeedbacks(updatedFeedbacks);
+        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
       }
     } catch (e) {
       console.error("[WritingQuiz] AI feedback error", e);
@@ -250,7 +292,7 @@ const WritingQuiz = () => {
   const handleSubmit = async () => {
     setMockSaving(true);
     try {
-      await attemptsService.saveSkillAttempt("writing", { writings });
+      await attemptsService.saveSkillAttempt("writing", { writings, writingExamIds: apiExamIds });
       await new Promise(r => setTimeout(r, 300));
     } finally {
       setMockSaving(false);
@@ -581,30 +623,32 @@ const WritingQuiz = () => {
       <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
         {/* Left: Prompt */}
         <div className="w-1/2 border-r border-border">
-          <ScrollArea className="h-[calc(100vh-64px)]">
-            <div className="p-6 space-y-6">
-              <div className="flex items-center gap-2">
-                <FileText size={20} className="text-primary" />
-                <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
+          <VocabularyContextMenu source="writing">
+            <ScrollArea className="h-[calc(100vh-64px)]">
+              <div className="p-6 space-y-6">
+                <div className="flex items-center gap-2">
+                  <FileText size={20} className="text-primary" />
+                  <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
+                </div>
+                <Card className="border-border bg-muted/30">
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
+                    <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{task.prompt}</div>
+                  </CardContent>
+                </Card>
+                <div>
+                  <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
+                  <ul className="space-y-2">
+                    {task.instructions.map((inst, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <span className="text-primary mt-0.5">•</span>{inst}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <Card className="border-border bg-muted/30">
-                <CardContent className="p-5">
-                  <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
-                  <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{task.prompt}</div>
-                </CardContent>
-              </Card>
-              <div>
-                <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
-                <ul className="space-y-2">
-                  {task.instructions.map((inst, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <span className="text-primary mt-0.5">•</span>{inst}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </ScrollArea>
+            </ScrollArea>
+          </VocabularyContextMenu>
         </div>
 
         {/* Right: Editor */}
@@ -615,7 +659,7 @@ const WritingQuiz = () => {
                 <Type size={18} className="text-primary" />
                 <span className="font-semibold text-foreground text-sm">Bài viết của bạn</span>
               </div>
-              <span className="text-xs text-muted-foreground">Khuyến nghị: {task.recommendedWords}</span>
+              <span className="text-xs text-muted-foreground">{task.title}</span>
             </div>
             <Textarea
               className="flex-1 min-h-[400px] resize-none text-sm leading-relaxed rounded-xl"

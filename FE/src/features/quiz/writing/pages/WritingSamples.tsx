@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type SampleEssay } from "../mocks/writing.mock";
 import { writingService } from "../services/writing.service";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 
 const WritingSamples = () => {
   const [samplesData, setSamplesData] = useState<{
@@ -104,49 +105,51 @@ const WritingSamples = () => {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
-        <div className="text-center space-y-3">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-foreground">
-            Bài mẫu <span className="text-gradient">Writing VSTEP</span>
-          </h1>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Tham khảo các bài viết mẫu đạt điểm 8+ ở trình độ B1 và B2. Mỗi bài đều có phân tích chi tiết lý do đạt điểm theo 4 tiêu chí chấm điểm VSTEP.
-          </p>
+      <VocabularyContextMenu source="writing_sample">
+        <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
+          <div className="text-center space-y-3">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-foreground">
+              Bài mẫu <span className="text-gradient">Writing VSTEP</span>
+            </h1>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Tham khảo các bài viết mẫu đạt điểm 8+ ở trình độ B1 và B2. Mỗi bài đều có phân tích chi tiết lý do đạt điểm theo 4 tiêu chí chấm điểm VSTEP.
+            </p>
+          </div>
+
+          <Tabs defaultValue="task1" className="space-y-6">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+              <TabsTrigger value="task1">Task 1 – Letter / Email</TabsTrigger>
+              <TabsTrigger value="task2">Task 2 – Essay</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="task1" className="space-y-4">
+              <div className="bg-muted/30 rounded-xl p-4 border border-border">
+                <h3 className="font-semibold text-foreground text-sm mb-2">📋 Đề bài Task 1</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  You have recently moved to a new city for work. Write a letter to your friend to: Tell him/her about your new city and your new job • Describe what you like and dislike about living there • Invite him/her to visit you. Write at least 120 words.
+                </p>
+              </div>
+              {task1Samples.map(renderSampleCard)}
+            </TabsContent>
+
+            <TabsContent value="task2" className="space-y-4">
+              <div className="bg-muted/30 rounded-xl p-4 border border-border">
+                <h3 className="font-semibold text-foreground text-sm mb-2">📋 Đề bài Task 2</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Some people believe that technology has made our lives more complicated, while others think it has made life easier and more convenient. Discuss both views and give your own opinion. Write at least 250 words.
+                </p>
+              </div>
+              {task2Samples.map(renderSampleCard)}
+            </TabsContent>
+          </Tabs>
+
+          <div className="text-center pt-4">
+            <Button asChild className="gradient-primary text-primary-foreground">
+              <Link to="/quiz">Luyện viết ngay</Link>
+            </Button>
+          </div>
         </div>
-
-        <Tabs defaultValue="task1" className="space-y-6">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
-            <TabsTrigger value="task1">Task 1 – Letter / Email</TabsTrigger>
-            <TabsTrigger value="task2">Task 2 – Essay</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="task1" className="space-y-4">
-            <div className="bg-muted/30 rounded-xl p-4 border border-border">
-              <h3 className="font-semibold text-foreground text-sm mb-2">📋 Đề bài Task 1</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                You have recently moved to a new city for work. Write a letter to your friend to: Tell him/her about your new city and your new job • Describe what you like and dislike about living there • Invite him/her to visit you. Write at least 120 words.
-              </p>
-            </div>
-            {task1Samples.map(renderSampleCard)}
-          </TabsContent>
-
-          <TabsContent value="task2" className="space-y-4">
-            <div className="bg-muted/30 rounded-xl p-4 border border-border">
-              <h3 className="font-semibold text-foreground text-sm mb-2">📋 Đề bài Task 2</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Some people believe that technology has made our lives more complicated, while others think it has made life easier and more convenient. Discuss both views and give your own opinion. Write at least 250 words.
-              </p>
-            </div>
-            {task2Samples.map(renderSampleCard)}
-          </TabsContent>
-        </Tabs>
-
-        <div className="text-center pt-4">
-          <Button asChild className="gradient-primary text-primary-foreground">
-            <Link to="/quiz">Luyện viết ngay</Link>
-          </Button>
-        </div>
-      </div>
+      </VocabularyContextMenu>
     </div>
   );
 };

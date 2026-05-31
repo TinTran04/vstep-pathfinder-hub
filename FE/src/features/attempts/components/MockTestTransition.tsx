@@ -20,6 +20,9 @@ const MockTestTransition = ({ completedSkillLabel, nextSkillLabel, nextRoute }: 
 
   // Pre-resolve the navigation target asynchronously so it's ready when needed
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const groupId = searchParams.get("groupId");
+
     if (nextRoute.includes("/mock-test/review")) {
       (async () => {
         const current =
@@ -30,7 +33,11 @@ const MockTestTransition = ({ completedSkillLabel, nextSkillLabel, nextRoute }: 
           : "/quiz";
       })();
     } else {
-      resolvedRouteRef.current = nextRoute;
+      if (groupId) {
+        resolvedRouteRef.current = `${nextRoute}${nextRoute.includes("?") ? "&" : "?"}groupId=${groupId}`;
+      } else {
+        resolvedRouteRef.current = nextRoute;
+      }
     }
   }, [nextRoute]);
 

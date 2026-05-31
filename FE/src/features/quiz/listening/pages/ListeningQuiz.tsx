@@ -17,6 +17,9 @@ import type { StartPracticeResponse, SubmitPracticeResponse } from "../services/
 import type { SectionResponse, QuestionResponse } from "@/features/quiz/services/practice.api-service";
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
+import { attemptsService } from "@/features/attempts/services/attempts.service";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { cleanDescription } from "@/lib/utils";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -134,6 +137,13 @@ const ListeningQuiz = () => {
         durationUsed
       );
       setSubmitResult(res);
+      if (isMockSession) {
+        await attemptsService.saveSkillAttempt("listening", {
+          score: res.score,
+          totalQuestions: res.totalQuestions,
+          answers: answers,
+        });
+      }
       setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
@@ -371,7 +381,7 @@ const ListeningQuiz = () => {
         {/* Exam title */}
         <div className="text-center">
           <h1 className="text-lg font-bold text-foreground">{exam.title}</h1>
-          {exam.description && <p className="text-sm text-muted-foreground">{exam.description}</p>}
+          {cleanDescription(exam.description) && <p className="text-sm text-muted-foreground">{cleanDescription(exam.description)}</p>}
         </div>
 
         {/* Section tabs */}
@@ -390,80 +400,83 @@ const ListeningQuiz = () => {
 
         {/* Main content */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col" style={{ height: "calc(100vh - 230px)" }}>
-          {/* Section header */}
           <div className="px-5 py-3 border-b border-border bg-muted/30">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-foreground text-sm">{section?.title || `Phần ${currentSection + 1}`}</h3>
                 {section?.instruction && <p className="text-xs text-muted-foreground">{section.instruction}</p>}
               </div>
-              <Badge variant="outline" className="text-xs">{section?.questions.length ?? 0} câu</Badge>
             </div>
           </div>
 
           {/* Questions */}
           <div className="flex-1 overflow-y-auto">
-            <div className="p-5 space-y-4">
-              {(section?.questions ?? []).map((q, i) => {
-                const globalIdx = sectionOffset + i + 1;
-                return (
-                  <div key={q.questionId} className={`rounded-xl border-2 p-4 transition-colors ${answers[q.questionId] !== undefined ? "border-primary/30 bg-primary/5" : "border-border"}`}>
-                    <h4 className="text-sm font-semibold text-foreground mb-3">
-                      <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
-                    </h4>
-                    <RadioGroup
-                      value={answers[q.questionId] ?? ""}
-                      onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-2"
-                    >
-                      {q.options.map((opt) => (
-                        <label key={opt.optionId} className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer text-sm transition-all ${answers[q.questionId] === opt.label ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 hover:bg-muted/50"}`}>
-                          <RadioGroupItem value={opt.label} id={`lq-${q.questionId}-${opt.optionId}`} />
-                          <Label htmlFor={`lq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1">
-                            <span className="font-medium text-muted-foreground mr-1.5">{opt.label}.</span>
-                            <span className="text-foreground">{opt.content}</span>
-                          </Label>
-                        </label>
-                      ))}
-                    </RadioGroup>
-                  </div>
-                );
-              })}
-            </div>
+            <VocabularyContextMenu source="listening">
+              <div className="p-5 space-y-4">
+                {(section?.questions ?? []).map((q, i) => {
+                  const globalIdx = sectionOffset + i + 1;
+                  return (
+                    <div key={q.questionId} className={`rounded-xl border-2 p-4 transition-colors ${answers[q.questionId] !== undefined ? "border-primary/30 bg-primary/5" : "border-border"}`}>
+                      <h4 className="text-sm font-semibold text-foreground mb-3">
+                        <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
+                      </h4>
+                      <RadioGroup
+                        value={answers[q.questionId] ?? ""}
+                        onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                      >
+                        {q.options.map((opt) => (
+                          <label key={opt.optionId} className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer text-sm transition-all ${answers[q.questionId] === opt.label ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 hover:bg-muted/50"}`}>
+                            <RadioGroupItem value={opt.label} id={`lq-${q.questionId}-${opt.optionId}`} />
+                            <Label htmlFor={`lq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1">
+                              <span className="font-medium text-muted-foreground mr-1.5">{opt.label}.</span>
+                              <span className="text-foreground">{opt.content}</span>
+                            </Label>
+                          </label>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  );
+                })}
+              </div>
+            </VocabularyContextMenu>
           </div>
 
           {/* Audio player */}
           <div className="border-t border-border bg-card px-5 py-3">
-            {exam.audioUrl ? (
-              <audio controls src={exam.audioUrl} className="w-full h-10" />
-            ) : (
-              <div className="flex items-center gap-3">
-                <Volume2 size={18} className="text-primary shrink-0" />
-                <span className="text-xs text-muted-foreground w-12">{formatTime(audioProgress)}</span>
-                <div className="flex-1">
-                  <Progress value={(audioProgress / audioDuration) * 100} className="h-2" />
-                </div>
-                <span className="text-xs text-muted-foreground w-12 text-right">{formatTime(audioDuration)}</span>
-                <div className="flex items-center gap-1.5 ml-2">
-                  {perms.canSeekListeningAudio && (
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(-10)}>
-                      <SkipBack size={14} />
+            {(() => {
+              const audioUrl = section?.audioUrl ?? exam.audioUrl;
+              return audioUrl ? (
+                <audio controls src={audioUrl} key={audioUrl} className="w-full h-10" />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Volume2 size={18} className="text-primary shrink-0" />
+                  <span className="text-xs text-muted-foreground w-12">{formatTime(audioProgress)}</span>
+                  <div className="flex-1">
+                    <Progress value={(audioProgress / audioDuration) * 100} className="h-2" />
+                  </div>
+                  <span className="text-xs text-muted-foreground w-12 text-right">{formatTime(audioDuration)}</span>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    {perms.canSeekListeningAudio && (
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(-10)}>
+                        <SkipBack size={14} />
+                      </Button>
+                    )}
+                    <Button size="icon" className="h-10 w-10 gradient-primary text-primary-foreground"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      disabled={!perms.canReplayListeningAudio && audioProgress >= audioDuration}
+                    >
+                      {isPlaying ? <Pause size={18} /> : <Play size={18} />}
                     </Button>
-                  )}
-                  <Button size="icon" className="h-10 w-10 gradient-primary text-primary-foreground"
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    disabled={!perms.canReplayListeningAudio && audioProgress >= audioDuration}
-                  >
-                    {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                  </Button>
-                  {perms.canSeekListeningAudio && (
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(10)}>
-                      <SkipForward size={14} />
-                    </Button>
-                  )}
+                    {perms.canSeekListeningAudio && (
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(10)}>
+                        <SkipForward size={14} />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
 

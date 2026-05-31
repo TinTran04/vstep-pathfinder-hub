@@ -52,6 +52,7 @@ export interface SkillAttempt {
   // Writing
   writings?: Record<number, string>;
   writingFeedback?: Record<number, WritingFeedbackResult>;
+  writingExamIds?: number[];
   // Speaking
   recordings?: Record<number, string>;
   speakingFeedback?: Record<number, SpeakingFeedbackResult>;

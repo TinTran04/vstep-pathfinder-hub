@@ -2,7 +2,7 @@
 // ============================================================
 // Data source configuration.
 //
-// Set VITE_DATA_SOURCE in your .env.local:
+// Set VITE_DATA_SOURCE in your .env:
 //   VITE_DATA_SOURCE=mock   → use localStorage mock data (default)
 //   VITE_DATA_SOURCE=api    → use real backend API
 // ============================================================

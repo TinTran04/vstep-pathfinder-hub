@@ -9,19 +9,19 @@ import type {
 export type { StartPracticeResponse, SubmitPracticeResponse, AttemptResultResponse };
 
 export const readingService = {
-  async start(examId: string): Promise<StartPracticeResponse> {
+  async start(examId: number): Promise<StartPracticeResponse> {
     return practiceApiService.start("reading", examId);
   },
 
   async submit(
-    attemptId: string,
-    answers: Record<string, string>,
+    attemptId: number,
+    answers: Record<number, string>,
     durationUsedSeconds: number
   ): Promise<SubmitPracticeResponse> {
     return practiceApiService.submit("reading", attemptId, answers, durationUsedSeconds);
   },
 
-  async getResult(attemptId: string): Promise<AttemptResultResponse> {
+  async getResult(attemptId: number): Promise<AttemptResultResponse> {
     return practiceApiService.getResult("reading", attemptId);
   },
 };

@@ -62,7 +62,7 @@ export const SKILL_TIMES: Record<Skill, string> = {
   listening: "~40 phút",
   reading: "~60 phút",
   writing: "~60 phút",
-  speaking: "~15 phút",
+  speaking: "~12–15 phút",
 };
 
 export const DEFAULT_MODE: QuizMode = "practice";

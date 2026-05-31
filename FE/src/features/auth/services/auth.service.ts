@@ -22,6 +22,7 @@ import type { UserData } from "@/features/auth/hooks/useAuth";
 // ----------------------------------------------------------------
 // Keys
 // ----------------------------------------------------------------
+const ACCESS_KEY = "vstep_access_token";
 const REFRESH_KEY = "vstep_refresh_token";
 const USER_KEY = "vstep_user";
 
@@ -60,6 +61,7 @@ function toUserData(res: AuthResponse): UserData {
 /** Persist tokens + user after successful auth */
 function persistSession(res: AuthResponse): UserData {
   apiClient.authToken = res.accessToken;
+  localStorage.setItem(ACCESS_KEY, res.accessToken);
   localStorage.setItem(REFRESH_KEY, res.refreshToken);
   const user = toUserData(res);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -69,6 +71,7 @@ function persistSession(res: AuthResponse): UserData {
 /** Clear all session data */
 function clearSession() {
   apiClient.authToken = null;
+  localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
 }
@@ -83,14 +86,32 @@ export const authService = {
     email: string,
     password: string
   ): Promise<{ success: boolean; user?: UserData; error?: string }> {
+    const isDev = import.meta.env.DEV;
+    if (isDev) {
+      console.log("[FE-PERF] authService.login start");
+      console.time("LOGIN_TOTAL_FE");
+      console.time("AUTH_LOGIN_REQUEST");
+      console.log("[FE-PERF] request sent");
+    }
     try {
       const res = await apiClient.post<AuthResponse>("/auth/login", {
         email,
         password,
       });
+      if (isDev) {
+        console.timeEnd("AUTH_LOGIN_REQUEST");
+        console.log("[FE-PERF] response received");
+      }
       const user = persistSession(res);
+      if (isDev) {
+        console.log("[FE-PERF] token saved");
+      }
       return { success: true, user };
     } catch (err: unknown) {
+      if (isDev) {
+        console.timeEnd("AUTH_LOGIN_REQUEST");
+        console.timeEnd("LOGIN_TOTAL_FE");
+      }
       const msg = (err as { message?: string })?.message;
       return {
         success: false,
@@ -254,9 +275,12 @@ export const authService = {
   restoreSession(): UserData | null {
     const raw = localStorage.getItem(USER_KEY);
     const refreshToken = localStorage.getItem(REFRESH_KEY);
+    const accessToken = localStorage.getItem(ACCESS_KEY);
     if (!raw || !refreshToken) return null;
     try {
-      // authToken is null after page reload — silently refresh in background.
+      if (accessToken) {
+        apiClient.authToken = accessToken;
+      }
       return JSON.parse(raw) as UserData;
     } catch {
       return null;

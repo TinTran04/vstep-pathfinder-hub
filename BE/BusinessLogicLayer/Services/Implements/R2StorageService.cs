@@ -80,12 +80,15 @@ public class R2StorageService : IR2StorageService
 
     private AmazonS3Client CreateClient()
     {
+        AWSConfigsS3.UseSignatureVersion4 = true;
+
         var credentials = new BasicAWSCredentials(_settings.AccessKey, _settings.SecretKey);
         var config = new AmazonS3Config
         {
             ServiceURL = _settings.Endpoint,
             ForcePathStyle = true,
-            AuthenticationRegion = RegionEndpoint.USEast1.SystemName
+            AuthenticationRegion = "auto",
+            SignatureVersion = "V4"
         };
 
         return new AmazonS3Client(credentials, config);

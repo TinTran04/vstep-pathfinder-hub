@@ -41,6 +41,19 @@ interface BEExamResponse {
   createdAt: string;
 }
 
+export interface ListeningAudioUploadUrlRequest {
+  examId?: number | null;
+  contentType: string;
+  fileExtension?: string | null;
+}
+
+export interface ListeningAudioUploadUrlResponse {
+  uploadUrl: string;
+  audioObjectKey: string;
+  audioUrl: string;
+  expiresAt: string;
+}
+
 interface ImportReadingExamResponse {
   examId: number;
   title: string;
@@ -49,11 +62,13 @@ interface ImportReadingExamResponse {
   warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
 }
 
-interface ListeningAudioUploadUrlResponse {
-  uploadUrl: string;
-  audioObjectKey: string;
-  audioUrl: string;
-  expiresAt: string;
+export interface ImportListeningExamResponse {
+  examId: number;
+  title: string;
+  audioUrl: string | null;
+  totalSections: number;
+  totalQuestions: number;
+  warnings: { code: string; message: string; questionNumber?: number | null; sectionNumber?: number | null }[];
 }
 
 function getDurationMinutes(skillType: string): number {
@@ -99,6 +114,16 @@ function toExam(e: BEExamResponse): Exam {
   else if (lowerSkill === "writing") questions = 2;
   else if (lowerSkill === "speaking") questions = 3;
 
+  let groupId: string | undefined = undefined;
+  let groupTitle: string | undefined = undefined;
+  if (e.description) {
+    const groupMatch = e.description.match(/group:([^;|\n]+)/);
+    if (groupMatch) groupId = groupMatch[1];
+    
+    const titleMatch = e.description.match(/groupTitle:([^;|\n]+)/);
+    if (titleMatch) groupTitle = titleMatch[1];
+  }
+
   return {
     id: e.examId.toString(),
     title: e.title,
@@ -108,6 +133,9 @@ function toExam(e: BEExamResponse): Exam {
     status: e.isPublished ? "active" : "draft",
     uploadedAt: e.createdAt ? e.createdAt.replace("T", " ").slice(0, 16) : new Date().toISOString().replace("T", " ").slice(0, 16),
     audioUrl: e.audioUrl,
+    mode: e.description && e.description.includes("mode:mock_test") ? "mock_test" : "practice",
+    groupId,
+    groupTitle,
   };
 }
 
@@ -203,10 +231,13 @@ export const adminService = {
     const skillType = payload.skill.toLowerCase();
     const durationMinutes = getDurationMinutes(skillType);
 
+    const groupSegment = payload.groupId ? `;group:${payload.groupId}` : "";
+    const groupTitleSegment = payload.groupTitle ? `;groupTitle:${payload.groupTitle}` : "";
+
     const bePayload = {
       title: payload.title,
       skillType: skillType,
-      description: payload.title,
+      description: `${payload.title} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
       audioUrl: payload.audioUrl ?? null,
@@ -221,13 +252,16 @@ export const adminService = {
     const skillType = payload.skill?.toLowerCase() || "listening";
     const durationMinutes = getDurationMinutes(skillType);
 
+    const groupSegment = payload.groupId ? `;group:${payload.groupId}` : "";
+    const groupTitleSegment = payload.groupTitle ? `;groupTitle:${payload.groupTitle}` : "";
+
     const bePayload = {
       title: payload.title || "",
       skillType: skillType,
-      description: payload.title || "",
+      description: `${payload.title || ""} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
-      audioUrl: payload.audioUrl ?? null,
+      audioUrl: payload.audioUrl ?? undefined,
       imageUrl: null,
     };
 
@@ -238,6 +272,15 @@ export const adminService = {
   async deleteExam(examId: string): Promise<boolean> {
     await apiClient.delete(`/exams/${examId}`);
     return true;
+  },
+
+  async createListeningAudioUploadUrl(
+    request: ListeningAudioUploadUrlRequest
+  ): Promise<ListeningAudioUploadUrlResponse> {
+    return apiClient.post<ListeningAudioUploadUrlResponse>(
+      "/exams/listening-audio/upload-url",
+      request
+    );
   },
 
   async importReadingDocx(file: File, isPublished = false): Promise<{ exam: Exam; warnings: ImportReadingExamResponse["warnings"] }> {
@@ -260,28 +303,60 @@ export const adminService = {
     };
   },
 
+  async uploadListeningAudioToR2(
+    uploadUrl: string,
+    file: File,
+    contentType: string
+  ): Promise<void> {
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: file,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Upload audio failed: HTTP ${res.status}`);
+    }
+  },
+
+  async importListeningDocx(
+    file: File,
+    audioUrl?: string | null,
+    isPublished = false
+  ): Promise<{ exam: Exam; warnings: ImportListeningExamResponse["warnings"] }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (audioUrl) {
+      formData.append("audioUrl", audioUrl);
+    }
+    formData.append("isPublished", String(isPublished));
+
+    const res = await apiClient.upload<ImportListeningExamResponse>("/exams/import-listening-docx", formData);
+    return {
+      exam: {
+        id: res.examId.toString(),
+        title: res.title,
+        skill: "Listening",
+        difficulty: "Trung bình",
+        questions: res.totalQuestions,
+        status: isPublished ? "active" : "draft",
+        uploadedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+        audioUrl: res.audioUrl,
+      },
+      warnings: res.warnings ?? [],
+    };
+  },
+
   async uploadListeningAudio(exam: Exam, file: File): Promise<Exam> {
     const contentType = file.type || "audio/mpeg";
-    const dotIndex = file.name.lastIndexOf(".");
-    const fileExtension = dotIndex >= 0 ? file.name.slice(dotIndex) : ".mp3";
-
-    const uploadInfo = await apiClient.post<ListeningAudioUploadUrlResponse>("/exams/listening-audio/upload-url", {
+    const fileExtension = file.name.split(".").pop()?.toLowerCase() ?? "mp3";
+    const uploadInfo = await this.createListeningAudioUploadUrl({
       examId: Number(exam.id),
       contentType,
       fileExtension,
     });
 
-    const uploadRes = await fetch(uploadInfo.uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": contentType,
-      },
-      body: file,
-    });
-
-    if (!uploadRes.ok) {
-      throw new Error(`Upload audio failed: HTTP ${uploadRes.status}`);
-    }
+    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, file, contentType);
 
     return this.updateExam(exam.id, {
       ...exam,
@@ -289,6 +364,22 @@ export const adminService = {
     });
   },
 
+  async uploadAudioAndImportListeningDocx(
+    docxFile: File,
+    audioFile: File,
+    isPublished: boolean
+  ): Promise<{ exam: Exam; warnings: ImportListeningExamResponse["warnings"] }> {
+    const contentType = audioFile.type || "audio/mpeg";
+    const fileExtension = audioFile.name.split(".").pop()?.toLowerCase() ?? "mp3";
+    const uploadInfo = await this.createListeningAudioUploadUrl({
+      examId: null,
+      contentType,
+      fileExtension,
+    });
+
+    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, audioFile, contentType);
+    return this.importListeningDocx(docxFile, uploadInfo.audioUrl, isPublished);
+  },
   // Price Plan CRUD
   async createPricePlan(payload: Omit<PricePlan, "id">): Promise<PricePlan> {
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -382,3 +473,4 @@ export const adminService = {
 };
 
 export default adminService;
+

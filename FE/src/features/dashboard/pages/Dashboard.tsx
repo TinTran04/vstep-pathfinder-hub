@@ -65,23 +65,61 @@ type TabType = "overview" | "rewards" | "settings" | "vocabulary";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, updateUser, logout, changePassword } = useAuth();
+  const { user, updateUser, logout, changePassword, isInitialising, isLoggedIn } = useAuth();
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[FE-PERF] dashboard mounted");
+      const startTimeStr = sessionStorage.getItem("login_start_time");
+      if (startTimeStr) {
+        const elapsed = Date.now() - parseInt(startTimeStr, 10);
+        console.log(`[FE-PERF] Time from login submit to dashboard mounted: ${elapsed}ms`);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isInitialising) return;
+
+    if (!isLoggedIn) {
+      toast.error("Vui lòng đăng nhập để tiếp tục.");
+      navigate("/auth");
+      return;
+    }
+
     let isMounted = true;
     dashboardService.getDashboardData().then((data) => {
       if (isMounted) {
+        if (import.meta.env.DEV) {
+          console.log("[FE-PERF] dashboard data loaded");
+          const startTimeStr = sessionStorage.getItem("login_start_time");
+          if (startTimeStr) {
+            const elapsed = Date.now() - parseInt(startTimeStr, 10);
+            console.log(`[FE-PERF] LOGIN_TOTAL_FE: ${elapsed}ms (from login submit to dashboard data loaded)`);
+            sessionStorage.removeItem("login_start_time");
+            try {
+              console.timeEnd("LOGIN_TOTAL_FE");
+            } catch (e) {}
+          }
+        }
         setDashboardData(data);
         setLoading(false);
       }
+    }).catch((err) => {
+      console.error(err);
+      if (isMounted) {
+        toast.error("Không thể kết nối đến máy chủ.");
+        setLoading(false);
+      }
     });
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isInitialising, isLoggedIn, navigate]);
 
   const weeklyData = dashboardData?.weeklyData || [];
   const recentScores = dashboardData?.recentScores || [];
@@ -112,7 +150,7 @@ const Dashboard = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar ?? "");
 
-  const shareUrl = "https://vstep-pathfinder-hub.lovable.app";
+  const shareUrl = window.location.origin;
 
   // Sync totalPoints when user data changes (e.g. after login or refresh)
   useEffect(() => {
@@ -129,6 +167,21 @@ const Dashboard = () => {
       setAvatarPreview(user.avatar || "");
     }
   }, [user?.name, user?.email, user?.avatar]);
+
+  if (isInitialising) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+          <p className="text-muted-foreground text-sm">Đang tải cấu hình phiên học...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   if (loading) {
     return (

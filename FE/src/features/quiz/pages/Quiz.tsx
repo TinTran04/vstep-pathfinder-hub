@@ -21,6 +21,7 @@ import logoImg from "@/assets/logo.png";
 import { quizService } from "../services/quiz.service";
 import { examService, type ExamItem } from "../services/exam.service";
 import { type Skill } from "../mocks/quiz.mock";
+import { cleanDescription } from "@/lib/utils";
 
 const skillIcons: Record<Skill, React.ReactNode> = {
   listening: <Headphones size={28} />,
@@ -597,7 +598,7 @@ const Quiz = () => {
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="text-base font-semibold text-foreground">{exam.title}</h3>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-2">{exam.description}</p>
+                          <p className="text-sm text-muted-foreground mb-2">{cleanDescription(exam.description)}</p>
                           <div className="flex items-center gap-4 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1"><Clock size={12} /> {exam.duration}</span>
                           </div>

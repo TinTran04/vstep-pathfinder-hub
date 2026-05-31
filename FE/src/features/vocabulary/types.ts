@@ -24,6 +24,17 @@ export interface SavedVocabulary {
   sourceUrl?: string;
   createdAt: string;
   updatedAt: string;
+  
+  // Backend-specific fields (UserVocabularyResponse)
+  userVocabularyId?: number;
+  dictionaryEntryId?: number;
+  englishDefinition?: string;
+  exampleVietnamese?: string;
+  personalNote?: string;
+  isFavorite?: boolean;
+  reviewCount?: number;
+  lastReviewedAt?: string | null;
+  nextReviewAt?: string | null;
 }
 
 export interface SaveVocabularyPayload {

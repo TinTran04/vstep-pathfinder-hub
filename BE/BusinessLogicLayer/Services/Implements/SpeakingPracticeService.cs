@@ -1,4 +1,5 @@
 using AutoMapper;
+using BusinessLogicLayer.DTOs.AI;
 using BusinessLogicLayer.DTOs.Speaking;
 using BusinessLogicLayer.Services.Interfaces;
 using DataAccessLayer.Entities;
@@ -11,12 +12,18 @@ public class SpeakingPracticeService : ISpeakingPracticeService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IR2StorageService _r2StorageService;
+    private readonly IOpenRouterGradingService _openRouterGradingService;
 
-    public SpeakingPracticeService(IUnitOfWork unitOfWork, IMapper mapper, IR2StorageService r2StorageService)
+    public SpeakingPracticeService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        IR2StorageService r2StorageService,
+        IOpenRouterGradingService openRouterGradingService)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _r2StorageService = r2StorageService;
+        _openRouterGradingService = openRouterGradingService;
     }
 
     public async Task<SpeakingUploadUrlResponse> CreateUploadUrlAsync(int userId, CreateSpeakingUploadUrlRequest request)
@@ -51,9 +58,22 @@ public class SpeakingPracticeService : ISpeakingPracticeService
             AudioUrl = string.IsNullOrWhiteSpace(request.AudioUrl)
                 ? _r2StorageService.GetObjectUrl(request.AudioObjectKey.Trim())
                 : request.AudioUrl.Trim(),
-            Status = "pending",
+            Status = "processing",
             AutoDeleteAt = GetAutoDeleteAt(user)
         };
+
+        try
+        {
+            var scoreResult = await _openRouterGradingService.GradeSpeakingAsync(submission.AudioUrl, submission.AudioObjectKey);
+            submission.Score = scoreResult.Score;
+            submission.Feedback = BuildSpeakingFeedback(scoreResult);
+            submission.Status = "scored";
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            submission.Status = "failed";
+            submission.Feedback = "AI grading failed. Please try again later.";
+        }
 
         await _unitOfWork.SpeakingSubmissions.AddAsync(submission);
         await _unitOfWork.SaveChangesAsync();
@@ -119,5 +139,21 @@ public class SpeakingPracticeService : ISpeakingPracticeService
             : 4;
 
         return DateTime.UtcNow.AddDays(retentionDays);
+    }
+
+    private static string? BuildSpeakingFeedback(AiScoreResult scoreResult)
+    {
+        if (string.IsNullOrWhiteSpace(scoreResult.Transcript))
+        {
+            return scoreResult.Feedback;
+        }
+
+        var feedback = string.IsNullOrWhiteSpace(scoreResult.Feedback)
+            ? string.Empty
+            : scoreResult.Feedback.Trim();
+        var transcript = scoreResult.Transcript.Trim();
+        var combined = $"{feedback}\nTranscript: {transcript}".Trim();
+
+        return combined.Length <= 1800 ? combined : combined[..1800];
     }
 }

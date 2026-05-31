@@ -1,5 +1,6 @@
 using DataAccessLayer.Context;
 using DataAccessLayer.Repositories.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace DataAccessLayer.UoW;
 
@@ -15,7 +16,10 @@ public class UnitOfWork : IUnitOfWork
         IExamRepository exams,
         IExamAttemptRepository examAttempts,
         IWritingSubmissionRepository writingSubmissions,
-        ISpeakingSubmissionRepository speakingSubmissions)
+        ISpeakingSubmissionRepository speakingSubmissions,
+        IDictionaryEntryRepository dictionaryEntries,
+        IUserVocabularyRepository userVocabularies,
+        IPaymentTransactionRepository paymentTransactions)
     {
         _context = context;
         Users = users;
@@ -25,6 +29,9 @@ public class UnitOfWork : IUnitOfWork
         ExamAttempts = examAttempts;
         WritingSubmissions = writingSubmissions;
         SpeakingSubmissions = speakingSubmissions;
+        DictionaryEntries = dictionaryEntries;
+        UserVocabularies = userVocabularies;
+        PaymentTransactions = paymentTransactions;
     }
 
     public IUserRepository Users { get; }
@@ -41,8 +48,21 @@ public class UnitOfWork : IUnitOfWork
 
     public ISpeakingSubmissionRepository SpeakingSubmissions { get; }
 
+    public IDictionaryEntryRepository DictionaryEntries { get; }
+
+    public IUserVocabularyRepository UserVocabularies { get; }
+
+    public IPaymentTransactionRepository PaymentTransactions { get; }
+
     public Task<int> SaveChangesAsync()
     {
         return _context.SaveChangesAsync();
+    }
+
+    public async Task ExecuteInTransactionAsync(Func<Task> operation)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await operation();
+        await transaction.CommitAsync();
     }
 }

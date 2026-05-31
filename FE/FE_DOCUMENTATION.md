@@ -165,7 +165,7 @@ Quy trình thi thử toàn diện:
 Khi Backend đã sẵn sàng, lập trình viên có thể chuyển đổi VSTEPPro từ **mock data** sang **API backend thật**.
 
 ### 5.1. Cấu hình environment
-Tạo file `FE/.env.local` hoặc `FE/.env.production` với nội dung:
+Tạo file `FE/.env` hoặc `FE/.env.production` với nội dung:
 ```bash
 VITE_DATA_SOURCE=api
 VITE_API_BASE_URL=http://localhost:4000/api/v1  # Hoặc URL API Backend thật
