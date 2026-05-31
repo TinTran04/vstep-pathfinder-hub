@@ -19,6 +19,7 @@ import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { cleanDescription } from "@/lib/utils";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -380,7 +381,7 @@ const ListeningQuiz = () => {
         {/* Exam title */}
         <div className="text-center">
           <h1 className="text-lg font-bold text-foreground">{exam.title}</h1>
-          {exam.description && <p className="text-sm text-muted-foreground">{exam.description}</p>}
+          {cleanDescription(exam.description) && <p className="text-sm text-muted-foreground">{cleanDescription(exam.description)}</p>}
         </div>
 
         {/* Section tabs */}
@@ -443,36 +444,39 @@ const ListeningQuiz = () => {
 
           {/* Audio player */}
           <div className="border-t border-border bg-card px-5 py-3">
-            {exam.audioUrl ? (
-              <audio controls src={exam.audioUrl} className="w-full h-10" />
-            ) : (
-              <div className="flex items-center gap-3">
-                <Volume2 size={18} className="text-primary shrink-0" />
-                <span className="text-xs text-muted-foreground w-12">{formatTime(audioProgress)}</span>
-                <div className="flex-1">
-                  <Progress value={(audioProgress / audioDuration) * 100} className="h-2" />
-                </div>
-                <span className="text-xs text-muted-foreground w-12 text-right">{formatTime(audioDuration)}</span>
-                <div className="flex items-center gap-1.5 ml-2">
-                  {perms.canSeekListeningAudio && (
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(-10)}>
-                      <SkipBack size={14} />
+            {(() => {
+              const audioUrl = section?.audioUrl ?? exam.audioUrl;
+              return audioUrl ? (
+                <audio controls src={audioUrl} key={audioUrl} className="w-full h-10" />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Volume2 size={18} className="text-primary shrink-0" />
+                  <span className="text-xs text-muted-foreground w-12">{formatTime(audioProgress)}</span>
+                  <div className="flex-1">
+                    <Progress value={(audioProgress / audioDuration) * 100} className="h-2" />
+                  </div>
+                  <span className="text-xs text-muted-foreground w-12 text-right">{formatTime(audioDuration)}</span>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    {perms.canSeekListeningAudio && (
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(-10)}>
+                        <SkipBack size={14} />
+                      </Button>
+                    )}
+                    <Button size="icon" className="h-10 w-10 gradient-primary text-primary-foreground"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      disabled={!perms.canReplayListeningAudio && audioProgress >= audioDuration}
+                    >
+                      {isPlaying ? <Pause size={18} /> : <Play size={18} />}
                     </Button>
-                  )}
-                  <Button size="icon" className="h-10 w-10 gradient-primary text-primary-foreground"
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    disabled={!perms.canReplayListeningAudio && audioProgress >= audioDuration}
-                  >
-                    {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                  </Button>
-                  {perms.canSeekListeningAudio && (
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(10)}>
-                      <SkipForward size={14} />
-                    </Button>
-                  )}
+                    {perms.canSeekListeningAudio && (
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(10)}>
+                        <SkipForward size={14} />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
 

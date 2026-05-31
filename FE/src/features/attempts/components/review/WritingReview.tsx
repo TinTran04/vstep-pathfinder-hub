@@ -129,18 +129,18 @@ const WritingReview = ({ attempt }: Props) => {
             </div>
             <ScrollArea className="h-[calc(100%-40px)]">
               <div className="p-4 space-y-3">
-                {activeFb && (activeFb as any).source === "api" ? (
+                {activeFb && 'source' in activeFb && activeFb.source === "api" ? (
                   <>
                     <div className="text-center p-3 bg-muted/50 rounded-xl">
                       <p className="text-xs text-muted-foreground">Điểm tổng</p>
                       <p className="text-2xl font-bold text-primary">
-                        {(activeFb as any).score !== null ? `${(activeFb as any).score}/10` : "Đang xử lý..."}
+                        {activeFb.score !== null ? `${activeFb.score}/10` : "Đang xử lý..."}
                       </p>
                     </div>
-                    {(activeFb as any).feedback && (
+                    {activeFb.feedback && (
                       <div className="bg-card rounded-lg p-3 border border-border">
                         <p className="text-xs font-semibold text-foreground mb-1">📋 Nhận xét của AI</p>
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{(activeFb as any).feedback}</p>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{activeFb.feedback}</p>
                       </div>
                     )}
                   </>
@@ -148,13 +148,13 @@ const WritingReview = ({ attempt }: Props) => {
                   <>
                     <div className="text-center p-3 bg-muted/50 rounded-xl">
                       <p className="text-xs text-muted-foreground">Điểm tổng</p>
-                      <p className="text-2xl font-bold text-primary">{(activeFb as WritingFeedbackResult).score}</p>
+                      <p className="text-2xl font-bold text-primary">{activeFb.score}</p>
                     </div>
                     {[
-                      { label: "📋 Task Achievement", value: (activeFb as WritingFeedbackResult).taskAchievement },
-                      { label: "🔗 Coherence", value: (activeFb as WritingFeedbackResult).coherence },
-                      { label: "📚 Lexical", value: (activeFb as WritingFeedbackResult).lexical },
-                      { label: "📝 Grammar", value: (activeFb as WritingFeedbackResult).grammar },
+                      { label: "📋 Task Achievement", value: activeFb.taskAchievement },
+                      { label: "🔗 Coherence", value: activeFb.coherence },
+                      { label: "📚 Lexical", value: activeFb.lexical },
+                      { label: "📝 Grammar", value: activeFb.grammar },
                     ].map((item) => (
                       <div key={item.label} className="bg-card rounded-lg p-3 border border-border">
                         <p className="text-xs font-semibold text-foreground mb-1">{item.label}</p>
@@ -164,7 +164,7 @@ const WritingReview = ({ attempt }: Props) => {
                     <div>
                       <p className="text-xs font-semibold text-foreground mb-2">💡 Gợi ý</p>
                       <ul className="space-y-1.5">
-                        {(activeFb as WritingFeedbackResult).tips.map((tip, i) => (
+                        {activeFb.tips.map((tip, i) => (
                           <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
                             <span className="text-primary shrink-0">•</span>{tip}
                           </li>

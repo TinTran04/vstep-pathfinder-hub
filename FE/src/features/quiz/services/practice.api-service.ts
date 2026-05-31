@@ -174,6 +174,7 @@ function normalizeSection(raw: unknown, index: number): SectionResponse | null {
     title: getString(raw, ["title", "name"], `Passage ${index + 1}`),
     instruction: getString(raw, ["instruction", "instructions", "direction", "directions"], ""),
     passageText: getString(raw, ["passageText", "passage", "content", "text", "readingText"], ""),
+    audioUrl: getString(raw, ["audioUrl", "audio"], "") || undefined,
     questions,
     orderIndex: getNumber(raw, ["orderIndex", "order", "displayOrder", "DisplayOrder", "sequence", "sectionNumber"]) ?? index,
   };

@@ -15,9 +15,10 @@ import { attemptsService } from "@/features/attempts/services/attempts.service";
 import type { SpeakingFeedbackResult } from "@/features/attempts/types";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { toast } from "sonner";
-import { examService } from "@/features/quiz/services/exam.service";
+import { examService, type ExamDetailResponse } from "@/features/quiz/services/exam.service";
 import { speakingApiService, type SpeakingResultResponse } from "../services/speaking.api-service";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { cleanDescription } from "@/lib/utils";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -35,13 +36,15 @@ interface ApiFeedbackState {
 type FeedbackState = SpeakingFeedback & { source: "mock" } | ApiFeedbackState;
 
 // Convert ExamItem to a SpeakingPart shape
-function examToPart(examId: number, title: string, description: string, index: number): SpeakingPart & { examId: number } {
+function examToPart(exam: ExamDetailResponse, index: number): SpeakingPart & { examId: number } {
+  const section = exam.sections?.[0];
+  const prompt = section?.passageText || section?.instruction || cleanDescription(exam.description) || exam.title;
   return {
-    examId,
+    examId: exam.examId,
     id: index + 1,
-    title,
+    title: exam.title,
     duration: "5 phút",
-    prompt: description || title,
+    prompt,
     tips: [
       "Trả lời tự nhiên, có cấu trúc rõ ràng",
       "Đưa ra ví dụ cụ thể để minh họa",
@@ -133,11 +136,15 @@ const SpeakingQuiz = () => {
           return;
         }
 
-        const mapped = matched.slice(0, 3).map((e, i) =>
-          examToPart(e.id, e.title, e.description, i)
+        const slice = matched.slice(0, 3);
+        const details = await Promise.all(
+          slice.map(e => examService.getExamDetail(e.id))
         );
+        if (!active) return;
+
+        const mapped = details.map((d, i) => examToPart(d, i));
         setPartsData(mapped);
-        const t = matched.length > 0 ? Math.min(matched.length, 3) * 5 * 60 : MOCK_TOTAL_TIME;
+        const t = slice.length * 5 * 60;
         setTotalTime(t);
         setTimeLeft(t);
       } catch (err) {

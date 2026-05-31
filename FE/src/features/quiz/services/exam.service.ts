@@ -60,6 +60,7 @@ export interface SectionResponse {
   title: string;
   instruction?: string | null;
   passageText?: string | null;
+  audioUrl?: string | null;
   questions: QuestionResponse[];
   orderIndex?: number;
 }
@@ -125,6 +126,10 @@ export const examService = {
 
   async getExamById(id: number): Promise<ExamResponse> {
     return apiClient.get<ExamResponse>(`/exams/${id}`);
+  },
+
+  async getExamDetail(id: number): Promise<ExamDetailResponse> {
+    return apiClient.get<ExamDetailResponse>(`/exams/${id}`);
   },
 };
 
