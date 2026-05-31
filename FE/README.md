@@ -2,7 +2,7 @@
 
 > Ứng dụng web luyện thi VSTEP (Vietnamese Standardized Test of English Proficiency) toàn diện với hệ thống đề thi mô phỏng, chấm điểm AI và theo dõi tiến độ cá nhân hóa.
 
-🌐 **Live Demo:** [https://vstep-pathfinder-hub.lovable.app](https://vstep-pathfinder-hub.lovable.app)
+🌐 **Live Demo:** [http://localhost:8080](http://localhost:8080)
 
 ---
 

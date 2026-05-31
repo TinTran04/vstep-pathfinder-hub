@@ -150,7 +150,7 @@ const Dashboard = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar ?? "");
 
-  const shareUrl = "https://vstep-pathfinder-hub.lovable.app";
+  const shareUrl = window.location.origin;
 
   // Sync totalPoints when user data changes (e.g. after login or refresh)
   useEffect(() => {
