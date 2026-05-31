@@ -21,6 +21,7 @@ export interface Exam {
   questions: number;
   status: "active" | "draft";
   uploadedAt: string;
+  description?: string;
   audioUrl?: string | null;
   mode?: "practice" | "mock_test";
   duration?: number;

@@ -9,7 +9,7 @@
 //
 //   GET /api/writing-practice/submissions/{submissionId}
 //     → WritingResultResponse (score, feedback, status)
-//     Poll until status === "graded"
+//     Poll until status === "scored" / "graded"
 // ============================================================
 
 import { apiClient } from "@/services/api-client";
@@ -28,7 +28,7 @@ export interface WritingSubmissionResponse {
   examId: number;
   attemptId: number | null;
   prompt: string;
-  status: string; // "pending" | "processing" | "graded" | "failed"
+  status: string; // "pending" | "processing" | "scored" | "graded" | "failed"
   score: number | null;
   feedback: string | null;
   createdAt: string;
@@ -86,7 +86,7 @@ export const writingApiService = {
       const result = await this.getSubmission(submissionId);
       onStatusChange?.(result.status);
 
-      if (result.status === "graded" || result.status === "failed") {
+      if (result.status === "scored" || result.status === "graded" || result.status === "failed") {
         return result;
       }
 

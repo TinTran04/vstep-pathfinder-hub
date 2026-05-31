@@ -130,6 +130,14 @@ const WritingQuiz = () => {
 
   const groupId = searchParams.get("groupId") ?? "";
 
+  const saveWritingAttemptProgress = async (data: Parameters<typeof attemptsService.saveSkillAttempt>[1]) => {
+    try {
+      await attemptsService.saveSkillAttempt("writing", data);
+    } catch (error) {
+      console.warn("[WritingQuiz] Attempt summary save skipped.", error);
+    }
+  };
+
   // ── Load exams ──────────────────────────────────────────────
   useEffect(() => {
     let active = true;
@@ -260,7 +268,7 @@ const WritingQuiz = () => {
         };
         const updatedFeedbacks = { ...feedbacks, [taskIndex]: fb };
         setFeedbacks(updatedFeedbacks);
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
+        await saveWritingAttemptProgress({ writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
       } else {
         // Mock mode
         const task = tasks[taskIndex];
@@ -277,7 +285,7 @@ const WritingQuiz = () => {
         }
         const updatedFeedbacks = { ...feedbacks, [taskIndex]: fb };
         setFeedbacks(updatedFeedbacks);
-        await attemptsService.saveSkillAttempt("writing", { writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
+        await saveWritingAttemptProgress({ writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
       }
     } catch (e) {
       console.error("[WritingQuiz] AI feedback error", e);
@@ -292,7 +300,7 @@ const WritingQuiz = () => {
   const handleSubmit = async () => {
     setMockSaving(true);
     try {
-      await attemptsService.saveSkillAttempt("writing", { writings, writingExamIds: apiExamIds });
+      await saveWritingAttemptProgress({ writings, writingExamIds: apiExamIds });
       await new Promise(r => setTimeout(r, 300));
     } finally {
       setMockSaving(false);

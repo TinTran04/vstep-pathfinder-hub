@@ -253,6 +253,7 @@ const Admin = () => {
   const mtReadingDocxRef = useRef<HTMLInputElement | null>(null);
 
   const readingDocxInputRef = useRef<HTMLInputElement | null>(null);
+  const [readingDocxFile, setReadingDocxFile] = useState<File | null>(null);
   const [importingReadingDocx, setImportingReadingDocx] = useState(false);
   const listeningAudioInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedAudioExam, setSelectedAudioExam] = useState<Exam | null>(null);
@@ -487,8 +488,10 @@ const Admin = () => {
     });
     setListeningDocxFile(null);
     setListeningAudioFile(null);
+    setReadingDocxFile(null);
     if (listeningDocxInputRef.current) listeningDocxInputRef.current.value = "";
     if (listeningImportAudioInputRef.current) listeningImportAudioInputRef.current.value = "";
+    if (readingDocxInputRef.current) readingDocxInputRef.current.value = "";
     setExamDialog(true);
   };
   
@@ -560,6 +563,116 @@ const Admin = () => {
       } finally {
         setIsImportingListening(false);
       }
+      return;
+    }
+
+    if (!editExam && examForm.skill === "Reading") {
+      if (!readingDocxFile) {
+        toast.error("Vui lòng chọn file DOCX cho đề Reading");
+        return;
+      }
+      if (!readingDocxFile.name.toLowerCase().endsWith(".docx")) {
+        toast.error("File đề Reading phải là .docx");
+        return;
+      }
+
+      setImportingReadingDocx(true);
+      try {
+        let { exam: importedExam, warnings } = await adminService.importReadingDocx(
+          readingDocxFile,
+          examForm.status === "active"
+        );
+
+        importedExam = await adminService.updateExam(importedExam.id, {
+          ...importedExam,
+          title: examForm.title,
+          difficulty: examForm.difficulty,
+          questions: examForm.questions,
+          mode: examForm.mode,
+          status: examForm.status,
+        });
+
+        const fetchedExams = await adminService.getExams();
+        setExams(fetchedExams);
+        setReadingDocxFile(null);
+        if (readingDocxInputRef.current) readingDocxInputRef.current.value = "";
+        toast.success(warnings.length > 0
+          ? `Import Reading thành công với ${warnings.length} cảnh báo`
+          : "Import đề Reading thành công");
+        setExamDialog(false);
+      } catch (err) {
+        const message = (err as { message?: string })?.message;
+        toast.error(message || "Import đề Reading thất bại");
+      } finally {
+        setImportingReadingDocx(false);
+      }
+      return;
+    }
+
+    if (!editExam && examForm.skill === "Speaking") {
+      if (!examForm.speakingPart1 || !examForm.speakingPart2 || !examForm.speakingPart3) {
+        toast.error("Vui lòng điền đầy đủ đề Speaking Part 1, Part 2 và Part 3");
+        return;
+      }
+
+      try {
+        const baseTitle = examForm.title;
+        const parts = [
+          { title: `${baseTitle} - Speaking Part 1`, prompt: examForm.speakingPart1 },
+          { title: `${baseTitle} - Speaking Part 2`, prompt: examForm.speakingPart2 },
+          { title: `${baseTitle} - Speaking Part 3`, prompt: examForm.speakingPart3 },
+        ];
+
+        const created = await Promise.all(parts.map(part => adminService.createExam({
+          title: part.title,
+          skill: "Speaking",
+          difficulty: examForm.difficulty,
+          questions: 1,
+          status: examForm.status,
+          mode: examForm.mode,
+          description: `${part.prompt} | mode:${examForm.mode}`,
+        })));
+
+        setExams(p => [...p, ...created]);
+        toast.success("Thêm đề Speaking thành công");
+      } catch (err) {
+        toast.error("Có lỗi xảy ra");
+      }
+
+      setExamDialog(false);
+      return;
+    }
+
+    if (!editExam && examForm.skill === "Writing") {
+      if (!examForm.writingTask1 || !examForm.writingTask2) {
+        toast.error("Vui lòng điền đầy đủ đề Writing Task 1 và Task 2");
+        return;
+      }
+
+      try {
+        const baseTitle = examForm.title;
+        const tasks = [
+          { title: `${baseTitle} - Writing Task 1`, prompt: examForm.writingTask1 },
+          { title: `${baseTitle} - Writing Task 2`, prompt: examForm.writingTask2 },
+        ];
+
+        const created = await Promise.all(tasks.map(task => adminService.createExam({
+          title: task.title,
+          skill: "Writing",
+          difficulty: examForm.difficulty,
+          questions: 1,
+          status: examForm.status,
+          mode: examForm.mode,
+          description: `${task.prompt} | mode:${examForm.mode}`,
+        })));
+
+        setExams(p => [...p, ...created]);
+        toast.success("Thêm đề Writing thành công");
+      } catch (err) {
+        toast.error("Có lỗi xảy ra");
+      }
+
+      setExamDialog(false);
       return;
     }
 
@@ -1123,9 +1236,21 @@ const Admin = () => {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">File đề thi DOCX (chứa 4 Passage)</Label>
-              <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 transition-colors cursor-pointer bg-muted/20">
+              <input
+                ref={readingDocxInputRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                onChange={e => setReadingDocxFile(e.target.files?.[0] ?? null)}
+              />
+              <div
+                onClick={() => readingDocxInputRef.current?.click()}
+                className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 transition-colors cursor-pointer bg-muted/20"
+              >
                 <FileText size={24} className="mx-auto text-muted-foreground mb-1" />
-                <p className="text-xs text-muted-foreground">Nhấn để chọn file đề thi .docx</p>
+                <p className="text-xs font-medium text-foreground">
+                  {readingDocxFile ? readingDocxFile.name : "Nhấn để chọn file đề thi .docx"}
+                </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">ℹ️ Đáp án đúng (ANSWER: A/B/C/D) sẽ được đọc tự động từ file DOCX.</p>
               </div>
             </div>

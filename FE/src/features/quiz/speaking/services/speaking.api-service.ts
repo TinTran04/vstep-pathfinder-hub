@@ -14,7 +14,7 @@
 //       → 202 Accepted: SpeakingSubmissionResponse
 //
 //  4. GET  /api/speaking-practice/submissions/{submissionId}
-//       Poll until status === "graded"
+//       Poll until status === "scored" / "graded"
 // ============================================================
 
 import { apiClient } from "@/services/api-client";
@@ -44,7 +44,7 @@ export interface SpeakingSubmissionResponse {
   attemptId: number | null;
   audioObjectKey: string;
   audioUrl: string;
-  status: string; // "pending" | "processing" | "graded" | "failed"
+  status: string; // "pending" | "processing" | "scored" | "graded" | "failed"
   score: number | null;
   feedback: string | null;
   autoDeleteAt: string | null;
@@ -118,7 +118,7 @@ export const speakingApiService = {
   },
 
   /**
-   * Bước 4: Poll cho đến khi status === "graded" | "failed" hoặc timeout.
+   * Bước 4: Poll cho đến khi status === "scored" | "graded" | "failed" hoặc timeout.
    */
   async pollUntilGraded(
     submissionId: number,
@@ -130,7 +130,7 @@ export const speakingApiService = {
       const result = await this.getSubmission(submissionId);
       onStatusChange?.(result.status);
 
-      if (result.status === "graded" || result.status === "failed") {
+      if (result.status === "scored" || result.status === "graded" || result.status === "failed") {
         return result;
       }
 

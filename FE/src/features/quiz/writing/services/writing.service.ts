@@ -4,6 +4,7 @@ import { isApiDataSource } from "@/services/data-source";
 import { writingApiService } from "./writing.api-service";
 import { examService } from "@/features/quiz/services/exam.service";
 import type { WritingFeedbackResult } from "@/features/attempts/types";
+import { cleanDescription } from "@/lib/utils";
 
 // ─── findErrors (dùng chung) ───────────────────────────────────
 const findErrors = (text: string): TextError[] => {
@@ -128,8 +129,9 @@ const apiImpl = {
       }
 
       try {
-        const exam = await examService.getExamById(examId);
-        const prompt = exam.description || "";
+        const exam = await examService.getExamDetail(examId);
+        const section = exam.sections?.[0];
+        const prompt = section?.passageText || section?.instruction || cleanDescription(exam.description) || exam.title;
         const submission = await writingApiService.submit(examId, prompt, essayText);
         const result = await writingApiService.pollUntilGraded(submission.writingSubmissionId);
         results[taskIdx] = {

@@ -127,6 +127,7 @@ function toExam(e: BEExamResponse): Exam {
   return {
     id: e.examId.toString(),
     title: e.title,
+    description: e.description,
     skill: skill,
     difficulty: "Trung bình",
     questions: questions,
@@ -237,7 +238,7 @@ export const adminService = {
     const bePayload = {
       title: payload.title,
       skillType: skillType,
-      description: `${payload.title} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
+      description: payload.description ?? `${payload.title} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
       audioUrl: payload.audioUrl ?? null,
@@ -258,7 +259,7 @@ export const adminService = {
     const bePayload = {
       title: payload.title || "",
       skillType: skillType,
-      description: `${payload.title || ""} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
+      description: payload.description ?? `${payload.title || ""} | mode:${payload.mode || "practice"}${groupSegment}${groupTitleSegment}`,
       durationMinutes,
       isPublished: payload.status === "active",
       audioUrl: payload.audioUrl ?? undefined,
