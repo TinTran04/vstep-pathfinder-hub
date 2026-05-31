@@ -51,7 +51,7 @@ public class SpeakingPracticeController : ControllerBase
     }
 
     /// <summary>
-    /// Luu metadata bai Speaking da upload len R2 va dua vao hang cho Worker Service cham diem.
+    /// Luu metadata bai Speaking da upload len R2 va goi OpenRouter de cham diem bang AI.
     /// </summary>
     [HttpPost("{examId:int}/submit")]
     [ProducesResponseType(typeof(ApiResponse<SpeakingSubmissionResponse>), StatusCodes.Status202Accepted)]
@@ -69,7 +69,7 @@ public class SpeakingPracticeController : ControllerBase
         try
         {
             var response = await _speakingPracticeService.SubmitAsync(GetUserId(), examId, request);
-            return StatusCode(StatusCodes.Status202Accepted, ApiResponse<SpeakingSubmissionResponse>.Ok(response, "Speaking submission queued for grading."));
+            return StatusCode(StatusCodes.Status202Accepted, ApiResponse<SpeakingSubmissionResponse>.Ok(response, "Speaking submission graded by AI."));
         }
         catch (InvalidOperationException exception)
         {

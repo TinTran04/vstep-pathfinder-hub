@@ -24,20 +24,18 @@ public class UserRepository : IUserRepository
             .FirstOrDefaultAsync(user => user.UserId == userId);
     }
 
+    public Task<User?> GetTrackedByIdAsync(int userId)
+    {
+        return _context.Users
+            .FirstOrDefaultAsync(user => user.UserId == userId);
+    }
+
     public Task<User?> GetByEmailAsync(string email)
     {
         return _context.Users
             .Include(user => user.Role)
             .Include(user => user.SubscriptionPlan)
             .FirstOrDefaultAsync(user => user.Email == email);
-    }
-
-    public Task<User?> GetByRefreshTokenAsync(string refreshToken)
-    {
-        return _context.Users
-            .Include(user => user.Role)
-            .Include(user => user.SubscriptionPlan)
-            .FirstOrDefaultAsync(user => user.RefreshToken == refreshToken);
     }
 
     public Task AddAsync(User user)

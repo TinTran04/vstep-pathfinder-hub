@@ -16,6 +16,8 @@ public class UserResponse
 
     public string SubscriptionPlan { get; set; } = string.Empty;
 
+    public DateTime? SubscriptionExpiresAt { get; set; }
+
     public bool EmailConfirmed { get; set; }
 
     public DateTime CreatedAt { get; set; }

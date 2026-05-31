@@ -9,6 +9,7 @@ using BusinessLogicLayer.Integrations.Email;
 using BusinessLogicLayer.Services.Interfaces;
 using DataAccessLayer.Entities;
 using DataAccessLayer.UoW;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -26,19 +27,22 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly JwtSettings _jwtSettings;
     private readonly OtpSettings _otpSettings;
+    private readonly Microsoft.Extensions.Logging.ILogger<AuthService> _logger;
 
     public AuthService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IEmailService emailService,
         IOptions<JwtSettings> jwtOptions,
-        IOptions<OtpSettings> otpOptions)
+        IOptions<OtpSettings> otpOptions,
+        Microsoft.Extensions.Logging.ILogger<AuthService> logger)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _emailService = emailService;
         _jwtSettings = jwtOptions.Value;
         _otpSettings = otpOptions.Value;
+        _logger = logger;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -64,49 +68,96 @@ public class AuthService : IAuthService
         await _unitOfWork.Users.AddAsync(user);
         await _unitOfWork.SaveChangesAsync();
         user = await GetUserByEmailOrThrowAsync(user.Email);
-        await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+        
+        Console.WriteLine($"[OTP] Generated OTP for {user.Email}: {otp}");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine($"[OTP] Failed to send email to {user.Email}: {exception.Message}");
+            }
+        });
 
         return BuildUnverifiedAuthResponse(user);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        var normalizedEmail = NormalizeEmail(request.Email);
-        var user = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
-
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        var email = request.Email ?? string.Empty;
+        string maskedEmail = email;
+        int atIndex = email.IndexOf('@');
+        if (atIndex > 1)
         {
+            maskedEmail = email[0] + "***" + email[atIndex..];
+        }
+        _logger.LogInformation("LOGIN_START for email: {Email}", maskedEmail);
+        var totalTimer = System.Diagnostics.Stopwatch.StartNew();
+
+        var dbTimer = System.Diagnostics.Stopwatch.StartNew();
+        var normalizedEmail = NormalizeEmail(email);
+        var user = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
+        dbTimer.Stop();
+        _logger.LogInformation("LOGIN_DB_QUERY took {Ms}ms", dbTimer.ElapsedMilliseconds);
+
+        var verifyTimer = System.Diagnostics.Stopwatch.StartNew();
+        var isPasswordValid = user is not null && BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+        verifyTimer.Stop();
+        _logger.LogInformation("LOGIN_PASSWORD_VERIFY took {Ms}ms", verifyTimer.ElapsedMilliseconds);
+
+        if (!isPasswordValid)
+        {
+            totalTimer.Stop();
+            _logger.LogWarning("LOGIN_FAILED: Invalid email or password. Total time: {Ms}ms", totalTimer.ElapsedMilliseconds);
             throw new UnauthorizedAccessException("Invalid email or password.");
         }
 
-        if (!user.EmailConfirmed)
+        var authenticatedUser = user ?? throw new UnauthorizedAccessException("Invalid email or password.");
+
+        if (!authenticatedUser.EmailConfirmed)
         {
+            totalTimer.Stop();
+            _logger.LogWarning("LOGIN_FAILED: Email is not verified. Total time: {Ms}ms", totalTimer.ElapsedMilliseconds);
             throw new UnauthorizedAccessException("Email is not verified.");
         }
 
-        SetRefreshToken(user);
+        var saveTimer = System.Diagnostics.Stopwatch.StartNew();
+        var (refreshToken, refreshTokenExpiresAt) = await CreateRefreshTokenAsync(authenticatedUser.UserId);
         await _unitOfWork.SaveChangesAsync();
+        saveTimer.Stop();
+        _logger.LogInformation("LOGIN_DB_SAVE_REFRESH_TOKEN took {Ms}ms", saveTimer.ElapsedMilliseconds);
 
-        return BuildAuthResponse(user);
+        var mapJwtTimer = System.Diagnostics.Stopwatch.StartNew();
+        var response = BuildAuthResponse(authenticatedUser, refreshToken, refreshTokenExpiresAt);
+        mapJwtTimer.Stop();
+        _logger.LogInformation("LOGIN_JWT_GENERATE_AND_MAP took {Ms}ms", mapJwtTimer.ElapsedMilliseconds);
+
+        totalTimer.Stop();
+        _logger.LogInformation("LOGIN_TOTAL took {Ms}ms", totalTimer.ElapsedMilliseconds);
+
+        return response;
     }
 
     public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
         var refreshToken = request.RefreshToken.Trim();
-        var user = await _unitOfWork.Users.GetByRefreshTokenAsync(refreshToken);
+        var tokenHash = HashRefreshToken(refreshToken);
+        var storedToken = await _unitOfWork.RefreshTokens.GetActiveByHashAsync(tokenHash);
 
-        if (user is null ||
-            !user.EmailConfirmed ||
-            user.RefreshTokenExpiryTime is null ||
-            user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+        if (storedToken is null || !storedToken.User.EmailConfirmed)
         {
             throw new UnauthorizedAccessException("Invalid or expired refresh token.");
         }
 
-        SetRefreshToken(user);
+        var (newRefreshToken, newRefreshTokenExpiresAt) = await CreateRefreshTokenAsync(storedToken.UserId);
+        _unitOfWork.RefreshTokens.Revoke(storedToken, HashRefreshToken(newRefreshToken));
         await _unitOfWork.SaveChangesAsync();
 
-        return BuildAuthResponse(user);
+        return BuildAuthResponse(storedToken.User, newRefreshToken, newRefreshTokenExpiresAt);
     }
 
     public async Task<AuthResponse> VerifyOtpAsync(VerifyOtpRequest request)
@@ -115,9 +166,9 @@ public class AuthService : IAuthService
 
         if (user.EmailConfirmed)
         {
-            SetRefreshToken(user);
+            var (refreshToken, refreshTokenExpiresAt) = await CreateRefreshTokenAsync(user.UserId);
             await _unitOfWork.SaveChangesAsync();
-            return BuildAuthResponse(user);
+            return BuildAuthResponse(user, refreshToken, refreshTokenExpiresAt);
         }
 
         if (string.IsNullOrWhiteSpace(user.EmailOtpHash) ||
@@ -138,11 +189,11 @@ public class AuthService : IAuthService
         user.EmailOtpHash = null;
         user.EmailOtpExpiryTime = null;
         user.OtpFailedCount = 0;
-        SetRefreshToken(user);
+        var (newRefreshToken, newRefreshTokenExpiresAt) = await CreateRefreshTokenAsync(user.UserId);
 
         await _unitOfWork.SaveChangesAsync();
 
-        return BuildAuthResponse(user);
+        return BuildAuthResponse(user, newRefreshToken, newRefreshTokenExpiresAt);
     }
 
     public async Task ResendOtpAsync(ResendOtpRequest request)
@@ -162,7 +213,20 @@ public class AuthService : IAuthService
 
         var otp = SetEmailOtp(user);
         await _unitOfWork.SaveChangesAsync();
-        await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+        
+        Console.WriteLine($"[OTP] Generated OTP for {user.Email}: {otp}");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine($"[OTP] Failed to send email to {user.Email}: {exception.Message}");
+            }
+        });
     }
 
     public async Task LogoutAsync(LogoutRequest request)
@@ -174,20 +238,121 @@ public class AuthService : IAuthService
             return;
         }
 
-        var user = await _unitOfWork.Users.GetByRefreshTokenAsync(refreshToken);
+        var tokenHash = HashRefreshToken(refreshToken);
+        var storedToken = await _unitOfWork.RefreshTokens.GetActiveByHashAsync(tokenHash);
 
-        if (user is null)
+        if (storedToken is null)
         {
             return;
         }
 
-        user.RefreshToken = null;
-        user.RefreshTokenExpiryTime = null;
-
+        _unitOfWork.RefreshTokens.Revoke(storedToken);
         await _unitOfWork.SaveChangesAsync();
     }
 
-    private async Task<User> GetUserByEmailOrThrowAsync(string email)
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        if (user is null)
+        {
+            throw new KeyNotFoundException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Mật khẩu hiện tại không chính xác.");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Users.Update(user);
+        await _unitOfWork.SaveChangesAsync();
+     }
+
+     public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+     {
+         var user = await GetUserByEmailOrThrowAsync(request.Email);
+
+         if (user.OtpLastSentAt is not null &&
+             user.OtpLastSentAt.Value.AddSeconds(ResendCooldownSeconds) > DateTime.UtcNow)
+         {
+             throw new InvalidOperationException("Vui lòng đợi trước khi yêu cầu mã OTP mới.");
+         }
+
+         var otp = SetEmailOtp(user);
+
+         _unitOfWork.Users.Update(user);
+         await _unitOfWork.SaveChangesAsync();
+
+         Console.WriteLine($"[Forgot Password OTP] Generated OTP for {user.Email}: {otp}");
+
+         _ = Task.Run(async () =>
+         {
+             try
+             {
+                 await _emailService.SendResetPasswordOtpEmailAsync(user.Email, user.FullName, otp);
+             }
+             catch (Exception exception)
+             {
+                 Console.WriteLine($"[Forgot Password OTP] Failed to send email to {user.Email}: {exception.Message}");
+             }
+         });
+     }
+
+     public async Task VerifyResetOtpAsync(VerifyOtpRequest request)
+     {
+         var user = await GetUserByEmailOrThrowAsync(request.Email);
+
+         if (string.IsNullOrWhiteSpace(user.EmailOtpHash) ||
+             user.EmailOtpExpiryTime is null ||
+             user.EmailOtpExpiryTime <= DateTime.UtcNow)
+         {
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+         }
+
+         if (!BCrypt.Net.BCrypt.Verify(request.Otp.Trim(), user.EmailOtpHash))
+         {
+             user.OtpFailedCount++;
+             _unitOfWork.Users.Update(user);
+             await _unitOfWork.SaveChangesAsync();
+
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ.");
+         }
+     }
+
+     public async Task ResetPasswordAsync(ResetPasswordRequest request)
+     {
+         var user = await GetUserByEmailOrThrowAsync(request.Email);
+
+         if (string.IsNullOrWhiteSpace(user.EmailOtpHash) ||
+             user.EmailOtpExpiryTime is null ||
+             user.EmailOtpExpiryTime <= DateTime.UtcNow)
+         {
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+         }
+
+         if (!BCrypt.Net.BCrypt.Verify(request.Otp.Trim(), user.EmailOtpHash))
+         {
+             user.OtpFailedCount++;
+
+             _unitOfWork.Users.Update(user);
+             await _unitOfWork.SaveChangesAsync();
+
+             throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+         }
+
+         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+         user.EmailOtpHash = null;
+         user.EmailOtpExpiryTime = null;
+         user.OtpFailedCount = 0;
+         user.UpdatedAt = DateTime.UtcNow;
+
+         _unitOfWork.Users.Update(user);
+         await _unitOfWork.SaveChangesAsync();
+     }
+
+     private async Task<User> GetUserByEmailOrThrowAsync(string email)
     {
         var normalizedEmail = NormalizeEmail(email);
         var user = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
@@ -200,15 +365,15 @@ public class AuthService : IAuthService
         return user;
     }
 
-    private AuthResponse BuildAuthResponse(User user)
+    private AuthResponse BuildAuthResponse(User user, string refreshToken, DateTime refreshTokenExpiresAt)
     {
         var accessTokenExpiresAt = DateTime.UtcNow.AddMinutes(GetAccessTokenDurationInMinutes());
         var response = _mapper.Map<AuthResponse>(user);
 
         response.AccessToken = GenerateAccessToken(user, accessTokenExpiresAt);
-        response.RefreshToken = user.RefreshToken ?? string.Empty;
+        response.RefreshToken = refreshToken;
         response.AccessTokenExpiresAt = accessTokenExpiresAt;
-        response.RefreshTokenExpiresAt = user.RefreshTokenExpiryTime ?? DateTime.UtcNow;
+        response.RefreshTokenExpiresAt = refreshTokenExpiresAt;
 
         return response;
     }
@@ -250,10 +415,18 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private void SetRefreshToken(User user)
+    private async Task<(string Token, DateTime ExpiresAt)> CreateRefreshTokenAsync(int userId)
     {
-        user.RefreshToken = GenerateRefreshToken();
-        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(RefreshTokenDays);
+        var token = GenerateRefreshToken();
+        var expiresAt = DateTime.UtcNow.AddDays(RefreshTokenDays);
+        await _unitOfWork.RefreshTokens.AddAsync(new RefreshToken
+        {
+            UserId = userId,
+            TokenHash = HashRefreshToken(token),
+            ExpiresAt = expiresAt
+        });
+
+        return (token, expiresAt);
     }
 
     private string SetEmailOtp(User user)
@@ -271,6 +444,12 @@ public class AuthService : IAuthService
     {
         var randomBytes = RandomNumberGenerator.GetBytes(64);
         return Convert.ToBase64String(randomBytes);
+    }
+
+    private static string HashRefreshToken(string refreshToken)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));
+        return Convert.ToHexString(bytes);
     }
 
     private static string GenerateOtp()

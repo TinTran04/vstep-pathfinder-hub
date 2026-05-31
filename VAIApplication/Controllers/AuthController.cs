@@ -1,7 +1,9 @@
 using BusinessLogicLayer.DTOs.Auth;
 using BusinessLogicLayer.DTOs.Common;
 using BusinessLogicLayer.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace VAIApplication.Controllers;
 
@@ -186,6 +188,147 @@ public class AuthController : ControllerBase
         await _authService.LogoutAsync(request);
         var response = new MessageResponse { Message = "Logout successfully." };
         return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
+    }
+
+    /// <summary>
+    /// Thay đổi mật khẩu tài khoản cho người dùng đang đăng nhập.
+    /// </summary>
+    /// <param name="request">Thông tin mật khẩu hiện tại và mật khẩu mới.</param>
+    /// <returns>Thông báo đổi mật khẩu thành công.</returns>
+    [HttpPost("change-password")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<MessageResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
+        }
+
+        try
+        {
+            var userId = GetUserId();
+            await _authService.ChangePasswordAsync(userId, request);
+            var response = new MessageResponse { Message = "Đổi mật khẩu thành công." };
+            return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Yêu cầu gửi mã OTP quên mật khẩu về email.
+    /// </summary>
+    /// <param name="request">Email cần lấy lại mật khẩu.</param>
+    /// <returns>Thông báo đã gửi mã OTP thành công.</returns>
+    [HttpPost("forgot-password")]
+    [ProducesResponseType(typeof(ApiResponse<MessageResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
+        }
+
+        try
+        {
+            await _authService.ForgotPasswordAsync(request);
+            var response = new MessageResponse { Message = "Mã OTP đã được gửi về email của bạn." };
+            return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Xác nhận mã OTP đặt lại mật khẩu mà không thực hiện đổi mật khẩu ngay.
+    /// </summary>
+    /// <param name="request">Email và mã OTP cần xác thực.</param>
+    /// <returns>Thông báo xác thực mã OTP thành công.</returns>
+    [HttpPost("verify-reset-otp")]
+    [ProducesResponseType(typeof(ApiResponse<MessageResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> VerifyResetOtp([FromBody] VerifyOtpRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
+        }
+
+        try
+        {
+            await _authService.VerifyResetOtpAsync(request);
+            var response = new MessageResponse { Message = "Xác thực mã OTP thành công." };
+            return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Xác nhận OTP và thiết lập lại mật khẩu mới.
+    /// </summary>
+    /// <param name="request">Email, mã OTP và mật khẩu mới.</param>
+    /// <returns>Thông báo đặt lại mật khẩu thành công.</returns>
+    [HttpPost("reset-password")]
+    [ProducesResponseType(typeof(ApiResponse<MessageResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
+        }
+
+        try
+        {
+            await _authService.ResetPasswordAsync(request);
+            var response = new MessageResponse { Message = "Đặt lại mật khẩu thành công." };
+            return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    private int GetUserId()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(userId, out var parsedUserId)
+            ? parsedUserId
+            : throw new UnauthorizedAccessException("Invalid user token.");
     }
 
     private Dictionary<string, string[]> GetModelStateErrors()

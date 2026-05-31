@@ -83,14 +83,13 @@ public class UserService : IUserService
         await ValidateRoleAsync(request.RoleId);
         await ValidateSubscriptionPlanAsync(request.SubscriptionPlanId);
 
-        var user = await GetExistingUserAsync(userId);
+        var user = await GetExistingTrackedUserAsync(userId);
 
         user.FullName = request.FullName.Trim();
         user.RoleId = request.RoleId;
         user.SubscriptionPlanId = request.SubscriptionPlanId;
         user.EmailConfirmed = request.EmailConfirmed;
 
-        _unitOfWork.Users.Update(user);
         await _unitOfWork.SaveChangesAsync();
 
         return await GetUserByIdAsync(user.UserId);
@@ -98,7 +97,7 @@ public class UserService : IUserService
 
     public async Task DeleteUserAsync(int userId)
     {
-        var user = await GetExistingUserAsync(userId);
+        var user = await GetExistingTrackedUserAsync(userId);
 
         _unitOfWork.Users.SoftDelete(user);
         await _unitOfWork.SaveChangesAsync();
@@ -107,6 +106,18 @@ public class UserService : IUserService
     private async Task<User> GetExistingUserAsync(int userId)
     {
         var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+        if (user is null)
+        {
+            throw new KeyNotFoundException("User not found.");
+        }
+
+        return user;
+    }
+
+    private async Task<User> GetExistingTrackedUserAsync(int userId)
+    {
+        var user = await _unitOfWork.Users.GetTrackedByIdAsync(userId);
 
         if (user is null)
         {

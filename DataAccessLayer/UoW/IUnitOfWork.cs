@@ -18,5 +18,15 @@ public interface IUnitOfWork
 
     ISpeakingSubmissionRepository SpeakingSubmissions { get; }
 
+    IDictionaryEntryRepository DictionaryEntries { get; }
+
+    IUserVocabularyRepository UserVocabularies { get; }
+
+    IPaymentTransactionRepository PaymentTransactions { get; }
+
+    IRefreshTokenRepository RefreshTokens { get; }
+
     Task<int> SaveChangesAsync();
+
+    Task ExecuteInTransactionAsync(Func<Task> operation);
 }

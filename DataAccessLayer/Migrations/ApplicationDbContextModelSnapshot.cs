@@ -22,6 +22,60 @@ namespace DataAccessLayer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DataAccessLayer.Entities.DictionaryEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AudioUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EnglishDefinition")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Example")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ExampleVietnamese")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("PartOfSpeech")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Phonetic")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("VietnameseMeaning")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Word")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Word")
+                        .IsUnique();
+
+                    b.ToTable("DictionaryEntries", (string)null);
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.Exam", b =>
                 {
                     b.Property<int>("ExamId")
@@ -322,6 +376,135 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("ExamSections", (string)null);
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.PaymentTransaction", b =>
+                {
+                    b.Property<int>("PaymentTransactionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PaymentTransactionId"));
+
+                    b.Property<int>("Amount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CheckoutUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(25)
+                        .HasColumnType("character varying(25)");
+
+                    b.Property<long>("OrderCode")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentLinkId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PayosReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("payos");
+
+                    b.Property<string>("QrCode")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("RawProviderPayload")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RawWebhookPayload")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("pending");
+
+                    b.Property<int>("SubscriptionPlanId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PaymentTransactionId");
+
+                    b.HasIndex("OrderCode")
+                        .IsUnique();
+
+                    b.HasIndex("SubscriptionPlanId");
+
+                    b.HasIndex("UserId", "Status", "CreatedAt");
+
+                    b.ToTable("PaymentTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.RefreshToken", b =>
+                {
+                    b.Property<int>("RefreshTokenId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("RefreshTokenId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReplacedByTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RevokedByIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RefreshTokenId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "ExpiresAt", "RevokedAt");
+
+                    b.ToTable("RefreshTokens", (string)null);
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.Role", b =>
                 {
                     b.Property<int>("RoleId")
@@ -528,7 +711,7 @@ namespace DataAccessLayer.Migrations
                             DurationDays = 7,
                             IsActive = true,
                             Name = "weekly",
-                            Price = 0m,
+                            Price = 49000m,
                             SpeakingAudioRetentionDays = 0,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -541,7 +724,7 @@ namespace DataAccessLayer.Migrations
                             DurationDays = 30,
                             IsActive = true,
                             Name = "monthly",
-                            Price = 0m,
+                            Price = 199000m,
                             SpeakingAudioRetentionDays = 0,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
@@ -598,17 +781,13 @@ namespace DataAccessLayer.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
-                    b.Property<string>("RefreshToken")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<DateTime?>("RefreshTokenExpiryTime")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<int>("RoleId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(3);
+
+                    b.Property<DateTime?>("SubscriptionExpiresAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("SubscriptionPlanId")
                         .ValueGeneratedOnAdd()
@@ -628,6 +807,55 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("SubscriptionPlanId");
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.UserVocabulary", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DictionaryEntryId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsFavorite")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("LastReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NextReviewAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PersonalNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("ReviewCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DictionaryEntryId");
+
+                    b.HasIndex("UserId", "DictionaryEntryId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "IsFavorite", "CreatedAt");
+
+                    b.ToTable("UserVocabulary", (string)null);
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.WritingSubmission", b =>
@@ -764,6 +992,36 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Exam");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.PaymentTransaction", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.SubscriptionPlan", "SubscriptionPlan")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DataAccessLayer.Entities.User", "User")
+                        .WithMany("PaymentTransactions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SubscriptionPlan");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.User", "User")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.SpeakingSubmission", b =>
                 {
                     b.HasOne("DataAccessLayer.Entities.ExamAttempt", "Attempt")
@@ -809,6 +1067,25 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("SubscriptionPlan");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.UserVocabulary", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.DictionaryEntry", "DictionaryEntry")
+                        .WithMany("UserVocabularies")
+                        .HasForeignKey("DictionaryEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DataAccessLayer.Entities.User", "User")
+                        .WithMany("UserVocabularies")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DictionaryEntry");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.WritingSubmission", b =>
                 {
                     b.HasOne("DataAccessLayer.Entities.ExamAttempt", "Attempt")
@@ -833,6 +1110,11 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Exam");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.DictionaryEntry", b =>
+                {
+                    b.Navigation("UserVocabularies");
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.Exam", b =>
@@ -871,7 +1153,13 @@ namespace DataAccessLayer.Migrations
                 {
                     b.Navigation("ExamAttempts");
 
+                    b.Navigation("PaymentTransactions");
+
+                    b.Navigation("RefreshTokens");
+
                     b.Navigation("SpeakingSubmissions");
+
+                    b.Navigation("UserVocabularies");
 
                     b.Navigation("WritingSubmissions");
                 });

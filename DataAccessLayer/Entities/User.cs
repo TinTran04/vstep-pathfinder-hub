@@ -18,9 +18,7 @@ public class User
 
     public SubscriptionPlan SubscriptionPlan { get; set; } = null!;
 
-    public string? RefreshToken { get; set; }
-
-    public DateTime? RefreshTokenExpiryTime { get; set; }
+    public DateTime? SubscriptionExpiresAt { get; set; }
 
     public bool EmailConfirmed { get; set; }
 
@@ -43,4 +41,10 @@ public class User
     public ICollection<WritingSubmission> WritingSubmissions { get; set; } = new List<WritingSubmission>();
 
     public ICollection<SpeakingSubmission> SpeakingSubmissions { get; set; } = new List<SpeakingSubmission>();
+
+    public ICollection<UserVocabulary> UserVocabularies { get; set; } = new List<UserVocabulary>();
+
+    public ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
+
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

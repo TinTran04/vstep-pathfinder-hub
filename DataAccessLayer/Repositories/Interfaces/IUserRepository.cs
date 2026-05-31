@@ -7,9 +7,9 @@ public interface IUserRepository
 {
     Task<User?> GetByIdAsync(int userId);
 
-    Task<User?> GetByEmailAsync(string email);
+    Task<User?> GetTrackedByIdAsync(int userId);
 
-    Task<User?> GetByRefreshTokenAsync(string refreshToken);
+    Task<User?> GetByEmailAsync(string email);
 
     Task<bool> ExistsByEmailAsync(string email);
 
