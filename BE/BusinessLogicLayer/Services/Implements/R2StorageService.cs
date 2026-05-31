@@ -73,9 +73,16 @@ public class R2StorageService : IR2StorageService
     public string GetObjectUrl(string objectKey)
     {
         EnsureConfigured();
+        var key = objectKey.TrimStart('/');
+
+        if (!string.IsNullOrWhiteSpace(_settings.PublicBaseUrl))
+        {
+            return $"{_settings.PublicBaseUrl.TrimEnd('/')}/{key}";
+        }
+
         var endpoint = _settings.Endpoint.TrimEnd('/');
         var bucketName = _settings.BucketName.Trim('/');
-        return $"{endpoint}/{bucketName}/{objectKey.TrimStart('/')}";
+        return $"{endpoint}/{bucketName}/{key}";
     }
 
     private AmazonS3Client CreateClient()

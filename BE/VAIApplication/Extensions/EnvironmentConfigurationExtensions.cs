@@ -20,6 +20,7 @@ public static class EnvironmentConfigurationExtensions
         SetIfPresent(configuration, "R2_SECRET_KEY", "R2:SecretKey");
         SetIfPresent(configuration, "R2_BUCKET_NAME", "R2:BucketName");
         SetIfPresent(configuration, "R2_ENDPOINT", "R2:Endpoint");
+        SetIfPresent(configuration, "R2_PUBLIC_BASE_URL", "R2:PublicBaseUrl");
         SetIfPresent(configuration, "MYMEMORY_EMAIL", "MyMemory:Email");
         SetIfPresent(configuration, "OPENROUTER_API_KEY", "OpenRouter:ApiKey");
         SetIfPresent(configuration, "OPENROUTER_MODEL", "OpenRouter:Model");
