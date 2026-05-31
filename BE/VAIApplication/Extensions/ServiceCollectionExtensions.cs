@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDictionaryEntryRepository, DictionaryEntryRepository>();
         services.AddScoped<IUserVocabularyRepository, UserVocabularyRepository>();
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IAuthService, AuthService>();

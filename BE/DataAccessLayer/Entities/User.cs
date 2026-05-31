@@ -20,10 +20,6 @@ public class User
 
     public DateTime? SubscriptionExpiresAt { get; set; }
 
-    public string? RefreshToken { get; set; }
-
-    public DateTime? RefreshTokenExpiryTime { get; set; }
-
     public bool EmailConfirmed { get; set; }
 
     public string? EmailOtpHash { get; set; }
@@ -49,4 +45,6 @@ public class User
     public ICollection<UserVocabulary> UserVocabularies { get; set; } = new List<UserVocabulary>();
 
     public ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
+
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

@@ -13,6 +13,8 @@ public class PaymentService : IPaymentService
     private const string Provider = "payos";
     private const string PendingStatus = "pending";
     private const string PaidStatus = "paid";
+    private const string CancelledStatus = "cancelled";
+    private const string FailedStatus = "failed";
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPayOsGateway _payOsGateway;
@@ -76,6 +78,76 @@ public class PaymentService : IPaymentService
         return MapResponse(transaction);
     }
 
+    public async Task<ConfirmPayOsPaymentResponse> ConfirmPayOsPaymentAsync(int userId, ConfirmPayOsPaymentRequest request)
+    {
+        var existingTransaction = await _unitOfWork.PaymentTransactions.GetByOrderCodeAsync(request.OrderCode)
+            ?? throw new KeyNotFoundException("Payment transaction not found.");
+        if (existingTransaction.UserId != userId)
+        {
+            throw new UnauthorizedAccessException("Payment transaction does not belong to current user.");
+        }
+
+        PayOsPaymentLinkResult? paymentInfo = null;
+        if (existingTransaction.Status != PaidStatus)
+        {
+            paymentInfo = await _payOsGateway.GetPaymentLinkAsync(request.OrderCode);
+        }
+
+        PaymentTransaction? confirmedTransaction = null;
+        SubscriptionPlan? confirmedPlan = null;
+        User? confirmedUser = null;
+
+        await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var transaction = await _unitOfWork.PaymentTransactions.GetTrackedByOrderCodeAsync(request.OrderCode)
+                ?? throw new KeyNotFoundException("Payment transaction not found.");
+
+            if (transaction.UserId != userId)
+            {
+                throw new UnauthorizedAccessException("Payment transaction does not belong to current user.");
+            }
+
+            var plan = await _unitOfWork.SubscriptionPlans.GetByIdAsync(transaction.SubscriptionPlanId)
+                ?? throw new KeyNotFoundException("Subscription plan not found.");
+            var user = await _unitOfWork.Users.GetTrackedByIdAsync(transaction.UserId)
+                ?? throw new KeyNotFoundException("User not found.");
+
+            if (transaction.Status != PaidStatus)
+            {
+                if (paymentInfo is null)
+                {
+                    throw new InvalidOperationException("payOS payment information was not loaded.");
+                }
+
+                ValidateProviderPayment(transaction, paymentInfo);
+
+                transaction.PaymentLinkId = paymentInfo.PaymentLinkId ?? transaction.PaymentLinkId;
+                transaction.RawProviderPayload = paymentInfo.RawJson;
+
+                var normalizedStatus = NormalizePayOsStatus(paymentInfo.Status);
+                if (normalizedStatus == PaidStatus)
+                {
+                    CompletePaidTransaction(transaction, user, plan, DateTime.UtcNow, paymentInfo.Reference, paymentInfo.RawJson);
+                }
+                else if (normalizedStatus is CancelledStatus or FailedStatus)
+                {
+                    transaction.Status = normalizedStatus;
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            confirmedTransaction = transaction;
+            confirmedPlan = plan;
+            confirmedUser = user;
+        });
+
+        return MapConfirmResponse(
+            confirmedTransaction ?? throw new InvalidOperationException("Payment confirmation failed."),
+            confirmedPlan ?? throw new InvalidOperationException("Subscription plan could not be loaded."),
+            confirmedUser ?? throw new InvalidOperationException("User could not be loaded."));
+    }
+
     public async Task HandlePayOsWebhookAsync(PayOsWebhookRequest request, string rawBody)
     {
         if (!request.Success || request.Code != "00" || request.Data.Code != "00")
@@ -104,26 +176,12 @@ public class PaymentService : IPaymentService
 
             var plan = await _unitOfWork.SubscriptionPlans.GetByIdAsync(transaction.SubscriptionPlanId)
                 ?? throw new KeyNotFoundException("Subscription plan not found.");
-            if (!plan.IsActive || plan.Price <= 0 || plan.DurationDays <= 0)
-            {
-                throw new InvalidOperationException("Subscription plan is not payable.");
-            }
-
             var user = await _unitOfWork.Users.GetTrackedByIdAsync(transaction.UserId)
                 ?? throw new KeyNotFoundException("User not found.");
 
             var paidAt = ParsePayOsDateTime(request.Data.TransactionDateTime) ?? DateTime.UtcNow;
-            var currentExpiry = user.SubscriptionExpiresAt.HasValue && user.SubscriptionExpiresAt.Value > paidAt
-                ? user.SubscriptionExpiresAt.Value
-                : paidAt;
-
-            user.SubscriptionPlanId = plan.SubscriptionPlanId;
-            user.SubscriptionExpiresAt = currentExpiry.AddDays(plan.DurationDays);
-
-            transaction.Status = PaidStatus;
             transaction.PaymentLinkId = request.Data.PaymentLinkId ?? transaction.PaymentLinkId;
-            transaction.PayosReference = request.Data.Reference;
-            transaction.PaidAt = paidAt;
+            CompletePaidTransaction(transaction, user, plan, paidAt, request.Data.Reference, rawBody);
             transaction.RawWebhookPayload = rawBody;
 
             await _unitOfWork.SaveChangesAsync();
@@ -162,7 +220,85 @@ public class PaymentService : IPaymentService
             PaymentLinkId = transaction.PaymentLinkId,
             CheckoutUrl = transaction.CheckoutUrl ?? string.Empty,
             QrCode = transaction.QrCode,
+            PaidAt = transaction.PaidAt,
+            SubscriptionExpiresAt = transaction.User?.SubscriptionExpiresAt,
             CreatedAt = transaction.CreatedAt
+        };
+    }
+
+    private static ConfirmPayOsPaymentResponse MapConfirmResponse(
+        PaymentTransaction transaction,
+        SubscriptionPlan plan,
+        User user)
+    {
+        return new ConfirmPayOsPaymentResponse
+        {
+            PaymentTransactionId = transaction.PaymentTransactionId,
+            OrderCode = transaction.OrderCode,
+            Status = transaction.Status,
+            SubscriptionPlanId = plan.SubscriptionPlanId,
+            SubscriptionPlan = plan.Name,
+            SubscriptionExpiresAt = user.SubscriptionExpiresAt,
+            PaidAt = transaction.PaidAt
+        };
+    }
+
+    private static void ValidateProviderPayment(PaymentTransaction transaction, PayOsPaymentLinkResult paymentInfo)
+    {
+        if (transaction.OrderCode != paymentInfo.OrderCode ||
+            transaction.Amount != paymentInfo.Amount)
+        {
+            throw new InvalidOperationException("payOS payment data does not match transaction.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(paymentInfo.Description) &&
+            !string.Equals(transaction.Description, paymentInfo.Description, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("payOS payment description does not match transaction.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(transaction.PaymentLinkId) &&
+            !string.IsNullOrWhiteSpace(paymentInfo.PaymentLinkId) &&
+            !string.Equals(transaction.PaymentLinkId, paymentInfo.PaymentLinkId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("payOS payment link does not match transaction.");
+        }
+    }
+
+    private static void CompletePaidTransaction(
+        PaymentTransaction transaction,
+        User user,
+        SubscriptionPlan plan,
+        DateTime paidAt,
+        string? providerReference,
+        string rawPayload)
+    {
+        if (!plan.IsActive || plan.Price <= 0 || plan.DurationDays <= 0)
+        {
+            throw new InvalidOperationException("Subscription plan is not payable.");
+        }
+
+        var currentExpiry = user.SubscriptionExpiresAt.HasValue && user.SubscriptionExpiresAt.Value > paidAt
+            ? user.SubscriptionExpiresAt.Value
+            : paidAt;
+
+        user.SubscriptionPlanId = plan.SubscriptionPlanId;
+        user.SubscriptionExpiresAt = currentExpiry.AddDays(plan.DurationDays);
+
+        transaction.Status = PaidStatus;
+        transaction.PayosReference = providerReference;
+        transaction.PaidAt = paidAt;
+        transaction.RawProviderPayload = rawPayload;
+    }
+
+    private static string NormalizePayOsStatus(string status)
+    {
+        return status.Trim().ToUpperInvariant() switch
+        {
+            "PAID" => PaidStatus,
+            "CANCELLED" or "CANCELED" or "EXPIRED" => CancelledStatus,
+            "FAILED" => FailedStatus,
+            _ => PendingStatus
         };
     }
 

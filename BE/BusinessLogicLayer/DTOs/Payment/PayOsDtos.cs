@@ -29,7 +29,34 @@ public class SubscriptionPaymentResponse
 
     public string? QrCode { get; set; }
 
+    public DateTime? PaidAt { get; set; }
+
+    public DateTime? SubscriptionExpiresAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
+}
+
+public class ConfirmPayOsPaymentRequest
+{
+    [Range(1, long.MaxValue)]
+    public long OrderCode { get; set; }
+}
+
+public class ConfirmPayOsPaymentResponse
+{
+    public int PaymentTransactionId { get; set; }
+
+    public long OrderCode { get; set; }
+
+    public string Status { get; set; } = string.Empty;
+
+    public int SubscriptionPlanId { get; set; }
+
+    public string SubscriptionPlan { get; set; } = string.Empty;
+
+    public DateTime? SubscriptionExpiresAt { get; set; }
+
+    public DateTime? PaidAt { get; set; }
 }
 
 public class PayOsWebhookRequest

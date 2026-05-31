@@ -63,6 +63,53 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
+    /// Xac nhan thanh toan payOS tu FE sau khi user quay ve returnUrl; backend goi payOS de kiem tra trang thai that truoc khi cap nhat goi.
+    /// </summary>
+    /// <param name="request">OrderCode cua giao dich da tao truoc do.</param>
+    /// <returns>Trang thai giao dich va goi hien tai cua user sau khi xac nhan.</returns>
+    [HttpPost("payos/confirm")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<ConfirmPayOsPaymentResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ConfirmPayOsPayment([FromBody] ConfirmPayOsPaymentRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+        }
+
+        try
+        {
+            var response = await _paymentService.ConfirmPayOsPaymentAsync(GetUserId(), request);
+            return Ok(ApiResponse<ConfirmPayOsPaymentResponse>.Ok(response, "Confirm payOS payment successfully."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (HttpRequestException)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, ApiResponse<object>.Fail("payOS provider is unavailable."));
+        }
+        catch (TaskCanceledException)
+        {
+            return StatusCode(StatusCodes.Status504GatewayTimeout, ApiResponse<object>.Fail("payOS provider request timed out."));
+        }
+    }
+
+    /// <summary>
     /// Webhook payOS thong bao thanh toan thanh cong; verify signature, chong double payment va cap nhat subscription trong transaction.
     /// </summary>
     /// <returns>Thong bao webhook da duoc xu ly.</returns>

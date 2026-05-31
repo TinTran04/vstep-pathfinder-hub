@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using BusinessLogicLayer.Core.Settings;
 using BusinessLogicLayer.Services.Interfaces;
@@ -71,6 +72,39 @@ public class PayOsGateway : IPayOsGateway
             PaymentLinkId = result.Data.PaymentLinkId,
             CheckoutUrl = result.Data.CheckoutUrl,
             QrCode = result.Data.QrCode
+        };
+    }
+
+    public async Task<PayOsPaymentLinkResult> GetPaymentLinkAsync(long orderCode)
+    {
+        EnsureConfigured();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"v2/payment-requests/{orderCode}");
+        request.Headers.Add("x-client-id", _settings.ClientId);
+        request.Headers.Add("x-api-key", _settings.ApiKey);
+
+        using var response = await _httpClient.SendAsync(request);
+        var rawJson = await response.Content.ReadAsStringAsync();
+        PayOsGetPaymentResponse? result = null;
+        if (!string.IsNullOrWhiteSpace(rawJson))
+        {
+            result = JsonSerializer.Deserialize<PayOsGetPaymentResponse>(rawJson);
+        }
+
+        if (!response.IsSuccessStatusCode || result is null || result.Code != "00" || result.Data is null)
+        {
+            throw new InvalidOperationException(result?.Desc ?? "payOS get payment link failed.");
+        }
+
+        return new PayOsPaymentLinkResult
+        {
+            OrderCode = result.Data.OrderCode,
+            Amount = result.Data.Amount,
+            Description = result.Data.Description,
+            PaymentLinkId = result.Data.PaymentLinkId ?? result.Data.Id,
+            Status = result.Data.Status,
+            Reference = result.Data.Transactions.FirstOrDefault()?.Reference,
+            RawJson = rawJson
         };
     }
 
@@ -151,6 +185,57 @@ public class PayOsGateway : IPayOsGateway
         [JsonPropertyName("qrCode")]
         public string? QrCode { get; set; }
     }
+
+    private sealed class PayOsGetPaymentResponse
+    {
+        [JsonPropertyName("code")]
+        public string Code { get; set; } = string.Empty;
+
+        [JsonPropertyName("desc")]
+        public string Desc { get; set; } = string.Empty;
+
+        [JsonPropertyName("data")]
+        public PayOsPaymentLinkData? Data { get; set; }
+    }
+
+    private sealed class PayOsPaymentLinkData
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("paymentLinkId")]
+        public string? PaymentLinkId { get; set; }
+
+        [JsonPropertyName("orderCode")]
+        public long OrderCode { get; set; }
+
+        [JsonPropertyName("amount")]
+        public int Amount { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = string.Empty;
+
+        [JsonPropertyName("reference")]
+        public string? Reference { get; set; }
+
+        [JsonPropertyName("transactions")]
+        public List<PayOsPaymentTransactionData> Transactions { get; set; } = new();
+    }
+
+    private sealed class PayOsPaymentTransactionData
+    {
+        [JsonPropertyName("reference")]
+        public string? Reference { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("transactionDateTime")]
+        public string? TransactionDateTime { get; set; }
+    }
 }
 
 public class PayOsCreatePaymentCommand
@@ -175,4 +260,21 @@ public class PayOsCreatePaymentResult
     public string CheckoutUrl { get; set; } = string.Empty;
 
     public string? QrCode { get; set; }
+}
+
+public class PayOsPaymentLinkResult
+{
+    public long OrderCode { get; set; }
+
+    public int Amount { get; set; }
+
+    public string? Description { get; set; }
+
+    public string? PaymentLinkId { get; set; }
+
+    public string Status { get; set; } = string.Empty;
+
+    public string? Reference { get; set; }
+
+    public string RawJson { get; set; } = string.Empty;
 }

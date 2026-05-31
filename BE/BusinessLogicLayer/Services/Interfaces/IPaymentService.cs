@@ -6,5 +6,7 @@ public interface IPaymentService
 {
     Task<SubscriptionPaymentResponse> CreateSubscriptionPaymentAsync(int userId, CreateSubscriptionPaymentRequest request);
 
+    Task<ConfirmPayOsPaymentResponse> ConfirmPayOsPaymentAsync(int userId, ConfirmPayOsPaymentRequest request);
+
     Task HandlePayOsWebhookAsync(PayOsWebhookRequest request, string rawBody);
 }

@@ -24,6 +24,8 @@ public interface IUnitOfWork
 
     IPaymentTransactionRepository PaymentTransactions { get; }
 
+    IRefreshTokenRepository RefreshTokens { get; }
+
     Task<int> SaveChangesAsync();
 
     Task ExecuteInTransactionAsync(Func<Task> operation);
