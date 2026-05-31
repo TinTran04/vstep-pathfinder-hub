@@ -14,6 +14,16 @@ export interface SubscriptionPaymentResponse {
   createdAt: string;
 }
 
+export interface ConfirmPayOsPaymentResponse {
+  paymentTransactionId: number;
+  orderCode: number;
+  status: string;
+  subscriptionPlanId: number;
+  subscriptionPlan: string;
+  subscriptionExpiresAt: string | null;
+  paidAt: string | null;
+}
+
 export const paymentService = {
   /**
    * Tạo link thanh toán payOS để nâng cấp gói Subscription cho user.
@@ -25,6 +35,15 @@ export const paymentService = {
     return apiClient.post<SubscriptionPaymentResponse>(
       "/payments/payos/subscription",
       { subscriptionPlanId }
+    );
+  },
+
+  async confirmPayOsPayment(
+    orderCode: number
+  ): Promise<ConfirmPayOsPaymentResponse> {
+    return apiClient.post<ConfirmPayOsPaymentResponse>(
+      "/payments/payos/confirm",
+      { orderCode }
     );
   },
 };

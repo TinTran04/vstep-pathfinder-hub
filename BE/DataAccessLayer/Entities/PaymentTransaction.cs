@@ -34,6 +34,8 @@ public class PaymentTransaction
 
     public string? RawWebhookPayload { get; set; }
 
+    public string? RawProviderPayload { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

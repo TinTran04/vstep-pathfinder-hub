@@ -5,4 +5,6 @@ namespace BusinessLogicLayer.Services.Interfaces;
 public interface IPayOsGateway
 {
     Task<PayOsCreatePaymentResult> CreatePaymentLinkAsync(PayOsCreatePaymentCommand command);
+
+    Task<PayOsPaymentLinkResult> GetPaymentLinkAsync(long orderCode);
 }

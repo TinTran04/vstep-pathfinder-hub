@@ -50,6 +50,8 @@ const AnimatedRoutes = () => {
         <Route path="/mock-test/review" element={<PageTransition><MockTestReviewRedirect /></PageTransition>} />
         <Route path="/payment" element={<PageTransition><Payment /></PageTransition>} />
         <Route path="/payment/return" element={<PageTransition><PaymentReturn /></PageTransition>} />
+        <Route path="/payment/success" element={<PageTransition><PaymentReturn /></PageTransition>} />
+        <Route path="/payment/cancel" element={<PageTransition><PaymentReturn /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>

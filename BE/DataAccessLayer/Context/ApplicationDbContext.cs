@@ -38,6 +38,8 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
 
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTime.UtcNow;
@@ -73,6 +75,14 @@ public class ApplicationDbContext : DbContext
         }
 
         foreach (var entry in ChangeTracker.Entries<UserVocabulary>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = utcNow;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<RefreshToken>())
         {
             if (entry.State == EntityState.Added)
             {
@@ -119,9 +129,6 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(user => user.SubscriptionExpiresAt);
 
-            entity.Property(user => user.RefreshToken)
-                .HasMaxLength(512);
-
             entity.Property(user => user.EmailConfirmed)
                 .HasDefaultValue(false);
 
@@ -151,6 +158,47 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasQueryFilter(user => !user.IsDeleted);
+        });
+
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.ToTable("RefreshTokens");
+
+            entity.HasKey(token => token.RefreshTokenId);
+
+            entity.Property(token => token.RefreshTokenId)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(token => token.TokenHash)
+                .HasMaxLength(128)
+                .IsRequired();
+
+            entity.Property(token => token.CreatedByIp)
+                .HasMaxLength(64);
+
+            entity.Property(token => token.RevokedByIp)
+                .HasMaxLength(64);
+
+            entity.Property(token => token.ReplacedByTokenHash)
+                .HasMaxLength(128);
+
+            entity.Property(token => token.CreatedAt)
+                .IsRequired();
+
+            entity.Property(token => token.ExpiresAt)
+                .IsRequired();
+
+            entity.HasIndex(token => token.TokenHash)
+                .IsUnique();
+
+            entity.HasIndex(token => new { token.UserId, token.ExpiresAt, token.RevokedAt });
+
+            entity.HasOne(token => token.User)
+                .WithMany(user => user.RefreshTokens)
+                .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasQueryFilter(token => token.User != null && !token.User.IsDeleted);
         });
 
         modelBuilder.Entity<Role>(entity =>
@@ -720,6 +768,9 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(100);
 
             entity.Property(transaction => transaction.RawWebhookPayload)
+                .HasColumnType("jsonb");
+
+            entity.Property(transaction => transaction.RawProviderPayload)
                 .HasColumnType("jsonb");
 
             entity.Property(transaction => transaction.CreatedAt)

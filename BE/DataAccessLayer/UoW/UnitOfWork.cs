@@ -19,7 +19,8 @@ public class UnitOfWork : IUnitOfWork
         ISpeakingSubmissionRepository speakingSubmissions,
         IDictionaryEntryRepository dictionaryEntries,
         IUserVocabularyRepository userVocabularies,
-        IPaymentTransactionRepository paymentTransactions)
+        IPaymentTransactionRepository paymentTransactions,
+        IRefreshTokenRepository refreshTokens)
     {
         _context = context;
         Users = users;
@@ -32,6 +33,7 @@ public class UnitOfWork : IUnitOfWork
         DictionaryEntries = dictionaryEntries;
         UserVocabularies = userVocabularies;
         PaymentTransactions = paymentTransactions;
+        RefreshTokens = refreshTokens;
     }
 
     public IUserRepository Users { get; }
@@ -54,6 +56,8 @@ public class UnitOfWork : IUnitOfWork
 
     public IPaymentTransactionRepository PaymentTransactions { get; }
 
+    public IRefreshTokenRepository RefreshTokens { get; }
+
     public Task<int> SaveChangesAsync()
     {
         return _context.SaveChangesAsync();
@@ -61,8 +65,12 @@ public class UnitOfWork : IUnitOfWork
 
     public async Task ExecuteInTransactionAsync(Func<Task> operation)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        await operation();
-        await transaction.CommitAsync();
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await operation();
+            await transaction.CommitAsync();
+        });
     }
 }
