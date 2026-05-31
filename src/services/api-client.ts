@@ -11,7 +11,7 @@
 // Auth token can be injected by setting apiClient.authToken before any call.
 // ============================================================
 
-const DEFAULT_BASE_URL = "/api/v1";
+const DEFAULT_BASE_URL = "/api";
 
 // ----------------------------------------------------------------
 // Types
@@ -68,8 +68,10 @@ function buildHeaders(extraHeaders?: HeadersInit): Headers {
   headers.set("Content-Type", "application/json");
 
   // Inject auth token if provided (will be set after login in future).
-  if (apiClient.authToken) {
-    headers.set("Authorization", `Bearer ${apiClient.authToken}`);
+  const authToken = apiClient.authToken ?? localStorage.getItem("vstep_access_token");
+  if (authToken) {
+    apiClient.authToken = authToken;
+    headers.set("Authorization", `Bearer ${authToken}`);
   }
   return headers;
 }
@@ -111,6 +113,15 @@ export const apiClient = {
     return parseResponse<T>(res);
   },
 
+  async put<T>(path: string, body?: unknown, extraHeaders?: HeadersInit): Promise<T> {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
+      method: "PUT",
+      headers: buildHeaders(extraHeaders),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return parseResponse<T>(res);
+  },
+
   async delete<T>(path: string, extraHeaders?: HeadersInit): Promise<T> {
     const res = await fetch(`${getBaseUrl()}${path}`, {
       method: "DELETE",
@@ -125,8 +136,10 @@ export const apiClient = {
    */
   async upload<T>(path: string, formData: FormData): Promise<T> {
     const headers = new Headers();
-    if (apiClient.authToken) {
-      headers.set("Authorization", `Bearer ${apiClient.authToken}`);
+    const authToken = apiClient.authToken ?? localStorage.getItem("vstep_access_token");
+    if (authToken) {
+      apiClient.authToken = authToken;
+      headers.set("Authorization", `Bearer ${authToken}`);
     }
     const res = await fetch(`${getBaseUrl()}${path}`, {
       method: "POST",

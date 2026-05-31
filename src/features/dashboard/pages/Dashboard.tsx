@@ -1,17 +1,18 @@
 import { useState, useEffect } from "react";
+import VocabularyNotebook from "../components/VocabularyNotebook";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  BarChart3, BookOpen, Clock, TrendingUp, Award, ChevronRight,
-  Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, FileText, Settings, User,
-  Flame, Gift, Share2, Star, Zap, Trophy, Copy, Check, Camera, Mail, Lock,
-  ShoppingBag, Sparkles, Crown, Ticket, CreditCard, RotateCcw,
+  BarChart3, BookOpen, Clock, TrendingUp, ChevronRight,
+  Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, Settings, User,
+  Flame, Share2, Zap, Trophy, Copy, Check, Camera, Mail, Lock,
+  Sparkles, BookMarked, FileText, Star, Gift, ShoppingBag,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -53,75 +54,134 @@ export interface PointActionItem {
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
-export interface RewardItem {
-  id: number;
-  name: string;
-  description: string;
-  cost: number;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  category: string;
-  emoji: string;
-  monthlyLimit: number;
-}
-
 export interface DashboardData {
   recentScores: ScoreItem[];
   weeklyData: WeeklyItem[];
   streakDays: boolean[];
   pointActions: PointActionItem[];
-  rewardsStore: RewardItem[];
 }
 
-type TabType = "overview" | "rewards" | "settings";
+type TabType = "overview" | "rewards" | "settings" | "vocabulary";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, updateUser, logout } = useAuth();
+  const { user, updateUser, logout, changePassword, isInitialising, isLoggedIn } = useAuth();
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log("[FE-PERF] dashboard mounted");
+      const startTimeStr = sessionStorage.getItem("login_start_time");
+      if (startTimeStr) {
+        const elapsed = Date.now() - parseInt(startTimeStr, 10);
+        console.log(`[FE-PERF] Time from login submit to dashboard mounted: ${elapsed}ms`);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isInitialising) return;
+
+    if (!isLoggedIn) {
+      toast.error("Vui lòng đăng nhập để tiếp tục.");
+      navigate("/auth");
+      return;
+    }
+
     let isMounted = true;
     dashboardService.getDashboardData().then((data) => {
       if (isMounted) {
+        if (import.meta.env.DEV) {
+          console.log("[FE-PERF] dashboard data loaded");
+          const startTimeStr = sessionStorage.getItem("login_start_time");
+          if (startTimeStr) {
+            const elapsed = Date.now() - parseInt(startTimeStr, 10);
+            console.log(`[FE-PERF] LOGIN_TOTAL_FE: ${elapsed}ms (from login submit to dashboard data loaded)`);
+            sessionStorage.removeItem("login_start_time");
+            try {
+              console.timeEnd("LOGIN_TOTAL_FE");
+            } catch (e) {}
+          }
+        }
         setDashboardData(data);
         setLoading(false);
       }
+    }).catch((err) => {
+      console.error(err);
+      if (isMounted) {
+        toast.error("Không thể kết nối đến máy chủ.");
+        setLoading(false);
+      }
     });
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isInitialising, isLoggedIn, navigate]);
 
   const weeklyData = dashboardData?.weeklyData || [];
   const recentScores = dashboardData?.recentScores || [];
-  const streakDays = dashboardData?.streakDays || [];
   const pointActions = dashboardData?.pointActions || [];
-  const rewardsStore = dashboardData?.rewardsStore || [];
+
+  // Tạo streakDays từ streak thật của user (không dùng mock)
+  // Hiển thị 14 ngày: đánh dấu N ngày cuối là active (= streak count)
+  const currentStreak = user?.streak ?? 0;
+  const STREAK_DISPLAY = 14;
+  const streakDays: boolean[] = Array.from({ length: STREAK_DISPLAY }, (_, i) => {
+    const dayFromEnd = STREAK_DISPLAY - 1 - i;
+    return dayFromEnd < currentStreak;
+  });
 
   const maxHours = weeklyData.length > 0 ? Math.max(...weeklyData.map((d: WeeklyItem) => d.hours)) : 0;
   const [shareDialog, setShareDialog] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [totalPoints, setTotalPoints] = useState(user?.points ?? 350);
+  const [totalPoints, setTotalPoints] = useState(user?.points ?? 0);
   const [showPointAnim, setShowPointAnim] = useState(false);
   const [pointDelta, setPointDelta] = useState(0);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
-  const [redeemDialog, setRedeemDialog] = useState<RewardItem | null>(null);
-  const [redeemedIds, setRedeemedIds] = useState<number[]>([]);
-  // Track monthly redemption counts: { rewardId: count }
-  const [monthlyRedeemCounts, setMonthlyRedeemCounts] = useState<Record<number, number>>({});
 
   // Settings state
-  const [settingsName, setSettingsName] = useState(user?.name ?? "Nguyễn Văn A");
-  const [settingsEmail, setSettingsEmail] = useState(user?.email ?? "nguyenvana@gmail.com");
+  const [settingsName, setSettingsName] = useState(user?.name ?? "");
+  const [settingsEmail, setSettingsEmail] = useState(user?.email ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar ?? "");
 
-  const currentStreak = user?.streak ?? 12;
-  const shareUrl = "https://vstep-pathfinder-hub.lovable.app";
+  const shareUrl = window.location.origin;
+
+  // Sync totalPoints when user data changes (e.g. after login or refresh)
+  useEffect(() => {
+    if (user?.points !== undefined) {
+      setTotalPoints(user.points);
+    }
+  }, [user?.points]);
+
+  // Sync settings fields when user data loads
+  useEffect(() => {
+    if (user) {
+      setSettingsName(user.name || "");
+      setSettingsEmail(user.email || "");
+      setAvatarPreview(user.avatar || "");
+    }
+  }, [user?.name, user?.email, user?.avatar]);
+
+  if (isInitialising) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+          <p className="text-muted-foreground text-sm">Đang tải cấu hình phiên học...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -157,21 +217,9 @@ const Dashboard = () => {
     }, 1000);
   };
 
-  const handleRedeem = (reward: typeof rewardsStore[0]) => {
-    if (totalPoints < reward.cost) {
-      toast.error("Bạn không đủ điểm để đổi phần thưởng này!");
-      return;
-    }
-    const currentCount = monthlyRedeemCounts[reward.id] || 0;
-    if (currentCount >= reward.monthlyLimit) {
-      toast.error(`Bạn đã đạt giới hạn ${reward.monthlyLimit} lượt/tháng cho phần thưởng này!`);
-      return;
-    }
-    setTotalPoints((p) => p - reward.cost);
-    setMonthlyRedeemCounts(prev => ({ ...prev, [reward.id]: currentCount + 1 }));
-    setRedeemedIds((prev) => [...prev, reward.id]);
-    setRedeemDialog(null);
-    toast.success(`🎉 Đã đổi thành công: ${reward.name}! (${currentCount + 1}/${reward.monthlyLimit} lượt tháng này)`);
+  const handleRedeem = (_reward: unknown) => {
+    // Feature coming soon
+    toast.info("Tính năng đổi điểm đang được phát triển!");
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,7 +239,7 @@ const Dashboard = () => {
     toast.success("✅ Đã cập nhật thông tin!");
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!currentPassword || !newPassword) {
       toast.error("Vui lòng điền đầy đủ thông tin!");
       return;
@@ -204,16 +252,27 @@ const Dashboard = () => {
       toast.error("Mật khẩu mới phải có ít nhất 6 ký tự!");
       return;
     }
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    toast.success("✅ Đã đổi mật khẩu thành công!");
+
+    try {
+      const res = await changePassword(currentPassword, newPassword);
+      if (res.success) {
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        toast.success("✅ Đã đổi mật khẩu thành công!");
+      } else {
+        toast.error(res.error || "Mật khẩu hiện tại không chính xác!");
+      }
+    } catch (err) {
+      toast.error("Có lỗi kết nối xảy ra!");
+    }
   };
 
   const sidebarItems = [
     { icon: <BarChart3 size={20} />, label: "Tổng quan", tab: "overview" as TabType },
     { icon: <ShoppingBag size={20} />, label: "Đổi thưởng", tab: "rewards" as TabType },
     { icon: <Settings size={20} />, label: "Cài đặt", tab: "settings" as TabType },
+    { icon: <BookMarked size={20} />, label: "Sổ tay từ vựng", tab: "vocabulary" as TabType },
   ];
 
   return (
@@ -327,12 +386,7 @@ const Dashboard = () => {
             addPoints={addPoints}
           />}
 
-          {activeTab === "rewards" && <RewardsTab
-            totalPoints={totalPoints}
-            redeemedIds={redeemedIds}
-            monthlyRedeemCounts={monthlyRedeemCounts}
-            setRedeemDialog={setRedeemDialog}
-          />}
+          {activeTab === "rewards" && <RewardsTab totalPoints={totalPoints} />}
 
           {activeTab === "settings" && <SettingsTab
             settingsName={settingsName}
@@ -350,6 +404,12 @@ const Dashboard = () => {
             setConfirmPassword={setConfirmPassword}
             handleChangePassword={handleChangePassword}
           />}
+
+          {activeTab === "vocabulary" && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+              <VocabularyNotebook />
+            </motion.div>
+          )}
         </div>
       </main>
 
@@ -389,65 +449,6 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Redeem Dialog */}
-      <Dialog open={!!redeemDialog} onOpenChange={() => setRedeemDialog(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ShoppingBag size={20} className="text-primary" />
-              Xác nhận đổi thưởng
-            </DialogTitle>
-          </DialogHeader>
-          {redeemDialog && (
-            <div className="space-y-4">
-              <div className="text-center py-4">
-                <span className="text-5xl">{redeemDialog.emoji}</span>
-                <h3 className="text-lg font-bold text-foreground mt-3">{redeemDialog.name}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{redeemDialog.description}</p>
-              </div>
-              <div className="bg-muted/50 rounded-xl p-4 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Chi phí</span>
-                <span className="text-lg font-bold text-amber-600 flex items-center gap-1">
-                  <Zap size={18} /> {redeemDialog.cost} điểm
-                </span>
-              </div>
-              <div className="bg-muted/50 rounded-xl p-4 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Điểm hiện tại</span>
-                <span className={`text-lg font-bold ${totalPoints >= redeemDialog.cost ? "text-emerald-600" : "text-destructive"}`}>
-                  {totalPoints} điểm
-                </span>
-              </div>
-              <div className="bg-muted/50 rounded-xl p-4 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground flex items-center gap-1"><RotateCcw size={14} /> Lượt đổi tháng này</span>
-                <span className="text-sm font-bold text-foreground">
-                  {monthlyRedeemCounts[redeemDialog.id] || 0}/{redeemDialog.monthlyLimit}
-                </span>
-              </div>
-              {totalPoints < redeemDialog.cost && (
-                <p className="text-sm text-destructive text-center">
-                  Bạn cần thêm <strong>{redeemDialog.cost - totalPoints}</strong> điểm nữa
-                </p>
-              )}
-              {(monthlyRedeemCounts[redeemDialog.id] || 0) >= redeemDialog.monthlyLimit && (
-                <p className="text-sm text-destructive text-center">
-                  Đã đạt giới hạn <strong>{redeemDialog.monthlyLimit} lượt/tháng</strong>
-                </p>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setRedeemDialog(null)}>Hủy</Button>
-                <Button
-                  onClick={() => handleRedeem(redeemDialog)}
-                  disabled={totalPoints < redeemDialog.cost || (monthlyRedeemCounts[redeemDialog.id] || 0) >= redeemDialog.monthlyLimit}
-                  className="gradient-primary text-primary-foreground gap-1"
-                >
-                  <ShoppingBag size={16} />
-                  Đổi ngay
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
@@ -484,8 +485,8 @@ const OverviewTab = ({
     {/* Stats cards */}
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {([
-        { icon: <Clock size={20} />, label: "Giờ học tuần này", value: "12.5h", color: "text-primary" },
-        { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: "24/60", color: "text-emerald-500" },
+        { icon: <Clock size={20} />, label: "Giờ học tuần này", value: "0h", color: "text-primary" },
+        { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: "0", color: "text-emerald-500" },
         { icon: <Zap size={20} />, label: "Điểm thưởng", value: `${totalPoints}`, color: "text-amber-500", isPoints: true },
         { icon: <Flame size={20} />, label: "Chuỗi ngày học", value: `${currentStreak} ngày`, color: "text-orange-500", isStreak: true },
       ] as { icon: React.ReactNode; label: string; value: string; color: string; isPoints?: boolean; isStreak?: boolean }[]).map((s, i) => (
@@ -587,23 +588,30 @@ const OverviewTab = ({
         </CardHeader>
         <CardContent>
           <div className="h-48 mt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="h" />
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                  formatter={(value: number) => [`${value}h`, "Thời gian học"]}
-                />
-                <Bar dataKey="hours" name="Giờ học" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {weeklyData.length === 0 || weeklyData.every((d: WeeklyItem) => d.hours === 0) ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                <TrendingUp size={32} className="opacity-20" />
+                <p className="text-sm">Chưa có dữ liệu học tuần này</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="h" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                    }}
+                    formatter={(value: number) => [`${value}h`, "Thời gian học"]}
+                  />
+                  <Bar dataKey="hours" name="Giờ học" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -614,10 +622,10 @@ const OverviewTab = ({
         </CardHeader>
         <CardContent className="space-y-4">
           {[
-            { skill: "Listening", progress: 72 },
-            { skill: "Reading", progress: 65 },
-            { skill: "Writing", progress: 45 },
-            { skill: "Speaking", progress: 58 },
+            { skill: "Listening", progress: 0 },
+            { skill: "Reading", progress: 0 },
+            { skill: "Writing", progress: 0 },
+            { skill: "Speaking", progress: 0 },
           ].map((s) => (
             <div key={s.skill} className="space-y-1.5">
               <div className="flex items-center justify-between text-sm">
@@ -625,7 +633,7 @@ const OverviewTab = ({
                   <span className={`w-2 h-2 rounded-full ${skillColors[s.skill]}`} />
                   <span className="font-medium text-foreground">{s.skill}</span>
                 </div>
-                <span className="text-muted-foreground">{s.progress}%</span>
+                <span className="text-muted-foreground text-xs">Chưa có dữ liệu</span>
               </div>
               <Progress value={s.progress} className="h-2" />
             </div>
@@ -639,41 +647,46 @@ const OverviewTab = ({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Kết quả gần đây</CardTitle>
-          <Button variant="ghost" size="sm" className="text-primary">Xem tất cả <ChevronRight size={16} /></Button>
+          {recentScores.length > 0 && (
+            <Button variant="ghost" size="sm" className="text-primary">Xem tất cả <ChevronRight size={16} /></Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
-        <div className="divide-y divide-border">
-          {recentScores.map((r: ScoreItem, i: number) => (
-            <motion.div key={i} className="flex items-center gap-4 py-3 hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors"
-              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.6 + i * 0.05 }}>
-              <div className={`w-10 h-10 rounded-xl ${skillColors[r.skill]} bg-opacity-10 flex items-center justify-center text-foreground`}>
-                {skillIcons[r.skill]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">{r.test}</p>
-                <p className="text-xs text-muted-foreground">{r.skill} · {r.date}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold text-foreground">{r.score}<span className="text-sm text-muted-foreground">/{r.total}</span></p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+        {recentScores.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
+            <FileText size={36} className="opacity-20" />
+            <p className="text-sm">Chưa có kết quả nào. Hãy bắt đầu luyện tập!</p>
+            <Button size="sm" variant="outline" className="mt-1" onClick={() => window.location.href = '/quiz'}>
+              Bắt đầu luyện tập ngay
+            </Button>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {recentScores.map((r: ScoreItem, i: number) => (
+              <motion.div key={i} className="flex items-center gap-4 py-3 hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors"
+                initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.6 + i * 0.05 }}>
+                <div className={`w-10 h-10 rounded-xl ${skillColors[r.skill]} bg-opacity-10 flex items-center justify-center text-foreground`}>
+                  {skillIcons[r.skill]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{r.test}</p>
+                  <p className="text-xs text-muted-foreground">{r.skill} · {r.date}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-foreground">{r.score}<span className="text-sm text-muted-foreground">/{r.total}</span></p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   </>
 );
 
 /* ──────────────── REWARDS STORE TAB ──────────────── */
-interface RewardsTabProps {
-  totalPoints: number;
-  redeemedIds: number[];
-  monthlyRedeemCounts: Record<number, number>;
-  setRedeemDialog: (reward: RewardItem) => void;
-}
-
-const RewardsTab = ({ totalPoints, redeemedIds, monthlyRedeemCounts, setRedeemDialog }: RewardsTabProps) => (
+const RewardsTab = ({ totalPoints }: { totalPoints: number }) => (
   <>
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Đổi phần thưởng 🎁</h1>
@@ -688,61 +701,37 @@ const RewardsTab = ({ totalPoints, redeemedIds, monthlyRedeemCounts, setRedeemDi
             <p className="text-sm opacity-80">Điểm thưởng hiện tại</p>
             <p className="text-4xl font-bold mt-1 flex items-center gap-2"><Zap size={28} /> {totalPoints}</p>
           </div>
-          <div className="text-right">
-            <p className="text-sm opacity-80">Tổng đã đổi</p>
-            <p className="text-2xl font-bold mt-1">{redeemedIds.length} phần thưởng</p>
+          <div className="text-right opacity-80">
+            <Sparkles size={40} />
           </div>
         </CardContent>
       </Card>
     </motion.div>
 
-    {/* Rewards grid */}
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {rewardsStore.map((reward, i) => {
-        const redeemCount = monthlyRedeemCounts[reward.id] || 0;
-        const isMaxed = redeemCount >= reward.monthlyLimit;
-        const canAfford = totalPoints >= reward.cost;
-        return (
-          <motion.div key={reward.id}
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}>
-            <Card className={`border-border transition-all duration-300 hover:border-primary/30 ${isMaxed ? "opacity-60" : "card-press"}`}>
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <span className="text-3xl">{reward.emoji}</span>
-                  <div className="flex flex-col items-end gap-1">
-                    {isMaxed && (
-                      <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">
-                        Hết lượt tháng này
-                      </Badge>
-                    )}
-                    <Badge variant="outline" className="text-[10px] flex items-center gap-1">
-                      <RotateCcw size={10} /> {redeemCount}/{reward.monthlyLimit} lượt/tháng
-                    </Badge>
-                  </div>
-                </div>
-                <h3 className="font-bold text-foreground">{reward.name}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{reward.description}</p>
-                <div className="flex items-center justify-between mt-4">
-                  <span className="text-sm font-bold text-amber-600 flex items-center gap-1">
-                    <Zap size={14} /> {reward.cost} điểm
-                  </span>
-                  <Button
-                    size="sm"
-                    variant={canAfford && !isMaxed ? "default" : "outline"}
-                    disabled={isMaxed}
-                    onClick={() => !isMaxed && setRedeemDialog(reward)}
-                    className={canAfford && !isMaxed ? "gradient-primary text-primary-foreground" : ""}
-                  >
-                    {isMaxed ? "Hết lượt" : canAfford ? "Đổi ngay" : "Chưa đủ điểm"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        );
-      })}
-    </div>
+    {/* Coming soon */}
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+      className="flex flex-col items-center justify-center py-20 text-center"
+    >
+      <motion.div
+        animate={{ rotate: [0, 10, -10, 10, 0], scale: [1, 1.05, 1] }}
+        transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+        className="text-7xl mb-6"
+      >
+        🚧
+      </motion.div>
+      <h2 className="text-2xl font-bold text-foreground mb-2">Đang cập nhật</h2>
+      <p className="text-muted-foreground max-w-sm">
+        Tính năng đổi điểm đang được phát triển và sẽ sớm ra mắt. Hãy tiếp tục tích lũy điểm thưởng nhé!
+      </p>
+      <div className="mt-8 flex items-center gap-3">
+        <motion.div className="w-2 h-2 rounded-full bg-primary" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.8, repeat: Infinity, delay: 0 }} />
+        <motion.div className="w-2 h-2 rounded-full bg-primary" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.8, repeat: Infinity, delay: 0.2 }} />
+        <motion.div className="w-2 h-2 rounded-full bg-primary" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.8, repeat: Infinity, delay: 0.4 }} />
+      </div>
+    </motion.div>
   </>
 );
 

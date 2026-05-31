@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { passages } from "@/features/quiz/reading/mocks/reading.mock";
 import type { SkillAttempt } from "../../types";
 import { getReadingExplanation } from "@/features/quiz/mocks/explanations.mock";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 
 interface Props {
   attempt: SkillAttempt;
@@ -61,9 +62,13 @@ const ReadingReview = ({ attempt }: Props) => {
                 <BookOpen size={16} className="text-primary" />
                 <h3 className="font-bold text-foreground text-sm">{passage.title}</h3>
               </div>
-              {passage.content.split("\n\n").map((para, i) => (
-                <p key={i} className="text-xs text-foreground leading-relaxed mb-3">{para}</p>
-              ))}
+              <VocabularyContextMenu source="review">
+                <div>
+                  {passage.content.split("\n\n").map((para, i) => (
+                    <p key={i} className="text-xs text-foreground leading-relaxed mb-3">{para}</p>
+                  ))}
+                </div>
+              </VocabularyContextMenu>
             </div>
           </ScrollArea>
         </div>

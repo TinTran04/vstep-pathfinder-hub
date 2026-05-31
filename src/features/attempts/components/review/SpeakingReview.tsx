@@ -7,6 +7,7 @@ import { speakingService } from "@/features/quiz/speaking/services/speaking.serv
 import { parts } from "@/features/quiz/speaking/mocks/speaking.mock";
 import type { SkillAttempt, SpeakingFeedbackResult } from "../../types";
 import { getSpeakingTranscript } from "@/features/quiz/mocks/explanations.mock";
+import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 
 interface Props {
   attempt: SkillAttempt;
@@ -115,14 +116,18 @@ const SpeakingReview = ({ attempt }: Props) => {
               {/* Sample model answer */}
               <div className="bg-primary/5 rounded-xl p-4 border border-primary/20">
                 <p className="text-xs font-semibold text-primary mb-2">📝 Bài nói mẫu tham khảo</p>
-                <p className="text-xs text-foreground whitespace-pre-line leading-relaxed italic">{getSpeakingTranscript(part.id)}</p>
+                <VocabularyContextMenu source="review">
+                  <p className="text-xs text-foreground whitespace-pre-line leading-relaxed italic">{getSpeakingTranscript(part.id)}</p>
+                </VocabularyContextMenu>
               </div>
 
               {/* User transcript if generated */}
               {activeFb?.transcript && (
                 <div className="bg-muted/50 rounded-xl p-4 border border-border">
                   <p className="text-xs font-semibold text-muted-foreground mb-2">💬 Bản ghi âm của bạn (Transcript)</p>
-                  <p className="text-xs text-foreground whitespace-pre-line leading-relaxed">{activeFb.transcript}</p>
+                  <VocabularyContextMenu source="speaking">
+                    <p className="text-xs text-foreground whitespace-pre-line leading-relaxed">{activeFb.transcript}</p>
+                  </VocabularyContextMenu>
                 </div>
               )}
 

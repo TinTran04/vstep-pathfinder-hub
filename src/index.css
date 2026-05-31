@@ -41,13 +41,13 @@
     --card-shadow-hover: 0 8px 32px -4px hsl(238 75% 62% / 0.15);
     --section-alt: 210 20% 96%;
 
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 210 40% 98%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 25%;
     --sidebar-primary: 238 75% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 32% 17%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 32% 17%;
+    --sidebar-accent: 210 16% 94%;
+    --sidebar-accent-foreground: 220 20% 25%;
+    --sidebar-border: 214 15% 91%;
     --sidebar-ring: 238 75% 62%;
 
     /* Reward colors */

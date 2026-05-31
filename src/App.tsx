@@ -16,14 +16,14 @@ import ListeningQuiz from "@/features/quiz/listening/pages/ListeningQuiz";
 import ReadingQuiz from "@/features/quiz/reading/pages/ReadingQuiz";
 import WritingQuiz from "@/features/quiz/writing/pages/WritingQuiz";
 import SpeakingQuiz from "@/features/quiz/speaking/pages/SpeakingQuiz";
-import VstepRegistration from "@/features/registration/pages/VstepRegistration";
 import Admin from "@/features/admin/pages/Admin";
-import Results from "@/features/quiz/pages/Results";
 import WritingSamples from "@/features/quiz/writing/pages/WritingSamples";
 import MockTestLanding from "@/features/attempts/pages/MockTestLanding";
 import AttemptReview from "@/features/attempts/pages/AttemptReview";
 import AttemptResult from "@/features/attempts/pages/AttemptResult";
 import MockTestReviewRedirect from "@/features/attempts/components/MockTestReviewRedirect";
+import Payment from "@/features/landing/pages/Payment";
+import PaymentReturn from "@/features/landing/pages/PaymentReturn";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,14 +42,16 @@ const AnimatedRoutes = () => {
         <Route path="/quiz/reading/take" element={<PageTransition><ReadingQuiz /></PageTransition>} />
         <Route path="/quiz/writing/take" element={<PageTransition><WritingQuiz /></PageTransition>} />
         <Route path="/quiz/speaking/take" element={<PageTransition><SpeakingQuiz /></PageTransition>} />
-        <Route path="/vstep-registration" element={<PageTransition><VstepRegistration /></PageTransition>} />
         <Route path="/admin" element={<PageTransition><Admin /></PageTransition>} />
-        <Route path="/results" element={<PageTransition><Results /></PageTransition>} />
         <Route path="/writing-samples" element={<PageTransition><WritingSamples /></PageTransition>} />
         <Route path="/mock-test" element={<PageTransition><MockTestLanding /></PageTransition>} />
         <Route path="/attempts/:attemptId/result" element={<PageTransition><AttemptResult /></PageTransition>} />
         <Route path="/attempts/:attemptId/review" element={<PageTransition><AttemptReview /></PageTransition>} />
         <Route path="/mock-test/review" element={<PageTransition><MockTestReviewRedirect /></PageTransition>} />
+        <Route path="/payment" element={<PageTransition><Payment /></PageTransition>} />
+        <Route path="/payment/return" element={<PageTransition><PaymentReturn /></PageTransition>} />
+        <Route path="/payment/success" element={<PageTransition><PaymentReturn /></PageTransition>} />
+        <Route path="/payment/cancel" element={<PageTransition><PaymentReturn /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>
