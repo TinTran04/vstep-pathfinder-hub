@@ -76,6 +76,7 @@ public class AuthService : IAuthService
             try
             {
                 await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
+                Console.WriteLine($"[OTP] Email sent to {user.Email}");
             }
             catch (Exception exception)
             {
