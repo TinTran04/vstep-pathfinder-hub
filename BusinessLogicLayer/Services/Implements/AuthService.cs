@@ -51,7 +51,7 @@ public class AuthService : IAuthService
 
         if (await _unitOfWork.Users.ExistsByEmailAsync(normalizedEmail))
         {
-            throw new InvalidOperationException("Email already exists.");
+            throw new InvalidOperationException("Email đã được sử dụng.");
         }
 
         var user = _mapper.Map<User>(request);
@@ -114,16 +114,16 @@ public class AuthService : IAuthService
         {
             totalTimer.Stop();
             _logger.LogWarning("LOGIN_FAILED: Invalid email or password. Total time: {Ms}ms", totalTimer.ElapsedMilliseconds);
-            throw new UnauthorizedAccessException("Invalid email or password.");
+            throw new UnauthorizedAccessException("Email hoặc mật khẩu không chính xác.");
         }
 
-        var authenticatedUser = user ?? throw new UnauthorizedAccessException("Invalid email or password.");
+        var authenticatedUser = user ?? throw new UnauthorizedAccessException("Email hoặc mật khẩu không chính xác.");
 
         if (!authenticatedUser.EmailConfirmed)
         {
             totalTimer.Stop();
             _logger.LogWarning("LOGIN_FAILED: Email is not verified. Total time: {Ms}ms", totalTimer.ElapsedMilliseconds);
-            throw new UnauthorizedAccessException("Email is not verified.");
+            throw new UnauthorizedAccessException("Email chưa được xác thực.");
         }
 
         var saveTimer = System.Diagnostics.Stopwatch.StartNew();
@@ -151,7 +151,7 @@ public class AuthService : IAuthService
 
         if (storedToken is null || !storedToken.User.EmailConfirmed)
         {
-            throw new UnauthorizedAccessException("Invalid or expired refresh token.");
+            throw new UnauthorizedAccessException("Refresh token không hợp lệ hoặc đã hết hạn.");
         }
 
         var (newRefreshToken, newRefreshTokenExpiresAt) = await CreateRefreshTokenAsync(storedToken.UserId);
@@ -176,14 +176,14 @@ public class AuthService : IAuthService
             user.EmailOtpExpiryTime is null ||
             user.EmailOtpExpiryTime <= DateTime.UtcNow)
         {
-            throw new UnauthorizedAccessException("OTP is invalid or expired.");
+            throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
         }
 
         if (!BCrypt.Net.BCrypt.Verify(request.Otp.Trim(), user.EmailOtpHash))
         {
             user.OtpFailedCount++;
             await _unitOfWork.SaveChangesAsync();
-            throw new UnauthorizedAccessException("OTP is invalid or expired.");
+            throw new UnauthorizedAccessException("Mã OTP không hợp lệ hoặc đã hết hạn.");
         }
 
         user.EmailConfirmed = true;
@@ -203,13 +203,13 @@ public class AuthService : IAuthService
 
         if (user.EmailConfirmed)
         {
-            throw new InvalidOperationException("Email is already verified.");
+            throw new InvalidOperationException("Email đã được xác thực.");
         }
 
         if (user.OtpLastSentAt is not null &&
             user.OtpLastSentAt.Value.AddSeconds(ResendCooldownSeconds) > DateTime.UtcNow)
         {
-            throw new InvalidOperationException("Please wait before requesting a new OTP.");
+            throw new InvalidOperationException("Vui lòng đợi trước khi yêu cầu mã OTP mới.");
         }
 
         var otp = SetEmailOtp(user);
@@ -256,7 +256,7 @@ public class AuthService : IAuthService
         var user = await _unitOfWork.Users.GetByIdAsync(userId);
         if (user is null)
         {
-            throw new KeyNotFoundException("User not found.");
+            throw new KeyNotFoundException("Không tìm thấy người dùng.");
         }
 
         if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
@@ -360,7 +360,7 @@ public class AuthService : IAuthService
 
         if (user is null)
         {
-            throw new KeyNotFoundException("User not found.");
+            throw new KeyNotFoundException("Không tìm thấy người dùng.");
         }
 
         return user;
@@ -394,7 +394,7 @@ public class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(_jwtSettings.Key) || _jwtSettings.Key.Length < 32)
         {
-            throw new InvalidOperationException("JWT key must be at least 32 characters.");
+            throw new InvalidOperationException("Khóa JWT phải có ít nhất 32 ký tự.");
         }
 
         var claims = new[]

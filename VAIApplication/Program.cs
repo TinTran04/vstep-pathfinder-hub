@@ -60,6 +60,12 @@ app.UseCors("AllowFE");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "Healthy",
+    timestamp = DateTimeOffset.UtcNow
+})).AllowAnonymous();
+
 app.MapControllers();
 
 app.Run();

@@ -32,13 +32,13 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
         }
 
         try
         {
             var response = await _authService.RegisterAsync(request);
-            return StatusCode(StatusCodes.Status201Created, ApiResponse<AuthResponse>.Ok(response, "Register successfully. Please verify your email OTP."));
+            return StatusCode(StatusCodes.Status201Created, ApiResponse<AuthResponse>.Ok(response, "Đăng ký thành công. Vui lòng xác thực mã OTP trong email."));
         }
         catch (InvalidOperationException exception)
         {
@@ -61,13 +61,13 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
         }
 
         try
         {
             var response = await _authService.VerifyOtpAsync(request);
-            return Ok(ApiResponse<AuthResponse>.Ok(response, "Email verified successfully."));
+            return Ok(ApiResponse<AuthResponse>.Ok(response, "Xác thực email thành công."));
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -94,13 +94,13 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
         }
 
         try
         {
             await _authService.ResendOtpAsync(request);
-            var response = new MessageResponse { Message = "OTP sent successfully." };
+            var response = new MessageResponse { Message = "Mã OTP đã được gửi thành công." };
             return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
         }
         catch (InvalidOperationException exception)
@@ -127,13 +127,13 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
         }
 
         try
         {
             var response = await _authService.LoginAsync(request);
-            return Ok(ApiResponse<AuthResponse>.Ok(response, "Login successfully."));
+            return Ok(ApiResponse<AuthResponse>.Ok(response, "Đăng nhập thành công."));
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -155,13 +155,13 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
         }
 
         try
         {
             var response = await _authService.RefreshTokenAsync(request);
-            return Ok(ApiResponse<AuthResponse>.Ok(response, "Refresh token successfully."));
+            return Ok(ApiResponse<AuthResponse>.Ok(response, "Làm mới phiên đăng nhập thành công."));
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -182,11 +182,11 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+            return BadRequest(ApiResponse<object>.Fail("Yêu cầu không hợp lệ.", GetModelStateErrors()));
         }
 
         await _authService.LogoutAsync(request);
-        var response = new MessageResponse { Message = "Logout successfully." };
+        var response = new MessageResponse { Message = "Đăng xuất thành công." };
         return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
     }
 
@@ -328,7 +328,7 @@ public class AuthController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(userId, out var parsedUserId)
             ? parsedUserId
-            : throw new UnauthorizedAccessException("Invalid user token.");
+            : throw new UnauthorizedAccessException("Token người dùng không hợp lệ.");
     }
 
     private Dictionary<string, string[]> GetModelStateErrors()

@@ -14,7 +14,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<JwtSettings>(configuration.GetSection("Jwt"));
-        services.Configure<SmtpSettings>(configuration.GetSection("Smtp"));
+        services.Configure<BrevoSettings>(configuration.GetSection("Brevo"));
         services.Configure<OtpSettings>(configuration.GetSection("Otp"));
         services.Configure<R2Settings>(configuration.GetSection("R2"));
         services.Configure<SupabaseSettings>(configuration.GetSection("Supabase"));
@@ -36,7 +36,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped<IEmailService, EmailService>();
+        services.AddHttpClient<IEmailService, EmailService>((provider, client) =>
+        {
+            var settings = configuration.GetSection("Brevo").Get<BrevoSettings>() ?? new BrevoSettings();
+            client.BaseAddress = new Uri(string.IsNullOrWhiteSpace(settings.BaseUrl)
+                ? "https://api.brevo.com/"
+                : settings.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(15);
+        });
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IExamService, ExamService>();

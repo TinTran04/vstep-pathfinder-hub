@@ -4,6 +4,6 @@ namespace BusinessLogicLayer.DTOs.Auth;
 
 public class LogoutRequest
 {
-    [Required]
+    [Required(ErrorMessage = "Refresh token là bắt buộc.")]
     public string RefreshToken { get; set; } = string.Empty;
 }

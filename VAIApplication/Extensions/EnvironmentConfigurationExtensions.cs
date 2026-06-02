@@ -9,12 +9,10 @@ public static class EnvironmentConfigurationExtensions
         SetIfPresent(configuration, "JWT_ISSUER", "Jwt:Issuer");
         SetIfPresent(configuration, "JWT_AUDIENCE", "Jwt:Audience");
         SetIfPresent(configuration, "JWT_DURATION_MINUTES", "Jwt:DurationInMinutes");
-        SetIfPresent(configuration, "SMTP_HOST", "Smtp:Host");
-        SetIfPresent(configuration, "SMTP_PORT", "Smtp:Port");
-        SetIfPresent(configuration, "SMTP_USERNAME", "Smtp:Username");
-        SetIfPresent(configuration, "SMTP_PASSWORD", "Smtp:Password");
-        SetIfPresent(configuration, "SMTP_FROM_EMAIL", "Smtp:FromEmail");
-        SetIfPresent(configuration, "SMTP_FROM_NAME", "Smtp:FromName");
+        SetIfPresent(configuration, "BREVO_API_KEY", "Brevo:ApiKey");
+        SetIfPresent(configuration, "BREVO_FROM_EMAIL", "Brevo:FromEmail");
+        SetIfPresent(configuration, "BREVO_FROM_NAME", "Brevo:FromName");
+        SetIfPresent(configuration, "BREVO_BASE_URL", "Brevo:BaseUrl");
         SetIfPresent(configuration, "OTP_EXPIRE_MINUTES", "Otp:ExpireMinutes");
         SetIfPresent(configuration, "R2_ACCESS_KEY", "R2:AccessKey");
         SetIfPresent(configuration, "R2_SECRET_KEY", "R2:SecretKey");
