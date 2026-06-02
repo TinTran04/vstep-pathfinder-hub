@@ -327,7 +327,7 @@ const ReadingQuiz = () => {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => navigate("/quiz")}>
+              <Button variant="outline" className="flex-1" onClick={() => navigate("/quiz", { replace: true })}>
                 <ArrowLeft size={16} className="mr-1" /> Quay lại
               </Button>
               <Button className="flex-1 gradient-primary text-primary-foreground" onClick={handleReset}>

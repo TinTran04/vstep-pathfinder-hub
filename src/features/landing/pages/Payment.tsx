@@ -91,8 +91,8 @@ const Payment = () => {
   };
 
   const formattedTransferContent = user
-    ? `VSTEPPRO ${txCode} ${user.email.split("@")[0].toUpperCase()}`
-    : `VSTEPPRO ${txCode} GUEST`;
+    ? `VSTEPUP ${txCode} ${user.email.split("@")[0].toUpperCase()}`
+    : `VSTEPUP ${txCode} GUEST`;
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden py-12 px-4 sm:px-6 lg:px-8">

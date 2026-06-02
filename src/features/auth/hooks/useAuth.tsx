@@ -81,6 +81,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Silently refresh access token in background
       authService.refreshToken().then((ok) => {
         if (!ok) {
+          // Save current URL before forced logout so Auth can redirect back
+          const currentPath = window.location.pathname + window.location.search;
+          if (currentPath !== "/" && !currentPath.startsWith("/auth")) {
+            sessionStorage.setItem("auth_redirect_after_login", currentPath);
+          }
           setIsLoggedIn(false);
           setUser(null);
         }

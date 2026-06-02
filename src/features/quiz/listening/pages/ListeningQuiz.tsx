@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 import { listeningService } from "../services/listening.service";
-import type { StartPracticeResponse, SubmitPracticeResponse } from "../services/listening.service";
+import type { StartPracticeResponse, SubmitPracticeResponse, AttemptResultResponse } from "../services/listening.service";
 import type { SectionResponse, QuestionResponse } from "@/features/quiz/services/practice.api-service";
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
@@ -29,6 +29,10 @@ const OPTION_LABELS = ["A", "B", "C", "D", "E"];
 function getCorrectLabel(q: QuestionResponse): string {
   const correct = q.options.find((o) => o.isCorrect);
   return correct?.label ?? "";
+}
+
+function getResultAnswer(result: AttemptResultResponse | null, questionId: string) {
+  return result?.answers?.find((answer) => answer.questionId === questionId);
 }
 
 /** Đếm tổng số câu hỏi trong tất cả sections */
@@ -62,6 +66,7 @@ const ListeningQuiz = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitResult, setSubmitResult] = useState<SubmitPracticeResponse | null>(null);
+  const [attemptResult, setAttemptResult] = useState<AttemptResultResponse | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -71,6 +76,11 @@ const ListeningQuiz = () => {
   const [audioProgress, setAudioProgress] = useState(0);
   const audioDuration = 180; // placeholder — real audio URL from exam.audioUrl
   const audioInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const questionsScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    questionsScrollRef.current?.scrollTo({ top: 0 });
+  }, [currentSection]);
 
   // ── Start practice on mount ───────────────────────────────
   useEffect(() => {
@@ -137,10 +147,12 @@ const ListeningQuiz = () => {
         durationUsed
       );
       setSubmitResult(res);
+      const result = await listeningService.getResult(practiceData.attemptId);
+      setAttemptResult(result);
       if (isMockSession) {
         await attemptsService.saveSkillAttempt("listening", {
-          score: res.score,
-          totalQuestions: res.totalQuestions,
+          score: result?.score ?? res.score,
+          totalQuestions: result?.totalQuestions ?? res.totalQuestions,
           answers: answers,
         });
       }
@@ -166,6 +178,7 @@ const ListeningQuiz = () => {
     setCurrentSection(0);
     setSubmitted(false);
     setSubmitResult(null);
+    setAttemptResult(null);
     setTimeLeft(practiceData ? (practiceData.exam.durationMinutes ?? 30) * 60 : 0);
     setDurationUsed(0);
     setIsPlaying(false);
@@ -237,7 +250,9 @@ const ListeningQuiz = () => {
 
   // ── Result screen ─────────────────────────────────────────
   if (submitted && submitResult) {
-    const { score, correctCount, totalQuestions } = submitResult;
+    const score = attemptResult?.score ?? submitResult.score;
+    const correctCount = attemptResult?.correctCount ?? submitResult.correctCount;
+    const totalQuestions = attemptResult?.totalQuestions ?? submitResult.totalQuestions;
     const pct = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
     return (
@@ -278,9 +293,10 @@ const ListeningQuiz = () => {
                   <h3 className="font-bold text-sm text-foreground">{sec.title || `Phần ${si + 1}`}</h3>
                   {sec.questions.map((q, qi) => {
                     const globalIdx = sections.slice(0, si).reduce((s, s2) => s + s2.questions.length, 0) + qi + 1;
-                    const userAnswer = answers[q.questionId];
-                    const correctLabel = getCorrectLabel(q);
-                    const isCorrect = userAnswer === correctLabel;
+                    const answerReview = getResultAnswer(attemptResult, q.questionId);
+                    const userAnswer = answerReview?.userAnswer ?? answers[q.questionId];
+                    const correctLabel = answerReview?.correctAnswer ?? getCorrectLabel(q);
+                    const isCorrect = answerReview?.isCorrect ?? (Boolean(correctLabel) && userAnswer === correctLabel);
                     return (
                       <div key={q.questionId} className={`p-4 rounded-xl border-2 space-y-2 ${isCorrect ? "bg-emerald-50/50 border-emerald-200" : "bg-red-50/50 border-red-200"}`}>
                         <div className="flex items-start gap-2 justify-between">
@@ -300,10 +316,10 @@ const ListeningQuiz = () => {
                               Đáp án đúng: <span className="font-semibold text-emerald-700">{correctLabel}</span>
                             </p>
                           )}
-                          {q.explanation && (
+                          {(answerReview?.explanation || q.explanation) && (
                             <div className="mt-2 p-2.5 bg-background/50 border border-border rounded-lg">
                               <p className="font-semibold text-xs text-foreground mb-1">💡 Giải thích:</p>
-                              <p className="text-muted-foreground leading-relaxed">{q.explanation}</p>
+                              <p className="text-muted-foreground leading-relaxed">{answerReview?.explanation || q.explanation}</p>
                             </div>
                           )}
                         </div>
@@ -315,7 +331,7 @@ const ListeningQuiz = () => {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => navigate("/quiz")}>
+              <Button variant="outline" className="flex-1" onClick={() => navigate("/quiz", { replace: true })}>
                 <ArrowLeft size={16} className="mr-1" /> Quay lại
               </Button>
               <Button className="flex-1 gradient-primary text-primary-foreground" onClick={handleReset}>
@@ -410,7 +426,7 @@ const ListeningQuiz = () => {
           </div>
 
           {/* Questions */}
-          <div className="flex-1 overflow-y-auto">
+          <div ref={questionsScrollRef} className="flex-1 overflow-y-auto">
             <VocabularyContextMenu source="listening">
               <div className="p-5 space-y-4">
                 {(section?.questions ?? []).map((q, i) => {

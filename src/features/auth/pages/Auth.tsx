@@ -94,7 +94,10 @@ const Auth = () => {
     if (role === "admin") {
       navigate("/admin");
     } else {
-      const redirectUrl = searchParams.get("redirect") || "/dashboard";
+      const redirectUrl = searchParams.get("redirect")
+        || sessionStorage.getItem("auth_redirect_after_login")
+        || "/dashboard";
+      sessionStorage.removeItem("auth_redirect_after_login");
       navigate(redirectUrl);
     }
   };

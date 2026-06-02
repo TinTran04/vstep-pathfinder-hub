@@ -1,6 +1,8 @@
 import { ArrowRight, BookOpen, GraduationCap, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import heroDashboard from "@/assets/hero-dashboard.png";
 
 const badges = [
@@ -10,6 +12,9 @@ const badges = [
 ];
 
 const HeroSection = () => {
+  const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
+
   return (
     <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden">
       {/* Background decoration */}
@@ -78,11 +83,13 @@ const HeroSection = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.6 }}
             >
-              <Button size="lg" className="gradient-primary text-primary-foreground font-semibold shadow-lg hover:opacity-90 hover:shadow-xl transition-all text-base px-8 hover:-translate-y-0.5">
+              <Button size="lg" className="gradient-primary text-primary-foreground font-semibold shadow-lg hover:opacity-90 hover:shadow-xl transition-all text-base px-8 hover:-translate-y-0.5"
+                onClick={() => navigate(isLoggedIn ? "/quiz" : "/auth")}>
                 Học thử miễn phí
                 <ArrowRight size={18} className="ml-2" />
               </Button>
-              <Button size="lg" variant="outline" className="font-semibold text-base px-8 border-2 hover:-translate-y-0.5 transition-all">
+              <Button size="lg" variant="outline" className="font-semibold text-base px-8 border-2 hover:-translate-y-0.5 transition-all"
+                onClick={() => navigate("/quiz")}>
                 Làm đề ngay
               </Button>
             </motion.div>

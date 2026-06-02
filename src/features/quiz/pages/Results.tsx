@@ -89,10 +89,10 @@ const Results = () => {
         {/* Hero */}
         <div className="text-center space-y-4">
           <h1 className="text-3xl md:text-4xl font-extrabold text-foreground">
-            Kết quả <span className="text-gradient">học viên VSTEPPro</span>
+            Kết quả <span className="text-gradient">học viên VStepUp</span>
           </h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Hàng nghìn học viên đã chinh phục VSTEP thành công cùng VSTEPPro. Đây là những con số thực tế từ cộng đồng học viên.
+            Hàng nghìn học viên đã chinh phục VSTEP thành công cùng VStepUp. Đây là những con số thực tế từ cộng đồng học viên.
           </p>
         </div>
 

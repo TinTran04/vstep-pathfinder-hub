@@ -36,9 +36,8 @@ const PaymentReturn = () => {
 
     const processPayment = async () => {
       if (!isLoggedIn) {
-        setIsSuccess(false);
-        toast.error("Vui lòng đăng nhập lại để xác minh thanh toán.");
-        setLoading(false);
+        const returnUrl = encodeURIComponent(location.pathname + location.search);
+        navigate(`/auth?redirect=${returnUrl}`, { replace: true });
         return;
       }
 
@@ -142,7 +141,7 @@ const PaymentReturn = () => {
             <div className="space-y-2">
               <h3 className="text-2xl font-extrabold text-foreground">Giao dịch thành công!</h3>
               <p className="text-sm text-muted-foreground px-2">
-                Cảm ơn bạn đã đăng ký dịch vụ của VSTEPPro. Tài khoản của bạn hiện là thành viên{" "}
+                Cảm ơn bạn đã đăng ký dịch vụ của VStepUp. Tài khoản của bạn hiện là thành viên{" "}
                 <strong>{displayPlan}</strong>.
               </p>
             </div>

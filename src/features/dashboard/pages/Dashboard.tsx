@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import VocabularyNotebook from "../components/VocabularyNotebook";
 import { useNavigate, Link } from "react-router-dom";
+import logoImg from "@/assets/logo.png";
 import {
   BarChart3, BookOpen, Clock, TrendingUp, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, Settings, User,
@@ -281,10 +282,8 @@ const Dashboard = () => {
       <aside className="hidden lg:flex w-64 bg-card border-r border-border flex-col sticky top-0 h-screen">
         <div className="p-6">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-extrabold text-lg">V</span>
-            </div>
-            <span className="font-bold text-xl text-foreground">VSTEP<span className="text-gradient">Pro</span></span>
+            <img src={logoImg} alt="VStepUp" className="w-9 h-9 rounded-xl object-contain" />
+            <span className="font-bold text-xl text-foreground">VStep<span className="text-gradient">Up</span></span>
           </Link>
         </div>
 
@@ -347,10 +346,8 @@ const Dashboard = () => {
         {/* Mobile header */}
         <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">V</span>
-            </div>
-            <span className="font-bold text-lg text-foreground">VSTEPPro</span>
+            <img src={logoImg} alt="VStepUp" className="w-8 h-8 rounded-lg object-contain" />
+            <span className="font-bold text-lg text-foreground">VStepUp</span>
           </Link>
           <div className="flex items-center gap-2">
             {sidebarItems.map((item) => (
@@ -424,7 +421,7 @@ const Dashboard = () => {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Chia sẻ VSTEPPro với bạn bè và nhận <strong className="text-amber-600">30 điểm thưởng</strong> mỗi lần chia sẻ!
+              Chia sẻ VStepUp với bạn bè và nhận <strong className="text-amber-600">30 điểm thưởng</strong> mỗi lần chia sẻ!
             </p>
             <div className="bg-muted/50 rounded-xl p-3 flex items-center gap-2">
               <input readOnly value={shareUrl} className="flex-1 bg-transparent text-sm text-foreground outline-none" />
