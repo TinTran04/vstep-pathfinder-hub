@@ -27,12 +27,12 @@ public class DashboardService : IDashboardService
         var todayVn = ToVietnamDate(utcNow);
         var vnNow = utcNow.AddHours(VietnamOffsetHours);
         var startOfWeekVn = vnNow.Date.AddDays(-GetMondayOffset(vnNow.DayOfWeek));
-        var weekStartUtc = startOfWeekVn.AddHours(-VietnamOffsetHours);
+        var weekStartUtc = ToUtcFromVietnamDateTime(startOfWeekVn);
         var weekEndUtc = weekStartUtc.AddDays(7);
 
         var activityFromDate = todayVn.AddDays(-30);
-        var activityFromUtc = activityFromDate.ToDateTime(TimeOnly.MinValue).AddHours(-VietnamOffsetHours);
-        var activityToUtc = todayVn.AddDays(1).ToDateTime(TimeOnly.MinValue).AddHours(-VietnamOffsetHours);
+        var activityFromUtc = ToUtcFromVietnamDate(activityFromDate);
+        var activityToUtc = ToUtcFromVietnamDate(todayVn.AddDays(1));
 
         var weekStudySeconds = await _unitOfWork.Dashboard.GetWeekStudySecondsAsync(userId, weekStartUtc, weekEndUtc);
         var completedCounts = await _unitOfWork.Dashboard.GetCompletedCountsAsync(userId);
@@ -147,6 +147,16 @@ public class DashboardService : IDashboardService
     private static DateOnly ToVietnamDate(DateTime utcNow)
     {
         return DateOnly.FromDateTime(utcNow.AddHours(VietnamOffsetHours));
+    }
+
+    private static DateTime ToUtcFromVietnamDate(DateOnly vietnamDate)
+    {
+        return ToUtcFromVietnamDateTime(vietnamDate.ToDateTime(TimeOnly.MinValue));
+    }
+
+    private static DateTime ToUtcFromVietnamDateTime(DateTime vietnamDateTime)
+    {
+        return DateTime.SpecifyKind(vietnamDateTime.AddHours(-VietnamOffsetHours), DateTimeKind.Utc);
     }
 
     private static int GetMondayOffset(DayOfWeek dayOfWeek)

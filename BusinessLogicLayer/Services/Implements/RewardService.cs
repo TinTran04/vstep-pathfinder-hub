@@ -97,8 +97,8 @@ public class RewardService : IRewardService
     {
         var today = ToVietnamDate(DateTime.UtcNow);
         var fromDate = today.AddDays(-30);
-        var fromUtc = fromDate.ToDateTime(TimeOnly.MinValue).AddHours(-VietnamOffsetHours);
-        var toUtc = today.AddDays(1).ToDateTime(TimeOnly.MinValue).AddHours(-VietnamOffsetHours);
+        var fromUtc = ToUtcFromVietnamDate(fromDate);
+        var toUtc = ToUtcFromVietnamDate(today.AddDays(1));
         var activityDates = (await _unitOfWork.Dashboard.GetActivityDatesAsync(userId, fromUtc, toUtc)).ToHashSet();
 
         var cursor = activityDates.Contains(today)
@@ -125,5 +125,12 @@ public class RewardService : IRewardService
     private static DateOnly ToVietnamDate(DateTime utcNow)
     {
         return DateOnly.FromDateTime(utcNow.AddHours(VietnamOffsetHours));
+    }
+
+    private static DateTime ToUtcFromVietnamDate(DateOnly vietnamDate)
+    {
+        return DateTime.SpecifyKind(
+            vietnamDate.ToDateTime(TimeOnly.MinValue).AddHours(-VietnamOffsetHours),
+            DateTimeKind.Utc);
     }
 }
