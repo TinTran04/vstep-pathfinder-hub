@@ -11,15 +11,18 @@ public class WritingPracticeService : IWritingPracticeService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IOpenRouterGradingService _openRouterGradingService;
+    private readonly IRewardService _rewardService;
 
     public WritingPracticeService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
-        IOpenRouterGradingService openRouterGradingService)
+        IOpenRouterGradingService openRouterGradingService,
+        IRewardService rewardService)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _openRouterGradingService = openRouterGradingService;
+        _rewardService = rewardService;
     }
 
     public async Task<WritingSubmissionResponse> SubmitAsync(int userId, int examId, SubmitWritingRequest request)
@@ -38,6 +41,7 @@ public class WritingPracticeService : IWritingPracticeService
             ExamId = exam.ExamId,
             Prompt = request.Prompt.Trim(),
             EssayText = request.EssayText.Trim(),
+            DurationUsedSeconds = request.DurationUsedSeconds,
             Status = "processing"
         };
 
@@ -56,6 +60,16 @@ public class WritingPracticeService : IWritingPracticeService
 
         await _unitOfWork.WritingSubmissions.AddAsync(submission);
         await _unitOfWork.SaveChangesAsync();
+
+        if (submission.Status == "scored")
+        {
+            await _rewardService.AwardActivityRewardsAsync(
+                userId,
+                "writing_submission",
+                submission.WritingSubmissionId,
+                exam.ExamMode,
+                submission.Score);
+        }
 
         return _mapper.Map<WritingSubmissionResponse>(submission);
     }

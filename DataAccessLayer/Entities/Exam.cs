@@ -8,6 +8,8 @@ public class Exam
 
     public string SkillType { get; set; } = string.Empty;
 
+    public string ExamMode { get; set; } = "test";
+
     public string Description { get; set; } = string.Empty;
 
     public int DurationMinutes { get; set; }

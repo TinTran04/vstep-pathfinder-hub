@@ -26,6 +26,10 @@ public interface IUnitOfWork
 
     IRefreshTokenRepository RefreshTokens { get; }
 
+    IDashboardRepository Dashboard { get; }
+
+    IUserRewardLedgerRepository UserRewardLedgers { get; }
+
     Task<int> SaveChangesAsync();
 
     Task ExecuteInTransactionAsync(Func<Task> operation);

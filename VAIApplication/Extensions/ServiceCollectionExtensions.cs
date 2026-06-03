@@ -35,6 +35,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserVocabularyRepository, UserVocabularyRepository>();
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
+        services.AddScoped<IUserRewardLedgerRepository, UserRewardLedgerRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddHttpClient<IEmailService, EmailService>((provider, client) =>
         {
@@ -57,6 +59,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISupabaseStorageService, SupabaseStorageService>();
         services.AddScoped<IDictionaryService, DictionaryService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IRewardService, RewardService>();
 
         services.AddHttpClient<IDictionaryApiService, DictionaryApiService>(client =>
         {

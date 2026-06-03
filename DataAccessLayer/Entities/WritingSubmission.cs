@@ -18,6 +18,8 @@ public class WritingSubmission
 
     public decimal? Score { get; set; }
 
+    public int? DurationUsedSeconds { get; set; }
+
     public string? Feedback { get; set; }
 
     public DateTime CreatedAt { get; set; }

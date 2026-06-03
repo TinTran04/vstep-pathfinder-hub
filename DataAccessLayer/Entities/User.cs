@@ -20,6 +20,8 @@ public class User
 
     public DateTime? SubscriptionExpiresAt { get; set; }
 
+    public int RewardPoints { get; set; }
+
     public bool EmailConfirmed { get; set; }
 
     public string? EmailOtpHash { get; set; }
@@ -47,4 +49,6 @@ public class User
     public ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
 
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
+    public ICollection<UserRewardLedger> RewardLedgers { get; set; } = new List<UserRewardLedger>();
 }

@@ -20,7 +20,9 @@ public class UnitOfWork : IUnitOfWork
         IDictionaryEntryRepository dictionaryEntries,
         IUserVocabularyRepository userVocabularies,
         IPaymentTransactionRepository paymentTransactions,
-        IRefreshTokenRepository refreshTokens)
+        IRefreshTokenRepository refreshTokens,
+        IDashboardRepository dashboard,
+        IUserRewardLedgerRepository userRewardLedgers)
     {
         _context = context;
         Users = users;
@@ -34,6 +36,8 @@ public class UnitOfWork : IUnitOfWork
         UserVocabularies = userVocabularies;
         PaymentTransactions = paymentTransactions;
         RefreshTokens = refreshTokens;
+        Dashboard = dashboard;
+        UserRewardLedgers = userRewardLedgers;
     }
 
     public IUserRepository Users { get; }
@@ -57,6 +61,10 @@ public class UnitOfWork : IUnitOfWork
     public IPaymentTransactionRepository PaymentTransactions { get; }
 
     public IRefreshTokenRepository RefreshTokens { get; }
+
+    public IDashboardRepository Dashboard { get; }
+
+    public IUserRewardLedgerRepository UserRewardLedgers { get; }
 
     public Task<int> SaveChangesAsync()
     {

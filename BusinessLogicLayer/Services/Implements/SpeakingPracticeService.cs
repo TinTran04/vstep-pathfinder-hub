@@ -13,17 +13,20 @@ public class SpeakingPracticeService : ISpeakingPracticeService
     private readonly IMapper _mapper;
     private readonly IR2StorageService _r2StorageService;
     private readonly IOpenRouterGradingService _openRouterGradingService;
+    private readonly IRewardService _rewardService;
 
     public SpeakingPracticeService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IR2StorageService r2StorageService,
-        IOpenRouterGradingService openRouterGradingService)
+        IOpenRouterGradingService openRouterGradingService,
+        IRewardService rewardService)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _r2StorageService = r2StorageService;
         _openRouterGradingService = openRouterGradingService;
+        _rewardService = rewardService;
     }
 
     public async Task<SpeakingUploadUrlResponse> CreateUploadUrlAsync(int userId, CreateSpeakingUploadUrlRequest request)
@@ -58,6 +61,7 @@ public class SpeakingPracticeService : ISpeakingPracticeService
             AudioUrl = string.IsNullOrWhiteSpace(request.AudioUrl)
                 ? _r2StorageService.GetObjectUrl(request.AudioObjectKey.Trim())
                 : request.AudioUrl.Trim(),
+            DurationUsedSeconds = request.DurationUsedSeconds,
             Status = "processing",
             AutoDeleteAt = GetAutoDeleteAt(user)
         };
@@ -77,6 +81,16 @@ public class SpeakingPracticeService : ISpeakingPracticeService
 
         await _unitOfWork.SpeakingSubmissions.AddAsync(submission);
         await _unitOfWork.SaveChangesAsync();
+
+        if (submission.Status == "scored")
+        {
+            await _rewardService.AwardActivityRewardsAsync(
+                userId,
+                "speaking_submission",
+                submission.SpeakingSubmissionId,
+                exam.ExamMode,
+                submission.Score);
+        }
 
         return _mapper.Map<SpeakingSubmissionResponse>(submission);
     }

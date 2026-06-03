@@ -40,6 +40,8 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<UserRewardLedger> UserRewardLedgers => Set<UserRewardLedger>();
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTime.UtcNow;
@@ -90,6 +92,14 @@ public class ApplicationDbContext : DbContext
             }
         }
 
+        foreach (var entry in ChangeTracker.Entries<UserRewardLedger>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = utcNow;
+            }
+        }
+
         return base.SaveChangesAsync(cancellationToken);
     }
 
@@ -128,6 +138,9 @@ public class ApplicationDbContext : DbContext
                 .HasDefaultValue(1);
 
             entity.Property(user => user.SubscriptionExpiresAt);
+
+            entity.Property(user => user.RewardPoints)
+                .HasDefaultValue(0);
 
             entity.Property(user => user.EmailConfirmed)
                 .HasDefaultValue(false);
@@ -358,6 +371,11 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(20)
                 .IsRequired();
 
+            entity.Property(exam => exam.ExamMode)
+                .HasMaxLength(20)
+                .HasDefaultValue("test")
+                .IsRequired();
+
             entity.Property(exam => exam.Description)
                 .HasMaxLength(1000)
                 .IsRequired();
@@ -575,6 +593,8 @@ public class ApplicationDbContext : DbContext
             entity.Property(submission => submission.Score)
                 .HasPrecision(5, 2);
 
+            entity.Property(submission => submission.DurationUsedSeconds);
+
             entity.Property(submission => submission.Feedback)
                 .HasMaxLength(2000);
 
@@ -625,6 +645,8 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(submission => submission.Score)
                 .HasPrecision(5, 2);
+
+            entity.Property(submission => submission.DurationUsedSeconds);
 
             entity.Property(submission => submission.Feedback)
                 .HasMaxLength(2000);
@@ -795,6 +817,37 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasQueryFilter(transaction => transaction.User != null && !transaction.User.IsDeleted);
+        });
+
+        modelBuilder.Entity<UserRewardLedger>(entity =>
+        {
+            entity.ToTable("UserRewardLedgers");
+
+            entity.HasKey(ledger => ledger.UserRewardLedgerId);
+
+            entity.Property(ledger => ledger.UserRewardLedgerId)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(ledger => ledger.RewardType)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(ledger => ledger.SourceType)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(ledger => ledger.CreatedAt)
+                .IsRequired();
+
+            entity.HasIndex(ledger => new { ledger.UserId, ledger.RewardType, ledger.SourceType, ledger.SourceId })
+                .IsUnique();
+
+            entity.HasOne(ledger => ledger.User)
+                .WithMany(user => user.RewardLedgers)
+                .HasForeignKey(ledger => ledger.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(ledger => ledger.User != null && !ledger.User.IsDeleted);
         });
     }
 }

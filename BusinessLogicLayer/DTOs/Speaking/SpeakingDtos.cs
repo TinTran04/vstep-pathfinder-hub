@@ -29,6 +29,8 @@ public class SubmitSpeakingRequest
     [Required]
     [MaxLength(1000)]
     public string AudioUrl { get; set; } = string.Empty;
+
+    public int? DurationUsedSeconds { get; set; }
 }
 
 public class SpeakingSubmissionResponse
@@ -48,6 +50,8 @@ public class SpeakingSubmissionResponse
     public string Status { get; set; } = string.Empty;
 
     public decimal? Score { get; set; }
+
+    public int? DurationUsedSeconds { get; set; }
 
     public string? Feedback { get; set; }
 

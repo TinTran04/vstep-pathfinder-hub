@@ -10,6 +10,8 @@ public class SubmitWritingRequest
 
     [Required]
     public string EssayText { get; set; } = string.Empty;
+
+    public int? DurationUsedSeconds { get; set; }
 }
 
 public class WritingSubmissionResponse
@@ -27,6 +29,8 @@ public class WritingSubmissionResponse
     public string Status { get; set; } = string.Empty;
 
     public decimal? Score { get; set; }
+
+    public int? DurationUsedSeconds { get; set; }
 
     public string? Feedback { get; set; }
 

@@ -18,6 +18,8 @@ public class SpeakingSubmission
 
     public decimal? Score { get; set; }
 
+    public int? DurationUsedSeconds { get; set; }
+
     public string? Feedback { get; set; }
 
     public DateTime? AutoDeleteAt { get; set; }

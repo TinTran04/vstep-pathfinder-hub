@@ -11,11 +11,13 @@ public class PracticeService : IPracticeService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly IRewardService _rewardService;
 
-    public PracticeService(IUnitOfWork unitOfWork, IMapper mapper)
+    public PracticeService(IUnitOfWork unitOfWork, IMapper mapper, IRewardService rewardService)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _rewardService = rewardService;
     }
 
     public async Task<StartPracticeResponse> StartPracticeAsync(int userId, int examId, string expectedSkillType)
@@ -125,6 +127,13 @@ public class PracticeService : IPracticeService
         _unitOfWork.ExamAttempts.Update(attempt);
         await _unitOfWork.SaveChangesAsync();
 
+        await _rewardService.AwardActivityRewardsAsync(
+            userId,
+            "exam_attempt",
+            attempt.AttemptId,
+            attempt.Exam?.ExamMode ?? "test",
+            CalculateScoreOnTen(correctCount, questions.Count));
+
         return new SubmitPracticeResponse
         {
             AttemptId = attempt.AttemptId,
@@ -200,6 +209,13 @@ public class PracticeService : IPracticeService
     private static string NormalizeAnswer(string answer)
     {
         return answer.Trim().ToLowerInvariant();
+    }
+
+    private static decimal? CalculateScoreOnTen(int correctCount, int totalQuestions)
+    {
+        return totalQuestions > 0
+            ? decimal.Round((decimal)correctCount * 10 / totalQuestions, 2)
+            : null;
     }
 
     private static ExamDetailResponse HideAnswers(ExamDetailResponse response)
