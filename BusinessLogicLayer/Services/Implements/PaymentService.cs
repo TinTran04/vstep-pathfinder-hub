@@ -15,6 +15,8 @@ public class PaymentService : IPaymentService
     private const string PaidStatus = "paid";
     private const string CancelledStatus = "cancelled";
     private const string FailedStatus = "failed";
+    private const int WeeklyPlanId = 2;
+    private const int MonthlyPlanId = 3;
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPayOsGateway _payOsGateway;
@@ -33,6 +35,8 @@ public class PaymentService : IPaymentService
             ?? throw new KeyNotFoundException("User not found.");
         var plan = await _unitOfWork.SubscriptionPlans.GetByIdAsync(request.SubscriptionPlanId)
             ?? throw new KeyNotFoundException("Subscription plan not found.");
+
+        EnsureUserCanUpgradeSubscription(user, DateTime.UtcNow);
 
         if (!plan.IsActive)
         {
@@ -54,7 +58,12 @@ public class PaymentService : IPaymentService
             Description = description,
             BuyerName = user.FullName,
             BuyerEmail = user.Email,
-            ItemName = $"VAI {plan.Name}"
+            ItemName = plan.Name.ToLowerInvariant() switch
+            {
+                "monthly" => "VStepUp — Gói Học Tháng (30 ngày)",
+                "weekly" => "VStepUp — Gói Học Tuần (7 ngày)",
+                _ => $"VStepUp — {plan.Name}"
+            }
         });
 
         var transaction = new PaymentTransaction
@@ -127,6 +136,7 @@ public class PaymentService : IPaymentService
                 var normalizedStatus = NormalizePayOsStatus(paymentInfo.Status);
                 if (normalizedStatus == PaidStatus)
                 {
+                    EnsureUserCanUpgradeSubscription(user, DateTime.UtcNow);
                     CompletePaidTransaction(transaction, user, plan, DateTime.UtcNow, paymentInfo.Reference, paymentInfo.RawJson);
                 }
                 else if (normalizedStatus is CancelledStatus or FailedStatus)
@@ -181,6 +191,7 @@ public class PaymentService : IPaymentService
 
             var paidAt = ParsePayOsDateTime(request.Data.TransactionDateTime) ?? DateTime.UtcNow;
             transaction.PaymentLinkId = request.Data.PaymentLinkId ?? transaction.PaymentLinkId;
+            EnsureUserCanUpgradeSubscription(user, paidAt);
             CompletePaidTransaction(transaction, user, plan, paidAt, request.Data.Reference, rawBody);
             transaction.RawWebhookPayload = rawBody;
 
@@ -205,6 +216,20 @@ public class PaymentService : IPaymentService
         {
             throw new UnauthorizedAccessException("Invalid payOS webhook signature.");
         }
+    }
+
+    private static void EnsureUserCanUpgradeSubscription(User user, DateTime utcNow)
+    {
+        if (HasActivePaidSubscription(user, utcNow))
+        {
+            throw new InvalidOperationException("Bạn đang sở hữu gói tuần hoặc tháng còn hiệu lực nên không thể nâng cấp thêm.");
+        }
+    }
+
+    private static bool HasActivePaidSubscription(User user, DateTime utcNow)
+    {
+        return user.SubscriptionPlanId is WeeklyPlanId or MonthlyPlanId &&
+            (!user.SubscriptionExpiresAt.HasValue || user.SubscriptionExpiresAt.Value > utcNow);
     }
 
     private static SubscriptionPaymentResponse MapResponse(PaymentTransaction transaction)
