@@ -33,6 +33,9 @@ public class DashboardRepository : IDashboardRepository
 
     public async Task<int> GetWeekStudySecondsAsync(int userId, DateTime weekStartUtc, DateTime weekEndUtc)
     {
+        weekStartUtc = EnsureUtc(weekStartUtc);
+        weekEndUtc = EnsureUtc(weekEndUtc);
+
         var examSeconds = await _context.ExamAttempts
             .AsNoTracking()
             .Where(attempt =>
@@ -98,6 +101,9 @@ public class DashboardRepository : IDashboardRepository
 
     public async Task<List<DateOnly>> GetActivityDatesAsync(int userId, DateTime fromUtc, DateTime toUtc)
     {
+        fromUtc = EnsureUtc(fromUtc);
+        toUtc = EnsureUtc(toUtc);
+
         var examDates = await _context.ExamAttempts
             .AsNoTracking()
             .Where(attempt =>
@@ -275,5 +281,15 @@ public class DashboardRepository : IDashboardRepository
     private static DateOnly ToVietnamDate(DateTime utcDateTime)
     {
         return DateOnly.FromDateTime(utcDateTime.AddHours(7));
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }
