@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BusinessLogicLayer.Core.Settings;
@@ -23,33 +22,15 @@ public class OpenRouterGradingService : IOpenRouterGradingService
 
     public Task<AiScoreResult> GradeWritingAsync(string prompt, string essayText)
     {
-        var content = $"""
-            Grade this VSTEP Writing submission on a 0-10 scale.
-            Return only compact JSON with fields: score, feedback.
-            Feedback must be 1-2 short English sentences.
-
-            Prompt:
-            {TrimForPrompt(prompt, 3000)}
-
-            Essay:
-            {TrimForPrompt(essayText, 12000)}
-            """;
-
-        return SendTextGradingRequestAsync(content);
+        return SendTextGradingRequestAsync(BuildWritingPrompt(prompt, essayText));
     }
 
-    public async Task<AiScoreResult> GradeSpeakingAsync(string audioUrl, string audioObjectKey)
+    public async Task<AiScoreResult> GradeSpeakingAsync(string speakingPrompt, string audioUrl, string audioObjectKey)
     {
         var audioBytes = await DownloadAudioAsync(audioUrl);
         var base64Audio = Convert.ToBase64String(audioBytes);
         var format = InferAudioFormat(audioObjectKey, audioUrl);
-        var prompt = """
-            Transcribe and grade this VSTEP Speaking audio on a 0-10 scale.
-            Consider pronunciation, fluency, grammar, vocabulary, coherence, and task achievement.
-            Return only compact JSON with fields: score, feedback, transcript.
-            Feedback must be 1-2 short English sentences.
-            Transcript should be concise and may be empty if the audio is not understandable.
-            """;
+        var prompt = BuildSpeakingPrompt(speakingPrompt);
 
         var request = new OpenRouterChatRequest
         {
@@ -173,11 +154,14 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         var parsed = JsonSerializer.Deserialize<OpenRouterScoreResponse>(json, JsonOptions)
             ?? throw new InvalidOperationException("OpenRouter grading response is not valid JSON.");
 
-        var score = Math.Clamp(parsed.Score, 0, 10);
+        var scoreValue = parsed.Score ?? parsed.Overall
+            ?? throw new InvalidOperationException("OpenRouter grading response does not contain a score.");
+        var score = Math.Clamp(scoreValue, 0, 10);
+
         return new AiScoreResult
         {
             Score = decimal.Round(score, 2),
-            Feedback = TrimForStorage(parsed.Feedback),
+            Feedback = TrimForStorage(ParseFeedback(parsed.Feedback)),
             Transcript = TrimForStorage(parsed.Transcript)
         };
     }
@@ -215,6 +199,36 @@ public class OpenRouterGradingService : IOpenRouterGradingService
             : _settings.Model.Trim();
     }
 
+    private static string BuildWritingPrompt(string prompt, string essayText)
+    {
+        return WritingPromptTemplate
+            .Replace("{task_type}", InferWritingTaskType(prompt), StringComparison.Ordinal)
+            .Replace("{writing_prompt}", TrimForPrompt(prompt, 3000), StringComparison.Ordinal)
+            .Replace("{essay}", TrimForPrompt(essayText, 12000), StringComparison.Ordinal);
+    }
+
+    private static string BuildSpeakingPrompt(string speakingPrompt)
+    {
+        return SpeakingPromptTemplate
+            .Replace("{speaking_prompt}", TrimForPrompt(speakingPrompt, 3000), StringComparison.Ordinal);
+    }
+
+    private static string InferWritingTaskType(string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return "task2";
+        }
+
+        var normalized = prompt.ToLowerInvariant();
+        return normalized.Contains("task 1") ||
+            normalized.Contains("task1") ||
+            normalized.Contains("letter") ||
+            normalized.Contains("email")
+            ? "task1"
+            : "task2";
+    }
+
     private static string InferAudioFormat(string audioObjectKey, string audioUrl)
     {
         var source = !string.IsNullOrWhiteSpace(audioObjectKey) ? audioObjectKey : audioUrl;
@@ -244,6 +258,26 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
     }
 
+    private static string? ParseFeedback(JsonElement? feedback)
+    {
+        if (feedback is null)
+        {
+            return null;
+        }
+
+        var value = feedback.Value;
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Array => string.Join("\n", value.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString())
+                .Where(item => !string.IsNullOrWhiteSpace(item))),
+            JsonValueKind.Null => null,
+            _ => value.GetRawText()
+        };
+    }
+
     private static string? TrimForStorage(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -261,6 +295,130 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         PropertyNameCaseInsensitive = true
     };
 
+    private const string WritingPromptTemplate = """
+        You are a professional VSTEP writing examiner with 10+ years of experience assessing B1, B2, and C1 candidates.
+
+        Task type: {task_type}
+        Writing prompt: {writing_prompt}
+
+        Student essay:
+        ---
+        {essay}
+        ---
+
+        Evaluate strictly based on the official VSTEP Writing rubric (4 criteria, scale 0-10).
+        Note on task types:
+        - task1: Letter/email around 120 words. Assess format, tone (formal/informal), and whether all required points are addressed.
+        - task2: Essay around 250 words. Assess argumentation, clear position, and supporting ideas.
+
+        CRITERION 1 - TASK FULFILLMENT [MOST IMPORTANT, about 50% weight]
+        - 1-2: Completely off-topic or too short to assess. Fails to address the prompt.
+        - 3-4: Attempts to address the task but misses key points or significantly goes off-topic. Wrong format or tone for task1.
+        - 5-6: Generally addresses the task with most key points covered. Minor omissions or slightly inappropriate tone/format.
+        - 7-8: Fully addresses the task. All key points covered clearly. Appropriate format and tone. Clear position with supporting ideas (task2).
+        - 9-10: Excellent task fulfillment. All requirements met thoroughly. Compelling argument or perfectly crafted letter with nuanced tone.
+
+        CRITERION 2 - GRAMMAR [about 25% weight]
+        - 1-2: Only very basic structures, systematic errors make the writing very hard to understand.
+        - 3-4: Mostly simple sentences. Frequent errors including basic ones (articles, prepositions, verb tense).
+        - 5-6: Mix of simple and some complex sentences. Errors present but meaning is generally clear. Some attempt at complex structures.
+        - 7-8: Good range of complex structures. Minor errors only, do not impede understanding.
+        - 9-10: Wide range of grammatical structures used accurately and flexibly. Near error-free.
+
+        CRITERION 3 - VOCABULARY [about 15% weight]
+        - 1-2: Very limited vocabulary. Frequent wrong word choices. Meaning often unclear.
+        - 3-4: Basic vocabulary only, highly repetitive. Inappropriate word choices for the topic.
+        - 5-6: Adequate vocabulary for the topic. Some variety but over-reliance on common words. Some spelling/word form errors.
+        - 7-8: Good range including less common words, collocations, and topic-specific terms. Generally accurate.
+        - 9-10: Wide, precise vocabulary including idiomatic expressions and academic language.
+
+        CRITERION 4 - ORGANIZATION [about 10% weight]
+        - 1-2: No clear structure. Ideas are random and incoherent. No use of connectors.
+        - 3-4: Weak structure. Ideas loosely organized. Very limited use of connectors.
+        - 5-6: Basic structure present. Some use of connectors. Paragraphing attempted but not always logical.
+        - 7-8: Clear, logical structure. Well-organized paragraphs with good cohesive devices.
+        - 9-10: Excellent organization. Seamless flow between ideas and paragraphs.
+
+        Scoring rules:
+        - Score each criterion independently in increments of 0.5.
+        - score = weighted average: (task_response * 2 + grammar * 1 + vocabulary * 0.6 + organization * 0.4) / 4.
+        - feedback: 3-5 specific, actionable points in English, each referencing a specific criterion.
+
+        IMPORTANT: Return ONLY valid JSON. No explanation, no markdown, no extra text.
+        The backend parser requires "score" and "feedback". Criterion fields are optional but recommended.
+        {
+          "score": <number>,
+          "task_response": <number>,
+          "organization": <number>,
+          "vocabulary": <number>,
+          "grammar": <number>,
+          "feedback": ["<string>", "<string>", "<string>"]
+        }
+        """;
+
+    private const string SpeakingPromptTemplate = """
+        You are a professional VSTEP speaking examiner with 10+ years of experience assessing B1, B2, and C1 candidates.
+
+        Speaking task: {speaking_prompt}
+
+        First transcribe the attached student audio. Then evaluate the transcript strictly based on the official VSTEP Speaking rubric (5 criteria, scale 0-10).
+        The transcript is auto-generated by you from the audio, so minor transcription uncertainty may exist. Score based on meaning, pronunciation evidence, fluency, and linguistic quality.
+
+        CRITERION 1 - FLUENCY & IDEA DEVELOPMENT
+        - 1-2: Extremely hesitant, almost no idea development, very fragmented speech.
+        - 3-4: Frequent pauses and repetitions, limited idea development, hard to follow.
+        - 5-6: Some hesitation but generally able to continue. Basic idea development with simple elaboration.
+        - 7-8: Speaks with reasonable fluency. Can develop and expand ideas with some detail and examples.
+        - 9-10: Fully fluent, natural pace. Develops ideas clearly with strong examples and elaboration.
+
+        CRITERION 2 - VOCABULARY
+        - 1-2: Very limited vocabulary, frequent wrong word choices, meaning often unclear.
+        - 3-4: Basic vocabulary only, repetitive, some inappropriate choices for the topic.
+        - 5-6: Adequate vocabulary for the topic. Some variety but limited range of less common words.
+        - 7-8: Good range of vocabulary including less common words. Generally appropriate and accurate.
+        - 9-10: Wide, precise vocabulary including idiomatic expressions and topic-specific terms.
+
+        CRITERION 3 - GRAMMAR
+        - 1-2: Only very basic sentence structures, systematic errors make speech hard to understand.
+        - 3-4: Simple sentences mostly, frequent grammar errors including basic ones.
+        - 5-6: Mix of simple and compound sentences, some complex structures attempted. Errors present but meaning generally clear.
+        - 7-8: Frequent use of compound and complex sentences, flexible structures, minor errors only.
+        - 9-10: Wide range of grammatical structures used accurately and flexibly.
+
+        CRITERION 4 - CONTENT & COHERENCE
+        - 1-2: Response is largely off-topic or too short to assess. No logical organization.
+        - 3-4: Attempts to address the task but frequently goes off-topic. Weak use of connectors.
+        - 5-6: Generally on-topic. Basic logical organization with some connectors.
+        - 7-8: Clearly addresses the task. Well-organized response with appropriate connectors.
+        - 9-10: Fully addresses the task with well-supported, logically structured response.
+
+        CRITERION 5 - PRONUNCIATION
+        - 1-2: Very poor pronunciation, output is largely incoherent.
+        - 3-4: Many basic pronunciation issues.
+        - 5-6: Reasonably clear, with some pronunciation errors.
+        - 7-8: Clear and accurate pronunciation.
+        - 9-10: Near-native pronunciation.
+
+        Scoring rules:
+        - Score each criterion independently in increments of 0.5.
+        - score = average of all 5 criteria.
+        - feedback: 3-5 specific, actionable points in English referencing the rubric criteria above.
+        - transcript: concise transcript of the student's answer, or empty string if the audio is not understandable.
+
+        IMPORTANT: Return ONLY valid JSON. No explanation, no markdown, no extra text.
+        The backend parser requires "score", "feedback", and "transcript". Criterion fields are optional but recommended.
+        {
+          "score": <number>,
+          "fluency": <number>,
+          "vocabulary": <number>,
+          "grammar": <number>,
+          "relevance": <number>,
+          "pronunciation": <number>,
+          "feedback": ["<string>", "<string>", "<string>"],
+          "transcript": "<string>"
+        }
+        """;
+
     private sealed class OpenRouterChatRequest
     {
         [JsonPropertyName("model")]
@@ -273,7 +431,7 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         public double Temperature { get; set; } = 0.1;
 
         [JsonPropertyName("max_tokens")]
-        public int MaxTokens { get; set; } = 600;
+        public int MaxTokens { get; set; } = 800;
 
         [JsonPropertyName("response_format")]
         public object ResponseFormat { get; set; } = new { type = "json_object" };
@@ -308,9 +466,11 @@ public class OpenRouterGradingService : IOpenRouterGradingService
 
     private sealed class OpenRouterScoreResponse
     {
-        public decimal Score { get; set; }
+        public decimal? Score { get; set; }
 
-        public string? Feedback { get; set; }
+        public decimal? Overall { get; set; }
+
+        public JsonElement? Feedback { get; set; }
 
         public string? Transcript { get; set; }
     }

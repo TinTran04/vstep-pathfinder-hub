@@ -68,7 +68,10 @@ public class SpeakingPracticeService : ISpeakingPracticeService
 
         try
         {
-            var scoreResult = await _openRouterGradingService.GradeSpeakingAsync(submission.AudioUrl, submission.AudioObjectKey);
+            var scoreResult = await _openRouterGradingService.GradeSpeakingAsync(
+                exam.Description,
+                submission.AudioUrl,
+                submission.AudioObjectKey);
             submission.Score = scoreResult.Score;
             submission.Feedback = BuildSpeakingFeedback(scoreResult);
             submission.Status = "scored";

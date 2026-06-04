@@ -6,5 +6,5 @@ public interface IOpenRouterGradingService
 {
     Task<AiScoreResult> GradeWritingAsync(string prompt, string essayText);
 
-    Task<AiScoreResult> GradeSpeakingAsync(string audioUrl, string audioObjectKey);
+    Task<AiScoreResult> GradeSpeakingAsync(string speakingPrompt, string audioUrl, string audioObjectKey);
 }
