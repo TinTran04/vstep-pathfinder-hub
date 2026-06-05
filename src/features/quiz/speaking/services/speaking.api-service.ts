@@ -29,6 +29,7 @@ export interface CreateSpeakingUploadUrlRequest {
 export interface SpeakingUploadUrlResponse {
   uploadUrl: string;
   audioObjectKey: string;
+  contentType: string;
   expiresAt: string;
 }
 
@@ -150,10 +151,10 @@ export const speakingApiService = {
     contentType = "audio/webm"
   ): Promise<{ audioObjectKey: string; audioUrl: string; submissionId: number }> {
     // 1. Get presigned URL
-    const { uploadUrl, audioObjectKey } = await this.createUploadUrl(examId, contentType);
+    const { uploadUrl, audioObjectKey, contentType: signedContentType } = await this.createUploadUrl(examId, contentType);
 
     // 2. Upload to R2
-    const audioUrl = await this.uploadToR2(uploadUrl, blob, contentType);
+    const audioUrl = await this.uploadToR2(uploadUrl, blob, signedContentType);
 
     // 3. Submit metadata
     const submission = await this.submit(examId, audioObjectKey, audioUrl);

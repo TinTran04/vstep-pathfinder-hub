@@ -50,6 +50,7 @@ export interface ListeningAudioUploadUrlRequest {
 export interface ListeningAudioUploadUrlResponse {
   uploadUrl: string;
   audioObjectKey: string;
+  contentType: string;
   audioUrl: string;
   expiresAt: string;
 }
@@ -357,7 +358,7 @@ export const adminService = {
       fileExtension,
     });
 
-    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, file, contentType);
+    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, file, uploadInfo.contentType);
 
     return this.updateExam(exam.id, {
       ...exam,
@@ -378,7 +379,7 @@ export const adminService = {
       fileExtension,
     });
 
-    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, audioFile, contentType);
+    await this.uploadListeningAudioToR2(uploadInfo.uploadUrl, audioFile, uploadInfo.contentType);
     return this.importListeningDocx(docxFile, uploadInfo.audioUrl, isPublished);
   },
   // Price Plan CRUD
