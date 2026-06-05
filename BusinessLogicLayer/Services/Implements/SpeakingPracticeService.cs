@@ -33,12 +33,13 @@ public class SpeakingPracticeService : ISpeakingPracticeService
     {
         _ = await GetExistingUserAsync(userId);
         var exam = await GetPublishedSpeakingExamAsync(request.ExamId);
-        var (uploadUrl, objectKey, expiresAt) = await _r2StorageService.CreateSpeakingUploadUrlAsync(userId, exam.ExamId, request.ContentType);
+        var (uploadUrl, objectKey, contentType, expiresAt) = await _r2StorageService.CreateSpeakingUploadUrlAsync(userId, exam.ExamId, request.ContentType);
 
         return new SpeakingUploadUrlResponse
         {
             UploadUrl = uploadUrl,
             AudioObjectKey = objectKey,
+            ContentType = contentType,
             ExpiresAt = expiresAt
         };
     }

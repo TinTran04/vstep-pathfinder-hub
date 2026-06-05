@@ -17,6 +17,8 @@ public class SpeakingUploadUrlResponse
 
     public string AudioObjectKey { get; set; } = string.Empty;
 
+    public string ContentType { get; set; } = string.Empty;
+
     public DateTime ExpiresAt { get; set; }
 }
 

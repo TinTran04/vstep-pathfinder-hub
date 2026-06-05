@@ -19,12 +19,12 @@ public class R2StorageService : IR2StorageService
         _settings = options.Value;
     }
 
-    public Task<(string UploadUrl, string ObjectKey, DateTime ExpiresAt)> CreateSpeakingUploadUrlAsync(int userId, int examId, string contentType)
+    public Task<(string UploadUrl, string ObjectKey, string ContentType, DateTime ExpiresAt)> CreateSpeakingUploadUrlAsync(int userId, int examId, string contentType)
     {
         EnsureConfigured();
 
         var expiresAt = DateTime.UtcNow.AddMinutes(UploadUrlMinutes);
-        var safeContentType = string.IsNullOrWhiteSpace(contentType) ? "audio/webm" : contentType.Trim();
+        var safeContentType = NormalizeAudioContentType(contentType, "audio/webm");
         var objectId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         var objectKey = $"speaking/{userId}/{examId}/{objectId}.webm";
 
@@ -39,10 +39,10 @@ public class R2StorageService : IR2StorageService
         };
 
         var uploadUrl = client.GetPreSignedURL(request);
-        return Task.FromResult((uploadUrl, objectKey, expiresAt));
+        return Task.FromResult((uploadUrl, objectKey, safeContentType, expiresAt));
     }
 
-    public Task<(string UploadUrl, string ObjectKey, DateTime ExpiresAt)> CreateListeningAudioUploadUrlAsync(
+    public Task<(string UploadUrl, string ObjectKey, string ContentType, DateTime ExpiresAt)> CreateListeningAudioUploadUrlAsync(
         int? examId,
         string contentType,
         string? fileExtension)
@@ -50,7 +50,7 @@ public class R2StorageService : IR2StorageService
         EnsureConfigured();
 
         var expiresAt = DateTime.UtcNow.AddMinutes(UploadUrlMinutes);
-        var safeContentType = string.IsNullOrWhiteSpace(contentType) ? "audio/mpeg" : contentType.Trim();
+        var safeContentType = NormalizeAudioContentType(contentType, "audio/mpeg");
         var safeExtension = NormalizeAudioExtension(fileExtension, safeContentType);
         var objectId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         var examSegment = examId is > 0 ? examId.Value.ToString() : "unassigned";
@@ -67,7 +67,7 @@ public class R2StorageService : IR2StorageService
         };
 
         var uploadUrl = client.GetPreSignedURL(request);
-        return Task.FromResult((uploadUrl, objectKey, expiresAt));
+        return Task.FromResult((uploadUrl, objectKey, safeContentType, expiresAt));
     }
 
     public string GetObjectUrl(string objectKey)
@@ -131,6 +131,32 @@ public class R2StorageService : IR2StorageService
         };
     }
 
+    private static string NormalizeAudioContentType(string? contentType, string defaultContentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return defaultContentType;
+        }
+
+        var normalized = contentType.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "audio/mpeg" => "audio/mpeg",
+            "audio/mp3" => "audio/mpeg",
+            "audio/wav" => "audio/wav",
+            "audio/wave" => "audio/wav",
+            "audio/x-wav" => "audio/wav",
+            "audio/webm" => "audio/webm",
+            "audio/ogg" => "audio/ogg",
+            "audio/mp4" => "audio/mp4",
+            "audio/x-m4a" => "audio/mp4",
+            "audio/aac" => "audio/aac",
+            "audio/flac" => "audio/flac",
+            "audio/aiff" => "audio/aiff",
+            _ => defaultContentType
+        };
+    }
+
     private static string ContentTypeToExtension(string contentType)
     {
         return contentType.Trim().ToLowerInvariant() switch
@@ -144,6 +170,9 @@ public class R2StorageService : IR2StorageService
             "audio/ogg" => "ogg",
             "audio/mp4" => "m4a",
             "audio/x-m4a" => "m4a",
+            "audio/aac" => "aac",
+            "audio/flac" => "flac",
+            "audio/aiff" => "aiff",
             _ => "mp3"
         };
     }
