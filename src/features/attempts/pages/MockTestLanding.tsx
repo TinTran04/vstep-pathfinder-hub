@@ -56,13 +56,15 @@ const rules = [
 
 const MockTestLanding = () => {
   const navigate = useNavigate();
-  const { isLoggedIn, user, logout } = useAuth();
+  const { isLoggedIn, isInitialising, user, logout } = useAuth();
 
   const [mockTests, setMockTests] = useState<{ groupId: string; groupTitle: string; difficulty: string; listeningExamId: string }[]>([]);
   const [loadingExams, setLoadingExams] = useState(true);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
 
   useEffect(() => {
+    if (isInitialising) return;
+
     if (!isLoggedIn) {
       navigate("/auth");
       return;
@@ -101,7 +103,7 @@ const MockTestLanding = () => {
         if (active) setLoadingExams(false);
       });
     return () => { active = false; };
-  }, [isLoggedIn, navigate]);
+  }, [isInitialising, isLoggedIn, navigate]);
 
   if (!isLoggedIn || !user) return null;
 
