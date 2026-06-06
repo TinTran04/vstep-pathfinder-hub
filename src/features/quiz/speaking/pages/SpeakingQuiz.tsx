@@ -35,6 +35,35 @@ interface ApiFeedbackState {
 
 type FeedbackState = SpeakingFeedback & { source: "mock" } | ApiFeedbackState;
 
+function toAttemptSpeakingFeedback(feedbacks: Record<number, FeedbackState>): Record<number, SpeakingFeedbackResult> {
+  return Object.fromEntries(
+    Object.entries(feedbacks).map(([partId, feedback]) => {
+      if (feedback.source === "api") {
+        const scoreText = feedback.score !== null ? `${feedback.score}/10` : "0/10";
+        const tips = feedback.feedback
+          ? feedback.feedback.split("\n").map((item) => item.trim()).filter(Boolean)
+          : [feedback.status === "failed" ? "AI grading failed. Please try again later." : "AI is still processing this answer."];
+
+        return [Number(partId), {
+          pronunciation: scoreText,
+          fluency: scoreText,
+          grammar: scoreText,
+          vocabulary: scoreText,
+          tips,
+        }];
+      }
+
+      return [Number(partId), {
+        pronunciation: feedback.pronunciation,
+        fluency: feedback.fluency,
+        grammar: feedback.grammar,
+        vocabulary: feedback.vocabulary,
+        tips: feedback.tips,
+      }];
+    })
+  );
+}
+
 // Convert ExamItem to a SpeakingPart shape
 function examToPart(exam: ExamDetailResponse, index: number): SpeakingPart & { examId: number } {
   const section = exam.sections?.[0];
@@ -346,7 +375,7 @@ const SpeakingQuiz = () => {
         setShowAIFeedback(true);
         await attemptsService.saveSkillAttempt("speaking", {
           recordings,
-          speakingFeedback: newFeedbacks as Record<number, SpeakingFeedbackResult>,
+          speakingFeedback: toAttemptSpeakingFeedback(newFeedbacks),
         });
       } else {
         // Mock mode
@@ -365,7 +394,7 @@ const SpeakingQuiz = () => {
         const resolvedRecs = await uploadAndResolveRecordings(attemptId);
         await attemptsService.saveSkillAttempt("speaking", {
           recordings: resolvedRecs,
-          speakingFeedback: feedback as Record<number, SpeakingFeedbackResult>,
+          speakingFeedback: toAttemptSpeakingFeedback(mockFeedbacks),
         });
       }
     } catch (e) {
