@@ -69,9 +69,10 @@ public class SpeakingPracticeService : ISpeakingPracticeService
 
         try
         {
+            var gradingAudioUrl = await _r2StorageService.CreateReadUrlAsync(submission.AudioObjectKey);
             var scoreResult = await _openRouterGradingService.GradeSpeakingAsync(
                 exam.Description,
-                submission.AudioUrl,
+                gradingAudioUrl,
                 submission.AudioObjectKey);
             submission.Score = scoreResult.Score;
             submission.Feedback = BuildSpeakingFeedback(scoreResult);

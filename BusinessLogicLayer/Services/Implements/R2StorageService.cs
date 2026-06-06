@@ -12,6 +12,7 @@ namespace BusinessLogicLayer.Services.Implements;
 public class R2StorageService : IR2StorageService
 {
     private const int UploadUrlMinutes = 15;
+    private const int ReadUrlMinutes = 15;
     private readonly R2Settings _settings;
 
     public R2StorageService(IOptions<R2Settings> options)
@@ -68,6 +69,22 @@ public class R2StorageService : IR2StorageService
 
         var uploadUrl = client.GetPreSignedURL(request);
         return Task.FromResult((uploadUrl, objectKey, safeContentType, expiresAt));
+    }
+
+    public Task<string> CreateReadUrlAsync(string objectKey)
+    {
+        EnsureConfigured();
+
+        using var client = CreateClient();
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _settings.BucketName,
+            Key = objectKey.TrimStart('/'),
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.AddMinutes(ReadUrlMinutes)
+        };
+
+        return Task.FromResult(client.GetPreSignedURL(request));
     }
 
     public string GetObjectUrl(string objectKey)

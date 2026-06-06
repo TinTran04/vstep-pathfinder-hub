@@ -6,5 +6,7 @@ public interface IR2StorageService
 
     Task<(string UploadUrl, string ObjectKey, string ContentType, DateTime ExpiresAt)> CreateListeningAudioUploadUrlAsync(int? examId, string contentType, string? fileExtension);
 
+    Task<string> CreateReadUrlAsync(string objectKey);
+
     string GetObjectUrl(string objectKey);
 }
