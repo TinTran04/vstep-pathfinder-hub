@@ -1,5 +1,6 @@
 import { Clock, CheckCircle, BarChart3, Layers, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 const features = [
   { icon: Layers, text: "Đề thi mô phỏng chuẩn VSTEP" },
@@ -9,6 +10,7 @@ const features = [
 ];
 
 const ExamSection = () => {
+  const navigate = useNavigate();
   return (
     <section id="exam" className="section-padding">
       <div className="max-w-7xl mx-auto">
@@ -28,11 +30,11 @@ const ExamSection = () => {
                 giúp bạn làm quen áp lực thời gian và cấu trúc đề thực tế.
               </p>
               <div className="flex flex-wrap gap-3 mt-8">
-                <Button size="lg" variant="secondary" className="font-semibold text-base">
+                <Button size="lg" variant="secondary" className="font-semibold text-base" onClick={() => navigate("/quiz")}>
                   Thử đề miễn phí
                   <ArrowRight size={18} className="ml-2" />
                 </Button>
-                <Button size="lg" variant="ghost" className="font-semibold text-base text-primary-foreground border border-primary-foreground/30 hover:bg-primary-foreground/10">
+                <Button size="lg" variant="ghost" className="font-semibold text-base text-primary-foreground border border-primary-foreground/30 hover:bg-primary-foreground/10" onClick={() => navigate("/quiz")}>
                   Xem tất cả đề thi
                 </Button>
               </div>

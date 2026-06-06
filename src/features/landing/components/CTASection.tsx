@@ -1,8 +1,13 @@
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 const CTASection = () => {
+  const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
+
   return (
     <section className="section-padding">
       <div className="max-w-4xl mx-auto text-center">
@@ -40,11 +45,11 @@ const CTASection = () => {
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0.4 }}
             >
-              <Button size="lg" variant="secondary" className="font-semibold text-base hover:-translate-y-0.5 transition-all hover:shadow-lg">
+              <Button size="lg" variant="secondary" className="font-semibold text-base hover:-translate-y-0.5 transition-all hover:shadow-lg" onClick={() => navigate(isLoggedIn ? "/quiz" : "/auth")}>
                 Bắt đầu học ngay
                 <ArrowRight size={18} className="ml-2" />
               </Button>
-              <Button size="lg" variant="ghost" className="font-semibold text-base text-primary-foreground border border-primary-foreground/30 hover:bg-primary-foreground/10 hover:-translate-y-0.5 transition-all">
+              <Button size="lg" variant="ghost" className="font-semibold text-base text-primary-foreground border border-primary-foreground/30 hover:bg-primary-foreground/10 hover:-translate-y-0.5 transition-all" onClick={() => document.getElementById("journey")?.scrollIntoView({ behavior: "smooth" })}>
                 Xem lộ trình
               </Button>
             </motion.div>

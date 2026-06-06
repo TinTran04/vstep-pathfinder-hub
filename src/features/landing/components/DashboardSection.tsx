@@ -28,7 +28,12 @@ const DashboardSection = () => {
         </div>
 
         {/* Mockup dashboard */}
-        <div className="card-edu p-6 md:p-8 max-w-4xl mx-auto">
+        <div className="card-edu p-6 md:p-8 max-w-4xl mx-auto relative overflow-hidden">
+          <div className="absolute top-3 right-3 z-10">
+            <span className="text-[10px] bg-muted/80 backdrop-blur-sm text-muted-foreground px-2.5 py-1 rounded border border-border uppercase font-medium">
+              Ví dụ minh họa
+            </span>
+          </div>
           {/* Stats row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {stats.map((s) => (
@@ -55,7 +60,7 @@ const DashboardSection = () => {
 
           {/* Recent scores */}
           <div>
-            <h4 className="text-sm font-semibold text-foreground mb-3">Điểm gần đây</h4>
+            <h4 className="text-sm font-semibold text-foreground mb-3">Ví dụ kết quả học tập</h4>
             <div className="space-y-2">
               {recentScores.map((r) => (
                 <div key={r.name} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">

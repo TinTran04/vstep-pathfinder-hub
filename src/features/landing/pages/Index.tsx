@@ -8,7 +8,6 @@ import ExamSection from "@/features/landing/components/ExamSection";
 import DashboardSection from "@/features/landing/components/DashboardSection";
 import TestimonialSection from "@/features/landing/components/TestimonialSection";
 import PricingSection from "@/features/landing/components/PricingSection";
-import CTASection from "@/features/landing/components/CTASection";
 import FooterSection from "@/features/landing/components/FooterSection";
 
 const Index = () => {
@@ -24,7 +23,6 @@ const Index = () => {
       <DashboardSection />
       <TestimonialSection />
       <PricingSection />
-      <CTASection />
       <FooterSection />
     </div>
   );

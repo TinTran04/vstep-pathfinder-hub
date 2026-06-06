@@ -6,7 +6,7 @@ import {
   BarChart3, BookOpen, Clock, TrendingUp, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, Settings, User,
   Flame, Share2, Zap, Trophy, Copy, Check, Camera, Mail, Lock,
-  BookMarked, FileText, Star, Gift,
+  BookMarked, FileText, Star, Gift, Crown,
 } from "lucide-react";
 import avatar1 from "@/assets/avatars/avatar1.png";
 import avatar2 from "@/assets/avatars/avatar2.png";
@@ -39,7 +39,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { dashboardService } from "../services/dashboard.service";
+import { dashboardService, StreakDayItem, SkillProgressResponse } from "../services/dashboard.service";
 
 const skillColors: Record<string, string> = {
   Listening: "bg-blue-500",
@@ -77,8 +77,13 @@ export interface PointActionItem {
 export interface DashboardData {
   recentScores: ScoreItem[];
   weeklyData: WeeklyItem[];
-  streakDays: boolean[];
+  streakDays: StreakDayItem[];
   pointActions: PointActionItem[];
+  weekStudySeconds: number;
+  completedCount: number;
+  rewardPoints: number;
+  currentStreakDays: number;
+  skillProgress: SkillProgressResponse;
 }
 
 type TabType = "overview" | "settings" | "vocabulary";
@@ -144,15 +149,11 @@ const Dashboard = () => {
   const weeklyData = dashboardData?.weeklyData || [];
   const recentScores = dashboardData?.recentScores || [];
   const pointActions = dashboardData?.pointActions || [];
-
-  // Tạo streakDays từ streak thật của user (không dùng mock)
-  // Hiển thị 14 ngày: đánh dấu N ngày cuối là active (= streak count)
-  const currentStreak = user?.streak ?? 0;
-  const STREAK_DISPLAY = 14;
-  const streakDays: boolean[] = Array.from({ length: STREAK_DISPLAY }, (_, i) => {
-    const dayFromEnd = STREAK_DISPLAY - 1 - i;
-    return dayFromEnd < currentStreak;
-  });
+  const streakDays = dashboardData?.streakDays || [];
+  const currentStreak = dashboardData?.currentStreakDays ?? user?.streak ?? 0;
+  const weekStudySeconds = dashboardData?.weekStudySeconds ?? 0;
+  const completedCount = dashboardData?.completedCount ?? 0;
+  const skillProgress = dashboardData?.skillProgress;
 
   const maxHours = weeklyData.length > 0 ? Math.max(...weeklyData.map((d: WeeklyItem) => d.hours)) : 0;
   const [shareDialog, setShareDialog] = useState(false);
@@ -173,12 +174,14 @@ const Dashboard = () => {
 
   const shareUrl = window.location.origin;
 
-  // Sync totalPoints when user data changes (e.g. after login or refresh)
+  // Sync totalPoints when user data or dashboardData changes (e.g. after login, refresh or dashboard API loads)
   useEffect(() => {
-    if (user?.points !== undefined) {
+    if (dashboardData?.rewardPoints !== undefined) {
+      setTotalPoints(dashboardData.rewardPoints);
+    } else if (user?.points !== undefined) {
       setTotalPoints(user.points);
     }
-  }, [user?.points]);
+  }, [user?.points, dashboardData?.rewardPoints]);
 
   // Sync settings fields when user data loads
   useEffect(() => {
@@ -215,7 +218,7 @@ const Dashboard = () => {
     );
   }
 
-  const handleShare = (platform: string) => {
+  const handleShare = async (platform: string) => {
     if (platform === "copy") {
       navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -225,8 +228,27 @@ const Dashboard = () => {
     } else if (platform === "zalo") {
       window.open(`https://zalo.me/share?url=${encodeURIComponent(shareUrl)}`, "_blank");
     }
-    addPoints(30);
-    toast.success("🎉 +30 điểm thưởng khi chia sẻ!");
+
+    try {
+      const res = await dashboardService.awardShareReward();
+      const newPoints = res.rewardPoints;
+      const diff = newPoints - totalPoints;
+      if (diff > 0) {
+        setPointDelta(diff);
+        setShowPointAnim(true);
+        setTimeout(() => {
+          setTotalPoints(newPoints);
+          setShowPointAnim(false);
+        }, 1000);
+      } else {
+        setTotalPoints(newPoints);
+      }
+      toast.success(`🎉 +${diff > 0 ? diff : 30} điểm thưởng khi chia sẻ!`);
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err?.message || "Bạn đã chia sẻ hôm nay rồi! Quay lại ngày mai nhé.";
+      toast.info(`🔒 ${errMsg}`);
+    }
   };
 
   const addPoints = (pts: number) => {
@@ -388,6 +410,10 @@ const Dashboard = () => {
             settingsName={settingsName}
             setShareDialog={setShareDialog}
             addPoints={addPoints}
+            userPlan={user?.plan ?? "Miễn phí"}
+            weekStudySeconds={weekStudySeconds}
+            completedCount={completedCount}
+            skillProgress={skillProgress}
           />}
 
           {activeTab === "settings" && <SettingsTab
@@ -494,6 +520,29 @@ const Dashboard = () => {
 };
 
 /* ──────────────── OVERVIEW TAB ──────────────── */
+const formatStudyTime = (seconds: number): string => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
+};
+
+const getStreakDayLabel = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const daysOfWeek = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const dayName = daysOfWeek[date.getDay()];
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dayName}, ${dd}/${mm}`;
+};
+
+const getDayOfMonth = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  return String(date.getDate());
+};
+
 interface OverviewTabProps {
   totalPoints: number;
   currentStreak: number;
@@ -501,7 +550,7 @@ interface OverviewTabProps {
   pointDelta: number;
   maxHours: number;
   weeklyData: WeeklyItem[];
-  streakDays: boolean[];
+  streakDays: StreakDayItem[];
   pointActions: PointActionItem[];
   recentScores: ScoreItem[];
   skillColors: Record<string, string>;
@@ -509,221 +558,296 @@ interface OverviewTabProps {
   settingsName: string;
   setShareDialog: (open: boolean) => void;
   addPoints: (amount: number) => void;
+  userPlan: string;
+  weekStudySeconds: number;
+  completedCount: number;
+  skillProgress: SkillProgressResponse | undefined;
 }
 
 const OverviewTab = ({
   totalPoints, currentStreak, showPointAnim, pointDelta, maxHours,
   weeklyData, streakDays, pointActions, recentScores, skillColors, skillIcons,
-  settingsName, setShareDialog, addPoints,
-}: OverviewTabProps) => (
-  <>
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-      <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Xin chào, {settingsName} 👋</h1>
-      <p className="text-muted-foreground mt-1">Tiếp tục hành trình chinh phục VSTEP của bạn</p>
-    </motion.div>
+  settingsName, setShareDialog, addPoints, userPlan, weekStudySeconds,
+  completedCount, skillProgress,
+}: OverviewTabProps) => {
+  const isPremium = userPlan.toLowerCase() !== "miễn phí" && userPlan.toLowerCase() !== "free";
 
-    {/* Stats cards */}
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {([
-        { icon: <Clock size={20} />, label: "Giờ học tuần này", value: "0h", color: "text-primary" },
-        { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: "0", color: "text-emerald-500" },
-        { icon: <Zap size={20} />, label: "Điểm thưởng", value: `${totalPoints}`, color: "text-amber-500", isPoints: true },
-        { icon: <Flame size={20} />, label: "Chuỗi ngày học", value: `${currentStreak} ngày`, color: "text-orange-500", isStreak: true },
-      ] as { icon: React.ReactNode; label: string; value: string; color: string; isPoints?: boolean; isStreak?: boolean }[]).map((s, i) => (
-        <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}>
-          <Card className="border-border card-press cursor-default group hover:border-primary/30 transition-all duration-300">
-            <CardContent className="p-4 lg:p-5">
-              <div className={`${s.color} mb-2 flex items-center gap-2`}>
-                {s.isStreak ? <span className="animate-fire">{s.icon}</span> : s.icon}
+  return (
+    <>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Xin chào, {settingsName} 👋</h1>
+        <p className="text-muted-foreground mt-1">Tiếp tục hành trình chinh phục VSTEP của bạn</p>
+      </motion.div>
+
+      {/* Compact Current Plan Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+        className={`rounded-xl border px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+          isPremium 
+            ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50" 
+            : "bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"
+        }`}
+      >
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <div className={`p-1.5 rounded-lg shrink-0 ${
+            isPremium ? "bg-emerald-500 text-white animate-pulse" : "bg-amber-500 text-white"
+          }`}>
+            <Crown size={16} />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gói hiện tại:</span>
+            <span className={`text-sm font-bold truncate ${isPremium ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
+              {userPlan}
+            </span>
+            <span className="text-xs text-muted-foreground hidden md:inline">
+              • {isPremium ? "Bạn đang sử dụng các tính năng Premium cao cấp" : "Nâng cấp Premium để mở khóa toàn bộ đề thi & bài học"}
+            </span>
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center justify-end">
+          {!isPremium ? (
+            <Button asChild size="sm" className="h-8 gradient-primary text-primary-foreground font-medium text-xs px-3 shadow-sm">
+              <Link to="/#pricing">Nâng cấp ngay</Link>
+            </Button>
+          ) : (
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 bg-emerald-50/80 dark:bg-emerald-950/45 px-2.5 py-1 rounded-full border border-emerald-200/50 dark:border-emerald-900/50">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+              Đang hoạt động
+            </span>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {([
+          { icon: <Clock size={20} />, label: "Giờ học tuần này", value: formatStudyTime(weekStudySeconds), color: "text-primary" },
+          { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: `${completedCount}`, color: "text-emerald-500" },
+          { icon: <Zap size={20} />, label: "Điểm thưởng", value: `${totalPoints}`, color: "text-amber-500", isPoints: true },
+          { icon: <Flame size={20} />, label: "Chuỗi ngày học", value: `${currentStreak} ngày`, color: "text-orange-500", isStreak: true },
+        ] as { icon: React.ReactNode; label: string; value: string; color: string; isPoints?: boolean; isStreak?: boolean }[]).map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}>
+            <Card className="border-border card-press cursor-default group hover:border-primary/30 transition-all duration-300">
+              <CardContent className="p-4 lg:p-5">
+                <div className={`${s.color} mb-2 flex items-center gap-2`}>
+                  {s.isStreak ? <span className="animate-fire">{s.icon}</span> : s.icon}
+                </div>
+                <div className="relative">
+                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
+                  <AnimatePresence>
+                    {s.isPoints && showPointAnim && (
+                      <motion.span className="absolute -top-4 right-0 text-sm font-bold text-amber-500"
+                        initial={{ opacity: 1, y: 0 }} animate={{ opacity: 0, y: -20 }} exit={{ opacity: 0 }} transition={{ duration: 1 }}>
+                        +{pointDelta}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Streak + Points */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+          <Card className="border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Flame size={20} className="text-orange-500 animate-fire" />
+                Chuỗi ngày học liên tiếp
+                <Badge className="ml-auto bg-orange-100 text-orange-700 border-orange-200 text-xs">🔥 {currentStreak} ngày</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-7 gap-2 mt-2">
+                {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((d) => (
+                  <span key={d} className="text-xs text-muted-foreground text-center font-medium">{d}</span>
+                ))}
+                {streakDays.map((item: StreakDayItem, i: number) => {
+                  const dayLabel = getStreakDayLabel(item.date);
+                  const dayNum = getDayOfMonth(item.date);
+                  return (
+                    <motion.div
+                      key={item.date || i}
+                      title={dayLabel}
+                      className={`aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-colors cursor-help ${
+                        item.hasActivity ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground"
+                      }`}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ duration: 0.3, delay: i * 0.03 }}
+                    >
+                      {item.hasActivity ? "🔥" : dayNum}
+                    </motion.div>
+                  );
+                })}
               </div>
-              <div className="relative">
-                <p className="text-2xl font-bold text-foreground">{s.value}</p>
-                <AnimatePresence>
-                  {s.isPoints && showPointAnim && (
-                    <motion.span className="absolute -top-4 right-0 text-sm font-bold text-amber-500"
-                      initial={{ opacity: 1, y: 0 }} animate={{ opacity: 0, y: -20 }} exit={{ opacity: 0 }} transition={{ duration: 1 }}>
-                      +{pointDelta}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+              <p className="text-xs text-muted-foreground mt-3 text-center">
+                Duy trì streak 7 ngày liên tiếp → <strong className="text-amber-600">+50 điểm thưởng</strong>
+              </p>
             </CardContent>
           </Card>
         </motion.div>
-      ))}
-    </div>
 
-    {/* Streak + Points */}
-    <div className="grid lg:grid-cols-2 gap-6">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
-        <Card className="border-border">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+          <Card className="border-border">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Trophy size={20} className="text-amber-500" /> Điểm thưởng
+                </CardTitle>
+                <div className="flex items-center gap-1.5">
+                  <Zap size={16} className="text-amber-500" />
+                  <span className="text-lg font-bold text-foreground">{totalPoints}</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cách kiếm điểm</p>
+                {pointActions.slice(0, 4).map((pa: PointActionItem) => (
+                  <div key={pa.action} className="flex items-center gap-3 text-sm">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <pa.icon size={14} className="text-primary" />
+                    </div>
+                    <span className="flex-1 text-muted-foreground">{pa.action}</span>
+                    <Badge variant="secondary" className="text-xs font-bold text-amber-600">+{pa.points}</Badge>
+                  </div>
+                ))}
+              </div>
+              <Button variant="outline" className="w-full border-dashed border-primary/40 text-primary hover:bg-primary/5 gap-2" onClick={() => setShareDialog(true)}>
+                <Share2 size={16} /> Chia sẻ & nhận 30 điểm
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Chart + Skills */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2 border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
-              <Flame size={20} className="text-orange-500 animate-fire" />
-              Chuỗi ngày học liên tiếp
-              <Badge className="ml-auto bg-orange-100 text-orange-700 border-orange-200 text-xs">🔥 {currentStreak} ngày</Badge>
+              <TrendingUp size={20} className="text-primary" /> Thời gian học trong tuần
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-2 mt-2">
-              {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((d) => (
-                <span key={d} className="text-xs text-muted-foreground text-center font-medium">{d}</span>
-              ))}
-              {streakDays.map((active: boolean, i: number) => (
-                <motion.div key={i} className={`aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-colors ${active ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground"}`}
-                  initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: i * 0.03 }}>
-                  {active ? "🔥" : i + 1}
+            <div className="h-48 mt-2">
+              {weeklyData.length === 0 || weeklyData.every((d: WeeklyItem) => d.hours === 0) ? (
+                <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <TrendingUp size={32} className="opacity-20" />
+                  <p className="text-sm">Chưa có dữ liệu học tuần này</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="h" />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                      formatter={(value: number) => [`${value}h`, "Thời gian học"]}
+                    />
+                    <Bar dataKey="hours" name="Giờ học" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Tiến độ kỹ năng</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {[
+              { skill: "Listening" },
+              { skill: "Reading" },
+              { skill: "Writing" },
+              { skill: "Speaking" },
+            ].map((s) => {
+              const skillKey = s.skill.toLowerCase() as keyof SkillProgressResponse;
+              const progressItem = skillProgress ? skillProgress[skillKey] : null;
+              const progressVal = progressItem && progressItem.averageScoreOnTen !== null && progressItem.averageScoreOnTen !== undefined
+                ? Number(progressItem.averageScoreOnTen) * 10
+                : 0;
+              const progressLabel = progressItem && progressItem.averageScoreOnTen !== null && progressItem.averageScoreOnTen !== undefined
+                ? `${Number(progressItem.averageScoreOnTen).toFixed(1)}/10 (${progressItem.completedCount} bài)`
+                : "Chưa có dữ liệu";
+
+              return (
+                <div key={s.skill} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${skillColors[s.skill]}`} />
+                      <span className="font-medium text-foreground">{s.skill}</span>
+                    </div>
+                    <span className="text-muted-foreground text-xs">{progressLabel}</span>
+                  </div>
+                  <Progress value={progressVal} className="h-2" />
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent scores */}
+      <Card className="border-border">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Kết quả gần đây</CardTitle>
+            {recentScores.length > 0 && (
+              <Button variant="ghost" size="sm" className="text-primary">Xem tất cả <ChevronRight size={16} /></Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {recentScores.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
+              <FileText size={36} className="opacity-20" />
+              <p className="text-sm">Chưa có kết quả nào. Hãy bắt đầu luyện tập!</p>
+              <Button size="sm" variant="outline" className="mt-1" asChild>
+                <Link to="/quiz">Bắt đầu luyện tập ngay</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {recentScores.map((r: ScoreItem, i: number) => (
+                <motion.div key={i} className="flex items-center gap-4 py-3 hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors"
+                  initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.6 + i * 0.05 }}>
+                  <div className={`w-10 h-10 rounded-xl ${skillColors[r.skill]} bg-opacity-10 flex items-center justify-center text-foreground`}>
+                    {skillIcons[r.skill]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{r.test}</p>
+                    <p className="text-xs text-muted-foreground">{r.skill} · {r.date}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-foreground">{r.score}<span className="text-sm text-muted-foreground">/{r.total}</span></p>
+                  </div>
                 </motion.div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-3 text-center">
-              Duy trì streak 7 ngày liên tiếp → <strong className="text-amber-600">+50 điểm thưởng</strong>
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-        <Card className="border-border">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Trophy size={20} className="text-amber-500" /> Điểm thưởng
-              </CardTitle>
-              <div className="flex items-center gap-1.5">
-                <Zap size={16} className="text-amber-500" />
-                <span className="text-lg font-bold text-foreground">{totalPoints}</span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cách kiếm điểm</p>
-              {pointActions.slice(0, 4).map((pa: PointActionItem) => (
-                <div key={pa.action} className="flex items-center gap-3 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <pa.icon size={14} className="text-primary" />
-                  </div>
-                  <span className="flex-1 text-muted-foreground">{pa.action}</span>
-                  <Badge variant="secondary" className="text-xs font-bold text-amber-600">+{pa.points}</Badge>
-                </div>
-              ))}
-            </div>
-            <Button variant="outline" className="w-full border-dashed border-primary/40 text-primary hover:bg-primary/5 gap-2" onClick={() => setShareDialog(true)}>
-              <Share2 size={16} /> Chia sẻ & nhận 30 điểm
-            </Button>
-          </CardContent>
-        </Card>
-      </motion.div>
-    </div>
-
-    {/* Chart + Skills */}
-    <div className="grid lg:grid-cols-3 gap-6">
-      <Card className="lg:col-span-2 border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <TrendingUp size={20} className="text-primary" /> Thời gian học trong tuần
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-48 mt-2">
-            {weeklyData.length === 0 || weeklyData.every((d: WeeklyItem) => d.hours === 0) ? (
-              <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                <TrendingUp size={32} className="opacity-20" />
-                <p className="text-sm">Chưa có dữ liệu học tuần này</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="h" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    formatter={(value: number) => [`${value}h`, "Thời gian học"]}
-                  />
-                  <Bar dataKey="hours" name="Giờ học" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Tiến độ kỹ năng</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {[
-            { skill: "Listening", progress: 0 },
-            { skill: "Reading", progress: 0 },
-            { skill: "Writing", progress: 0 },
-            { skill: "Speaking", progress: 0 },
-          ].map((s) => (
-            <div key={s.skill} className="space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${skillColors[s.skill]}`} />
-                  <span className="font-medium text-foreground">{s.skill}</span>
-                </div>
-                <span className="text-muted-foreground text-xs">Chưa có dữ liệu</span>
-              </div>
-              <Progress value={s.progress} className="h-2" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-
-    {/* Recent scores */}
-    <Card className="border-border">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Kết quả gần đây</CardTitle>
-          {recentScores.length > 0 && (
-            <Button variant="ghost" size="sm" className="text-primary">Xem tất cả <ChevronRight size={16} /></Button>
           )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {recentScores.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
-            <FileText size={36} className="opacity-20" />
-            <p className="text-sm">Chưa có kết quả nào. Hãy bắt đầu luyện tập!</p>
-            <Button size="sm" variant="outline" className="mt-1" onClick={() => window.location.href = '/quiz'}>
-              Bắt đầu luyện tập ngay
-            </Button>
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {recentScores.map((r: ScoreItem, i: number) => (
-              <motion.div key={i} className="flex items-center gap-4 py-3 hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors"
-                initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.6 + i * 0.05 }}>
-                <div className={`w-10 h-10 rounded-xl ${skillColors[r.skill]} bg-opacity-10 flex items-center justify-center text-foreground`}>
-                  {skillIcons[r.skill]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">{r.test}</p>
-                  <p className="text-xs text-muted-foreground">{r.skill} · {r.date}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-foreground">{r.score}<span className="text-sm text-muted-foreground">/{r.total}</span></p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  </>
-);
+        </CardContent>
+      </Card>
+
+
+    </>
+  );
+};
 
 
 

@@ -2,6 +2,7 @@ import { Headphones, BookOpen, PenTool, Mic, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ScrollReveal from "@/components/ScrollReveal";
 import { StaggerContainer, StaggerItem } from "@/components/StaggerChildren";
+import { useNavigate } from "react-router-dom";
 
 const skills = [
   {
@@ -35,6 +36,7 @@ const skills = [
 ];
 
 const SkillsSection = () => {
+  const navigate = useNavigate();
   return (
     <section id="skills" className="section-padding">
       <div className="max-w-7xl mx-auto">
@@ -57,7 +59,7 @@ const SkillsSection = () => {
                 </div>
                 <h3 className="text-xl font-bold text-foreground mb-2">{s.name}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">{s.desc}</p>
-                <Button variant="ghost" size="sm" className="text-primary font-medium p-0 h-auto hover:bg-transparent group-hover:gap-2 transition-all">
+                <Button variant="ghost" size="sm" className="text-primary font-medium p-0 h-auto hover:bg-transparent group-hover:gap-2 transition-all" onClick={() => navigate("/quiz")}>
                   Khám phá ngay <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
                 </Button>
               </div>

@@ -94,19 +94,7 @@ const HeroSection = () => {
               </Button>
             </motion.div>
 
-            <motion.div
-              className="flex items-center gap-4 pt-4 text-sm text-muted-foreground"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.8 }}
-            >
-              <div className="flex -space-x-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="w-8 h-8 rounded-full bg-muted border-2 border-card" />
-                ))}
-              </div>
-              <span><strong className="text-foreground">2,500+</strong> học viên đang luyện thi</span>
-            </motion.div>
+
           </div>
 
           {/* Right image */}
@@ -119,21 +107,7 @@ const HeroSection = () => {
             <div className="rounded-2xl overflow-hidden shadow-2xl border border-border">
               <img src={heroDashboard} alt="Dashboard học VSTEP" className="w-full" loading="lazy" />
             </div>
-            {/* Floating card */}
-            <motion.div
-              className="absolute -bottom-4 -left-4 card-edu p-4 flex items-center gap-3 max-w-[220px]"
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.5, delay: 1 }}
-            >
-              <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                <GraduationCap size={20} className="text-accent" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">Đạt B2 VSTEP</p>
-                <p className="text-xs text-muted-foreground">Tỷ lệ đỗ 89%</p>
-              </div>
-            </motion.div>
+
           </motion.div>
         </div>
       </div>
