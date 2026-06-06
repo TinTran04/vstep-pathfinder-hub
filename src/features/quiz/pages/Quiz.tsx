@@ -24,10 +24,10 @@ import { type Skill } from "../mocks/quiz.mock";
 import { cleanDescription } from "@/lib/utils";
 
 const skillIcons: Record<Skill, React.ReactNode> = {
-  listening: <Headphones size={28} />,
-  reading: <BookOpenCheck size={28} />,
-  writing: <Pen size={28} />,
-  speaking: <Mic size={28} />,
+  listening: <Headphones size={24} />,
+  reading: <BookOpenCheck size={24} />,
+  writing: <Pen size={24} />,
+  speaking: <Mic size={24} />,
 };
 
 type SkillView = "exams" | "overview";
@@ -243,7 +243,7 @@ const Quiz = () => {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 space-y-14">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 space-y-8">
 
         {/* ─── Mode Selection Hero ─── */}
         <div className="text-center space-y-3 max-w-2xl mx-auto">
@@ -256,50 +256,52 @@ const Quiz = () => {
         </div>
 
         {/* ─── 2 Mode Cards ─── */}
-        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto items-stretch">
 
           {/* Card 1 — Luyện tập */}
           <button
             onClick={handleSelectPractice}
             className={`
-              group text-left rounded-2xl border-2 p-7 flex flex-col gap-5 transition-all duration-200
-              hover:shadow-xl hover:-translate-y-1
+              group text-left rounded-2xl border-2 p-5 flex flex-col justify-between gap-4 transition-all duration-200
+              hover:shadow-xl hover:-translate-y-1 w-full h-full
               ${selectedMode === "practice"
                 ? "border-indigo-500 bg-indigo-50/60 shadow-lg shadow-indigo-100"
                 : "border-indigo-200 bg-white hover:border-indigo-400"}
             `}
           >
-            {/* Icon + Badge */}
-            <div className="flex items-start justify-between">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                <BookOpen size={28} />
+            <div className="space-y-4">
+              {/* Icon + Badge */}
+              <div className="flex items-start justify-between">
+                <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                  <BookOpen size={24} />
+                </div>
+                <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 text-xs font-semibold">
+                  Practice
+                </Badge>
               </div>
-              <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 text-xs font-semibold">
-                Practice
-              </Badge>
-            </div>
 
-            {/* Title + Desc */}
-            <div className="space-y-1.5">
-              <h2 className="text-xl font-bold text-foreground">Luyện tập từng kỹ năng</h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Rèn luyện Listening, Reading, Writing, Speaking theo tốc độ của bạn.
-              </p>
-            </div>
+              {/* Title + Desc */}
+              <div className="space-y-1.5">
+                <h2 className="text-lg font-bold text-foreground">Luyện tập từng kỹ năng</h2>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Rèn luyện Listening, Reading, Writing, Speaking theo tốc độ của bạn.
+                </p>
+              </div>
 
-            {/* Bullets */}
-            <ul className="space-y-2">
-              {practiceBullets.map((b, i) => (
-                <li key={i} className="flex items-center gap-2 text-sm text-indigo-700">
-                  <span className="text-indigo-500 shrink-0">{b.icon}</span>
-                  {b.text}
-                </li>
-              ))}
-            </ul>
+              {/* Bullets */}
+              <ul className="space-y-1.5">
+                {practiceBullets.map((b, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs text-indigo-700">
+                    <span className="text-indigo-500 shrink-0">{b.icon}</span>
+                    {b.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             {/* CTA */}
             <div className={`
-              mt-auto rounded-xl py-2.5 px-4 font-semibold text-sm text-center transition-all
+              mt-auto rounded-xl py-2 px-4 font-semibold text-xs text-center transition-all w-full
               ${selectedMode === "practice"
                 ? "bg-indigo-600 text-white"
                 : "bg-indigo-100 text-indigo-700 group-hover:bg-indigo-200"}
@@ -312,43 +314,45 @@ const Quiz = () => {
           <button
             onClick={() => navigate("/mock-test")}
             className={`
-              group text-left rounded-2xl border-2 p-7 flex flex-col gap-5 transition-all duration-200
-              hover:shadow-xl hover:-translate-y-1
+              group text-left rounded-2xl border-2 p-5 flex flex-col justify-between gap-4 transition-all duration-200
+              hover:shadow-xl hover:-translate-y-1 w-full h-full
               border-violet-200 bg-white hover:border-violet-400
             `}
           >
-            {/* Icon + Badge */}
-            <div className="flex items-start justify-between">
-              <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600 group-hover:scale-110 transition-transform">
-                <Shield size={28} />
+            <div className="space-y-4">
+              {/* Icon + Badge */}
+              <div className="flex items-start justify-between">
+                <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 group-hover:scale-110 transition-transform">
+                  <Shield size={24} />
+                </div>
+                <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-xs font-semibold">
+                  Mock Test
+                </Badge>
               </div>
-              <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-xs font-semibold">
-                Mock Test
-              </Badge>
-            </div>
 
-            {/* Title + Desc */}
-            <div className="space-y-1.5">
-              <h2 className="text-xl font-bold text-foreground">Thi thử Full Test VSTEP</h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Làm bài đủ 4 kỹ năng theo trình tự Listening → Reading → Writing → Speaking.
-              </p>
-            </div>
+              {/* Title + Desc */}
+              <div className="space-y-1.5">
+                <h2 className="text-lg font-bold text-foreground">Thi thử Full Test VSTEP</h2>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Làm bài đủ 4 kỹ năng theo trình tự Listening → Reading → Writing → Speaking.
+                </p>
+              </div>
 
-            {/* Bullets */}
-            <ul className="space-y-2">
-              {mockBullets.map((b, i) => (
-                <li key={i} className="flex items-center gap-2 text-sm text-violet-700">
-                  <span className="text-violet-500 shrink-0">{b.icon}</span>
-                  {b.text}
-                </li>
-              ))}
-            </ul>
+              {/* Bullets */}
+              <ul className="space-y-1.5">
+                {mockBullets.map((b, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs text-violet-700">
+                    <span className="text-violet-500 shrink-0">{b.icon}</span>
+                    {b.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             {/* CTA */}
-            <div className="mt-auto rounded-xl py-2.5 px-4 font-semibold text-sm text-center
+            <div className="mt-auto rounded-xl py-2 px-4 font-semibold text-xs text-center w-full
               bg-violet-600 text-white group-hover:bg-violet-700 transition-colors flex items-center justify-center gap-2">
-              <Trophy size={15} /> Bắt đầu thi thử
+              <Trophy size={14} /> Bắt đầu thi thử
             </div>
           </button>
         </div>
@@ -372,24 +376,34 @@ const Quiz = () => {
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto items-stretch">
                 {skillsList.map((s) => (
-                  <motion.button
+                  <motion.div
                     key={s.key}
                     onClick={() => setSelectedSkill(s.key)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedSkill(s.key);
+                      }
+                    }}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className={`card-edu text-left p-7 group cursor-pointer border-2 ${s.bgColor}`}
+                    role="button"
+                    tabIndex={0}
+                    className={`card-edu text-left p-5 group cursor-pointer border-2 rounded-2xl ${s.bgColor} flex flex-col justify-between h-full w-full focus:outline-none focus:ring-2 focus:ring-primary/50`}
                   >
-                    <div className={`w-14 h-14 rounded-2xl bg-card flex items-center justify-center ${s.color} mb-4 group-hover:scale-110 transition-transform`}>
-                      {skillIcons[s.key]}
+                    <div>
+                      <div className={`w-12 h-12 rounded-xl bg-card flex items-center justify-center ${s.color} mb-3 group-hover:scale-110 transition-transform`}>
+                        {skillIcons[s.key]}
+                      </div>
+                      <h3 className="text-lg font-bold text-foreground mb-1">{s.label}</h3>
+                      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed min-h-[32px]">{s.desc}</p>
                     </div>
-                    <h3 className="text-xl font-bold text-foreground mb-2">{s.label}</h3>
-                    <p className="text-sm text-muted-foreground">{s.desc}</p>
-                    <div className="mt-4 flex items-center gap-1 text-sm font-medium text-primary">
-                      Bắt đầu luyện <ChevronRight size={16} />
+                    <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">
+                      Bắt đầu luyện <ChevronRight size={14} />
                     </div>
-                  </motion.button>
+                  </motion.div>
                 ))}
               </div>
             </motion.div>

@@ -6,8 +6,27 @@ import {
   BarChart3, BookOpen, Clock, TrendingUp, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, Settings, User,
   Flame, Share2, Zap, Trophy, Copy, Check, Camera, Mail, Lock,
-  Sparkles, BookMarked, FileText, Star, Gift, ShoppingBag,
+  BookMarked, FileText, Star, Gift,
 } from "lucide-react";
+import avatar1 from "@/assets/avatars/avatar1.png";
+import avatar2 from "@/assets/avatars/avatar2.png";
+import avatar3 from "@/assets/avatars/avatar3.png";
+import avatar4 from "@/assets/avatars/avatar4.png";
+import avatar5 from "@/assets/avatars/avatar5.png";
+import avatar6 from "@/assets/avatars/avatar6.png";
+import avatar7 from "@/assets/avatars/avatar7.png";
+import avatar8 from "@/assets/avatars/avatar8.png";
+
+const PRESET_AVATARS = [
+  { id: "avatar1", src: avatar1 },
+  { id: "avatar2", src: avatar2 },
+  { id: "avatar3", src: avatar3 },
+  { id: "avatar4", src: avatar4 },
+  { id: "avatar5", src: avatar5 },
+  { id: "avatar6", src: avatar6 },
+  { id: "avatar7", src: avatar7 },
+  { id: "avatar8", src: avatar8 },
+];
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -62,7 +81,7 @@ export interface DashboardData {
   pointActions: PointActionItem[];
 }
 
-type TabType = "overview" | "rewards" | "settings" | "vocabulary";
+type TabType = "overview" | "settings" | "vocabulary";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -142,6 +161,7 @@ const Dashboard = () => {
   const [showPointAnim, setShowPointAnim] = useState(false);
   const [pointDelta, setPointDelta] = useState(0);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 
   // Settings state
   const [settingsName, setSettingsName] = useState(user?.name ?? "");
@@ -223,20 +243,8 @@ const Dashboard = () => {
     toast.info("Tính năng đổi điểm đang được phát triển!");
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const url = ev.target?.result as string;
-        setAvatarPreview(url);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSaveProfile = () => {
-    updateUser({ name: settingsName, email: settingsEmail, avatar: avatarPreview });
+    updateUser({ name: settingsName, avatar: avatarPreview });
     toast.success("✅ Đã cập nhật thông tin!");
   };
 
@@ -271,7 +279,6 @@ const Dashboard = () => {
 
   const sidebarItems = [
     { icon: <BarChart3 size={20} />, label: "Tổng quan", tab: "overview" as TabType },
-    { icon: <ShoppingBag size={20} />, label: "Đổi thưởng", tab: "rewards" as TabType },
     { icon: <Settings size={20} />, label: "Cài đặt", tab: "settings" as TabType },
     { icon: <BookMarked size={20} />, label: "Sổ tay từ vựng", tab: "vocabulary" as TabType },
   ];
@@ -383,15 +390,12 @@ const Dashboard = () => {
             addPoints={addPoints}
           />}
 
-          {activeTab === "rewards" && <RewardsTab totalPoints={totalPoints} />}
-
           {activeTab === "settings" && <SettingsTab
             settingsName={settingsName}
             setSettingsName={setSettingsName}
             settingsEmail={settingsEmail}
-            setSettingsEmail={setSettingsEmail}
             avatarPreview={avatarPreview}
-            handleAvatarChange={handleAvatarChange}
+            onOpenAvatarPicker={() => setAvatarPickerOpen(true)}
             handleSaveProfile={handleSaveProfile}
             currentPassword={currentPassword}
             setCurrentPassword={setCurrentPassword}
@@ -442,6 +446,45 @@ const Dashboard = () => {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
               <p className="text-sm font-medium text-amber-800">💰 Mời bạn bè đăng ký → <strong>+100 điểm/người</strong></p>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Avatar Picker Dialog */}
+      <Dialog open={avatarPickerOpen} onOpenChange={setAvatarPickerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground font-bold">
+              <User size={20} className="text-primary" />
+              Chọn ảnh đại diện mặc định
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-4 gap-4 py-4 justify-items-center">
+            {PRESET_AVATARS.map((avatar) => {
+              const isSelected = avatarPreview === avatar.src;
+              return (
+                <button
+                  key={avatar.id}
+                  type="button"
+                  onClick={() => {
+                    setAvatarPreview(avatar.src);
+                    setAvatarPickerOpen(false);
+                  }}
+                  className={`relative w-16 h-16 rounded-full overflow-hidden border-2 transition-all hover:scale-105 duration-200 ${
+                    isSelected ? "border-primary ring-2 ring-primary/20 scale-105" : "border-border hover:border-primary/50"
+                  }`}
+                >
+                  <img src={avatar.src} alt={avatar.id} className="w-full h-full object-cover" />
+                  {isSelected && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <div className="bg-primary text-primary-foreground rounded-full p-0.5">
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>
@@ -682,64 +725,15 @@ const OverviewTab = ({
   </>
 );
 
-/* ──────────────── REWARDS STORE TAB ──────────────── */
-const RewardsTab = ({ totalPoints }: { totalPoints: number }) => (
-  <>
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-      <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Đổi phần thưởng 🎁</h1>
-      <p className="text-muted-foreground mt-1">Dùng điểm thưởng để đổi các phần thưởng hấp dẫn</p>
-    </motion.div>
 
-    {/* Points banner */}
-    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.1 }}>
-      <Card className="border-border gradient-primary text-primary-foreground">
-        <CardContent className="p-6 flex items-center justify-between">
-          <div>
-            <p className="text-sm opacity-80">Điểm thưởng hiện tại</p>
-            <p className="text-4xl font-bold mt-1 flex items-center gap-2"><Zap size={28} /> {totalPoints}</p>
-          </div>
-          <div className="text-right opacity-80">
-            <Sparkles size={40} />
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-
-    {/* Coming soon */}
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.2 }}
-      className="flex flex-col items-center justify-center py-20 text-center"
-    >
-      <motion.div
-        animate={{ rotate: [0, 10, -10, 10, 0], scale: [1, 1.05, 1] }}
-        transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-        className="text-7xl mb-6"
-      >
-        🚧
-      </motion.div>
-      <h2 className="text-2xl font-bold text-foreground mb-2">Đang cập nhật</h2>
-      <p className="text-muted-foreground max-w-sm">
-        Tính năng đổi điểm đang được phát triển và sẽ sớm ra mắt. Hãy tiếp tục tích lũy điểm thưởng nhé!
-      </p>
-      <div className="mt-8 flex items-center gap-3">
-        <motion.div className="w-2 h-2 rounded-full bg-primary" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.8, repeat: Infinity, delay: 0 }} />
-        <motion.div className="w-2 h-2 rounded-full bg-primary" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.8, repeat: Infinity, delay: 0.2 }} />
-        <motion.div className="w-2 h-2 rounded-full bg-primary" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.8, repeat: Infinity, delay: 0.4 }} />
-      </div>
-    </motion.div>
-  </>
-);
 
 /* ──────────────── SETTINGS TAB ──────────────── */
 interface SettingsTabProps {
   settingsName: string;
   setSettingsName: (name: string) => void;
   settingsEmail: string;
-  setSettingsEmail: (email: string) => void;
   avatarPreview: string | null;
-  handleAvatarChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenAvatarPicker: () => void;
   handleSaveProfile: () => void;
   currentPassword: string;
   setCurrentPassword: (pw: string) => void;
@@ -751,8 +745,8 @@ interface SettingsTabProps {
 }
 
 const SettingsTab = ({
-  settingsName, setSettingsName, settingsEmail, setSettingsEmail,
-  avatarPreview, handleAvatarChange, handleSaveProfile,
+  settingsName, setSettingsName, settingsEmail,
+  avatarPreview, onOpenAvatarPicker, handleSaveProfile,
   currentPassword, setCurrentPassword, newPassword, setNewPassword,
   confirmPassword, setConfirmPassword, handleChangePassword,
 }: SettingsTabProps) => (
@@ -779,14 +773,17 @@ const SettingsTab = ({
                     {settingsName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                  <Camera size={20} className="text-white" />
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-                </label>
+                <button
+                  type="button"
+                  onClick={onOpenAvatarPicker}
+                  className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"
+                >
+                  <Camera size={20} />
+                </button>
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">Ảnh đại diện</p>
-                <p className="text-xs text-muted-foreground">Nhấn vào ảnh để thay đổi</p>
+                <p className="text-xs text-muted-foreground">Nhấn vào ảnh để chọn ảnh mặc định</p>
               </div>
             </div>
 
@@ -796,8 +793,23 @@ const SettingsTab = ({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="flex items-center gap-1"><Mail size={14} /> Email</Label>
-              <Input id="email" type="email" value={settingsEmail} onChange={(e) => setSettingsEmail(e.target.value)} />
+              <Label htmlFor="email" className="flex items-center gap-1 text-muted-foreground">
+                <Mail size={14} /> Email (Không thể thay đổi)
+              </Label>
+              <div className="relative">
+                <Input
+                  id="email"
+                  type="email"
+                  value={settingsEmail}
+                  readOnly
+                  disabled
+                  className="bg-muted/50 border-muted text-muted-foreground pr-10 cursor-not-allowed"
+                />
+                <Lock size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+              </div>
+              <p className="text-[11px] text-muted-foreground/80 italic pl-1">
+                * Vui lòng liên hệ quản trị viên nếu bạn cần đổi địa chỉ email.
+              </p>
             </div>
 
             <Button onClick={handleSaveProfile} className="w-full gradient-primary text-primary-foreground">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, ChevronDown, BarChart3, ShoppingBag, Settings, LogOut } from "lucide-react";
+import { Menu, X, ChevronDown, BarChart3, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -104,10 +104,7 @@ const Navbar = () => {
                       <Settings size={16} /> Quản trị Admin
                     </Link>
                   )}
-                  <Link to="/dashboard" onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                    <ShoppingBag size={16} /> Đổi thưởng
-                  </Link>
+
                   <div className="border-t border-border mt-1 pt-1">
                     <button onClick={() => { logout(); setUserMenuOpen(false); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/5 transition-colors">
