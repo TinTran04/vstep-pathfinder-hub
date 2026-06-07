@@ -17,4 +17,6 @@ public class SubscriptionPlanProjection
     public bool CanStoreSpeakingAudioForever { get; set; }
 
     public int SpeakingAudioRetentionDays { get; set; }
+
+    public bool IsActive { get; set; }
 }
