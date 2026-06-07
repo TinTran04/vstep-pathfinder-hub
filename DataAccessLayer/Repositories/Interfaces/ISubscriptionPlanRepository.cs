@@ -1,3 +1,4 @@
+using DataAccessLayer.Core.Projections;
 using DataAccessLayer.Entities;
 
 namespace DataAccessLayer.Repositories.Interfaces;
@@ -9,4 +10,6 @@ public interface ISubscriptionPlanRepository
     Task<SubscriptionPlan?> GetByNameAsync(string name);
 
     Task<List<SubscriptionPlan>> GetActivePlansAsync();
+
+    Task<List<SubscriptionPlanProjection>> GetActivePlanProjectionsAsync();
 }

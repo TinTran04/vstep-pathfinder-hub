@@ -21,6 +21,7 @@ public class UserMappingProfile : Profile
             .ForMember(destination => destination.Role, options => options.Ignore())
             .ForMember(destination => destination.SubscriptionPlan, options => options.Ignore())
             .ForMember(destination => destination.SubscriptionExpiresAt, options => options.Ignore())
+            .ForMember(destination => destination.AvatarKey, options => options.Ignore())
             .ForMember(destination => destination.PasswordHash, options => options.Ignore())
             .ForMember(destination => destination.RefreshTokens, options => options.Ignore())
             .ForMember(destination => destination.EmailOtpHash, options => options.Ignore())

@@ -8,6 +8,8 @@ public class User
 
     public string Email { get; set; } = string.Empty;
 
+    public string AvatarKey { get; set; } = "avatar1";
+
     public string PasswordHash { get; set; } = string.Empty;
 
     public int RoleId { get; set; } = 3;

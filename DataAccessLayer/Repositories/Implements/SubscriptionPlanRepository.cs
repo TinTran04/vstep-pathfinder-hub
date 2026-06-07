@@ -1,4 +1,5 @@
 using DataAccessLayer.Context;
+using DataAccessLayer.Core.Projections;
 using DataAccessLayer.Entities;
 using DataAccessLayer.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,26 @@ public class SubscriptionPlanRepository : ISubscriptionPlanRepository
             .AsNoTracking()
             .Where(plan => plan.IsActive)
             .OrderBy(plan => plan.SubscriptionPlanId)
+            .ToListAsync();
+    }
+
+    public Task<List<SubscriptionPlanProjection>> GetActivePlanProjectionsAsync()
+    {
+        return _context.SubscriptionPlans
+            .AsNoTracking()
+            .Where(plan => plan.IsActive)
+            .OrderBy(plan => plan.SubscriptionPlanId)
+            .Select(plan => new SubscriptionPlanProjection
+            {
+                SubscriptionPlanId = plan.SubscriptionPlanId,
+                Name = plan.Name,
+                Description = plan.Description,
+                Price = plan.Price,
+                DurationDays = plan.DurationDays,
+                DailyPracticeLimit = plan.DailyPracticeLimit,
+                CanStoreSpeakingAudioForever = plan.CanStoreSpeakingAudioForever,
+                SpeakingAudioRetentionDays = plan.SpeakingAudioRetentionDays
+            })
             .ToListAsync();
     }
 }

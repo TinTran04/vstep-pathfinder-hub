@@ -127,6 +127,11 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(255)
                 .IsRequired();
 
+            entity.Property(user => user.AvatarKey)
+                .HasMaxLength(50)
+                .HasDefaultValue("avatar1")
+                .IsRequired();
+
             entity.Property(user => user.PasswordHash)
                 .HasMaxLength(255)
                 .IsRequired();

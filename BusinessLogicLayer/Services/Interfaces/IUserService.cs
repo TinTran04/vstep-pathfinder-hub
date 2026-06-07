@@ -13,5 +13,7 @@ public interface IUserService
 
     Task<UserResponse> UpdateUserAsync(int userId, UpdateUserRequest request);
 
+    Task<UserResponse> UpdateMyProfileAsync(int userId, UpdateMyProfileRequest request);
+
     Task DeleteUserAsync(int userId);
 }

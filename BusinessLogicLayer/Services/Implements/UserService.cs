@@ -10,6 +10,18 @@ namespace BusinessLogicLayer.Services.Implements;
 
 public class UserService : IUserService
 {
+    private static readonly HashSet<string> AllowedAvatarKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "avatar1",
+        "avatar2",
+        "avatar3",
+        "avatar4",
+        "avatar5",
+        "avatar6",
+        "avatar7",
+        "avatar8"
+    };
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
@@ -89,6 +101,30 @@ public class UserService : IUserService
         user.RoleId = request.RoleId;
         user.SubscriptionPlanId = request.SubscriptionPlanId;
         user.EmailConfirmed = request.EmailConfirmed;
+
+        await _unitOfWork.SaveChangesAsync();
+
+        return await GetUserByIdAsync(user.UserId);
+    }
+
+    public async Task<UserResponse> UpdateMyProfileAsync(int userId, UpdateMyProfileRequest request)
+    {
+        var fullName = request.FullName.Trim();
+        var avatarKey = request.AvatarKey.Trim();
+
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            throw new InvalidOperationException("Full name is required.");
+        }
+
+        if (!AllowedAvatarKeys.Contains(avatarKey))
+        {
+            throw new InvalidOperationException("Avatar key is invalid.");
+        }
+
+        var user = await GetExistingTrackedUserAsync(userId);
+        user.FullName = fullName;
+        user.AvatarKey = avatarKey.ToLowerInvariant();
 
         await _unitOfWork.SaveChangesAsync();
 

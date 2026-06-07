@@ -61,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IRewardService, RewardService>();
+        services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
 
         services.AddHttpClient<IDictionaryApiService, DictionaryApiService>(client =>
         {

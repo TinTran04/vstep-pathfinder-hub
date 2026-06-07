@@ -8,6 +8,8 @@ public class AuthResponse
 
     public string Email { get; set; } = string.Empty;
 
+    public string AvatarKey { get; set; } = "avatar1";
+
     public int RoleId { get; set; }
 
     public string Role { get; set; } = string.Empty;

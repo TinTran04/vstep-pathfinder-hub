@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using BusinessLogicLayer.DTOs.Common;
 using BusinessLogicLayer.DTOs.Users;
 using BusinessLogicLayer.Services.Interfaces;
@@ -44,6 +45,40 @@ public class UsersController : ControllerBase
         catch (InvalidOperationException exception)
         {
             return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Cap nhat ho so cua nguoi dung dang dang nhap.
+    /// </summary>
+    /// <param name="request">Ho ten va avatarKey preset.</param>
+    /// <returns>Thong tin nguoi dung sau khi cap nhat.</returns>
+    [HttpPatch("me")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<UserResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateMyProfileRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+        }
+
+        try
+        {
+            var response = await _userService.UpdateMyProfileAsync(GetUserId(), request);
+            return Ok(ApiResponse<UserResponse>.Ok(response, "Update profile successfully."));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
         }
     }
 
@@ -176,5 +211,13 @@ public class UsersController : ControllerBase
             .ToDictionary(
                 entry => entry.Key,
                 entry => entry.Value!.Errors.Select(error => error.ErrorMessage).ToArray());
+    }
+
+    private int GetUserId()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(userId, out var parsedUserId)
+            ? parsedUserId
+            : throw new UnauthorizedAccessException("Invalid user token.");
     }
 }
