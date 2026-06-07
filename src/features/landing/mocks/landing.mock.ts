@@ -48,6 +48,7 @@ export const plans = [
   {
     name: "Miễn phí",
     price: "0đ",
+    subscriptionPlanId: 1,
     rawPrice: 0,
     period: "Mãi mãi",
     popular: false,
@@ -61,6 +62,7 @@ export const plans = [
   {
     name: "Gói Tháng",
     price: "199.000đ",
+    subscriptionPlanId: 3,
     rawPrice: 199000,
     period: "/tháng",
     popular: true,
@@ -76,6 +78,7 @@ export const plans = [
   {
     name: "Gói Tuần",
     price: "49.000đ",
+    subscriptionPlanId: 2,
     rawPrice: 49000,
     period: "/tuần",
     popular: false,

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAvatarSrc } from "@/features/auth/avatarCatalog";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useEffect, useState } from "react";
 import logoImg from "@/assets/logo.png";
@@ -138,7 +139,7 @@ const MockTestLanding = () => {
           </div>
           <div className="flex items-center gap-3">
             <Avatar className="w-8 h-8">
-              {user.avatar && <AvatarImage src={user.avatar} alt={user.name} />}
+              <AvatarImage src={getAvatarSrc(user.avatarKey)} alt={user.name} />
               <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
                 {user.name.charAt(0)}
               </AvatarFallback>

@@ -15,6 +15,7 @@ import {
   DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getAvatarSrc } from "@/features/auth/avatarCatalog";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import logoImg from "@/assets/logo.png";
 
@@ -229,7 +230,7 @@ const Quiz = () => {
             </Button>
             <div className="flex items-center gap-2">
               <Avatar className="w-8 h-8">
-                {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                <AvatarImage src={getAvatarSrc(user.avatarKey)} alt={user.name} />
                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
                   {user.name.charAt(0)}
                 </AvatarFallback>

@@ -11,7 +11,7 @@ import { authService } from "../services/auth.service";
 export interface UserData {
   name: string;
   email: string;
-  avatar: string;
+  avatarKey: string;
   plan: string;
   points: number;
   streak: number;
@@ -28,6 +28,7 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; role?: string; error?: string }>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<UserData>) => void;
+  updateProfile: (payload: { name: string; avatarKey: string }) => Promise<{ success: boolean; error?: string }>;
   register: (
     name: string,
     email: string,
@@ -58,6 +59,7 @@ const AuthContext = createContext<AuthContextType>({
   login: () => Promise.resolve({ success: false }),
   logout: () => Promise.resolve(),
   updateUser: () => {},
+  updateProfile: () => Promise.resolve({ success: false }),
   register: () => Promise.resolve({ success: false }),
   verifyOtp: () => Promise.resolve({ success: false }),
   resendOtp: () => Promise.resolve({ success: false }),
@@ -169,6 +171,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const updateProfile = async (payload: { name: string; avatarKey: string }) => {
+    const result = await authService.updateMyProfile(payload);
+    if (result.success && result.user) {
+      setUser(result.user);
+      return { success: true };
+    }
+    return { success: false, error: result.error };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -178,6 +189,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         logout,
         updateUser,
+        updateProfile,
         register,
         verifyOtp,
         resendOtp,

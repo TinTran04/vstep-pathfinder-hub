@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Menu, X, ChevronDown, BarChart3, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getAvatarSrc } from "@/features/auth/avatarCatalog";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import logoImg from "@/assets/logo.png";
 
@@ -79,7 +80,7 @@ const Navbar = () => {
                 className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-muted transition-colors"
               >
                 <Avatar className="w-8 h-8">
-                  {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                  <AvatarImage src={getAvatarSrc(user.avatarKey)} alt={user.name} />
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
                     {user.name.charAt(0)}
                   </AvatarFallback>
@@ -155,7 +156,7 @@ const Navbar = () => {
             <div className="border-t border-border pt-2 space-y-1">
               <div className="flex items-center gap-3 px-3 py-2">
                 <Avatar className="w-8 h-8">
-                  {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                  <AvatarImage src={getAvatarSrc(user.avatarKey)} alt={user.name} />
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">{user.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div>

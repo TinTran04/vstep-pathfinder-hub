@@ -5,28 +5,9 @@ import logoImg from "@/assets/logo.png";
 import {
   BarChart3, BookOpen, Clock, TrendingUp, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, Settings, User,
-  Flame, Share2, Zap, Trophy, Copy, Check, Camera, Mail, Lock,
-  BookMarked, FileText, Star, Gift, Crown,
+  Flame, Check, Camera, Mail, Lock,
+  BookMarked, FileText, Crown,
 } from "lucide-react";
-import avatar1 from "@/assets/avatars/avatar1.png";
-import avatar2 from "@/assets/avatars/avatar2.png";
-import avatar3 from "@/assets/avatars/avatar3.png";
-import avatar4 from "@/assets/avatars/avatar4.png";
-import avatar5 from "@/assets/avatars/avatar5.png";
-import avatar6 from "@/assets/avatars/avatar6.png";
-import avatar7 from "@/assets/avatars/avatar7.png";
-import avatar8 from "@/assets/avatars/avatar8.png";
-
-const PRESET_AVATARS = [
-  { id: "avatar1", src: avatar1 },
-  { id: "avatar2", src: avatar2 },
-  { id: "avatar3", src: avatar3 },
-  { id: "avatar4", src: avatar4 },
-  { id: "avatar5", src: avatar5 },
-  { id: "avatar6", src: avatar6 },
-  { id: "avatar7", src: avatar7 },
-  { id: "avatar8", src: avatar8 },
-];
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -36,9 +17,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { getAvatarSrc, normalizeAvatarKey, PRESET_AVATARS } from "@/features/auth/avatarCatalog";
 import { dashboardService, StreakDayItem, SkillProgressResponse } from "../services/dashboard.service";
 
 const skillColors: Record<string, string> = {
@@ -68,20 +50,12 @@ export interface WeeklyItem {
   hours: number;
 }
 
-export interface PointActionItem {
-  action: string;
-  points: number;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-}
-
 export interface DashboardData {
   recentScores: ScoreItem[];
   weeklyData: WeeklyItem[];
   streakDays: StreakDayItem[];
-  pointActions: PointActionItem[];
   weekStudySeconds: number;
   completedCount: number;
-  rewardPoints: number;
   currentStreakDays: number;
   skillProgress: SkillProgressResponse;
 }
@@ -90,7 +64,7 @@ type TabType = "overview" | "settings" | "vocabulary";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, updateUser, logout, changePassword, isInitialising, isLoggedIn } = useAuth();
+  const { user, updateProfile, logout, changePassword, isInitialising, isLoggedIn } = useAuth();
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,19 +122,12 @@ const Dashboard = () => {
 
   const weeklyData = dashboardData?.weeklyData || [];
   const recentScores = dashboardData?.recentScores || [];
-  const pointActions = dashboardData?.pointActions || [];
   const streakDays = dashboardData?.streakDays || [];
   const currentStreak = dashboardData?.currentStreakDays ?? user?.streak ?? 0;
   const weekStudySeconds = dashboardData?.weekStudySeconds ?? 0;
   const completedCount = dashboardData?.completedCount ?? 0;
   const skillProgress = dashboardData?.skillProgress;
 
-  const maxHours = weeklyData.length > 0 ? Math.max(...weeklyData.map((d: WeeklyItem) => d.hours)) : 0;
-  const [shareDialog, setShareDialog] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [totalPoints, setTotalPoints] = useState(user?.points ?? 0);
-  const [showPointAnim, setShowPointAnim] = useState(false);
-  const [pointDelta, setPointDelta] = useState(0);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 
@@ -170,27 +137,16 @@ const Dashboard = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [avatarPreview, setAvatarPreview] = useState(user?.avatar ?? "");
-
-  const shareUrl = window.location.origin;
-
-  // Sync totalPoints when user data or dashboardData changes (e.g. after login, refresh or dashboard API loads)
-  useEffect(() => {
-    if (dashboardData?.rewardPoints !== undefined) {
-      setTotalPoints(dashboardData.rewardPoints);
-    } else if (user?.points !== undefined) {
-      setTotalPoints(user.points);
-    }
-  }, [user?.points, dashboardData?.rewardPoints]);
+  const [avatarKey, setAvatarKey] = useState(normalizeAvatarKey(user?.avatarKey));
 
   // Sync settings fields when user data loads
   useEffect(() => {
     if (user) {
       setSettingsName(user.name || "");
       setSettingsEmail(user.email || "");
-      setAvatarPreview(user.avatar || "");
+      setAvatarKey(normalizeAvatarKey(user.avatarKey));
     }
-  }, [user?.name, user?.email, user?.avatar]);
+  }, [user?.name, user?.email, user?.avatarKey]);
 
   if (isInitialising) {
     return (
@@ -218,56 +174,13 @@ const Dashboard = () => {
     );
   }
 
-  const handleShare = async (platform: string) => {
-    if (platform === "copy") {
-      navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } else if (platform === "facebook") {
-      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank");
-    } else if (platform === "zalo") {
-      window.open(`https://zalo.me/share?url=${encodeURIComponent(shareUrl)}`, "_blank");
+  const handleSaveProfile = async () => {
+    const result = await updateProfile({ name: settingsName, avatarKey });
+    if (result.success) {
+      toast.success("Đã cập nhật thông tin!");
+    } else {
+      toast.error(result.error || "Không thể cập nhật thông tin.");
     }
-
-    try {
-      const res = await dashboardService.awardShareReward();
-      const newPoints = res.rewardPoints;
-      const diff = newPoints - totalPoints;
-      if (diff > 0) {
-        setPointDelta(diff);
-        setShowPointAnim(true);
-        setTimeout(() => {
-          setTotalPoints(newPoints);
-          setShowPointAnim(false);
-        }, 1000);
-      } else {
-        setTotalPoints(newPoints);
-      }
-      toast.success(`🎉 +${diff > 0 ? diff : 30} điểm thưởng khi chia sẻ!`);
-    } catch (err: any) {
-      console.error(err);
-      const errMsg = err?.message || "Bạn đã chia sẻ hôm nay rồi! Quay lại ngày mai nhé.";
-      toast.info(`🔒 ${errMsg}`);
-    }
-  };
-
-  const addPoints = (pts: number) => {
-    setPointDelta(pts);
-    setShowPointAnim(true);
-    setTimeout(() => {
-      setTotalPoints((p) => p + pts);
-      setShowPointAnim(false);
-    }, 1000);
-  };
-
-  const handleRedeem = (_reward: unknown) => {
-    // Feature coming soon
-    toast.info("Tính năng đổi điểm đang được phát triển!");
-  };
-
-  const handleSaveProfile = () => {
-    updateUser({ name: settingsName, avatar: avatarPreview });
-    toast.success("✅ Đã cập nhật thông tin!");
   };
 
   const handleChangePassword = async () => {
@@ -352,9 +265,7 @@ const Dashboard = () => {
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 px-3 py-2">
             <Avatar className="w-9 h-9">
-              {avatarPreview ? (
-                <AvatarImage src={avatarPreview} alt={settingsName} />
-              ) : null}
+              <AvatarImage src={getAvatarSrc(avatarKey)} alt={settingsName} />
               <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
                 {settingsName.charAt(0)}
               </AvatarFallback>
@@ -396,20 +307,13 @@ const Dashboard = () => {
 
         <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
           {activeTab === "overview" && <OverviewTab
-            totalPoints={totalPoints}
             currentStreak={currentStreak}
-            showPointAnim={showPointAnim}
-            pointDelta={pointDelta}
-            maxHours={maxHours}
             weeklyData={weeklyData}
             streakDays={streakDays}
-            pointActions={pointActions}
             recentScores={recentScores}
             skillColors={skillColors}
             skillIcons={skillIcons}
             settingsName={settingsName}
-            setShareDialog={setShareDialog}
-            addPoints={addPoints}
             userPlan={user?.plan ?? "Miễn phí"}
             weekStudySeconds={weekStudySeconds}
             completedCount={completedCount}
@@ -420,7 +324,7 @@ const Dashboard = () => {
             settingsName={settingsName}
             setSettingsName={setSettingsName}
             settingsEmail={settingsEmail}
-            avatarPreview={avatarPreview}
+            avatarKey={avatarKey}
             onOpenAvatarPicker={() => setAvatarPickerOpen(true)}
             handleSaveProfile={handleSaveProfile}
             currentPassword={currentPassword}
@@ -440,42 +344,6 @@ const Dashboard = () => {
         </div>
       </main>
 
-      {/* Share Dialog */}
-      <Dialog open={shareDialog} onOpenChange={setShareDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share2 size={20} className="text-primary" />
-              Chia sẻ & nhận thưởng
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Chia sẻ VStepUp với bạn bè và nhận <strong className="text-amber-600">30 điểm thưởng</strong> mỗi lần chia sẻ!
-            </p>
-            <div className="bg-muted/50 rounded-xl p-3 flex items-center gap-2">
-              <input readOnly value={shareUrl} className="flex-1 bg-transparent text-sm text-foreground outline-none" />
-              <Button size="sm" variant="ghost" onClick={() => handleShare("copy")} className="shrink-0">
-                {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
-              </Button>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="gap-2" onClick={() => handleShare("facebook")}>
-                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-blue-600"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                Facebook
-              </Button>
-              <Button variant="outline" className="gap-2" onClick={() => handleShare("zalo")}>
-                <span className="w-4 h-4 rounded bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">Z</span>
-                Zalo
-              </Button>
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-              <p className="text-sm font-medium text-amber-800">💰 Mời bạn bè đăng ký → <strong>+100 điểm/người</strong></p>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Avatar Picker Dialog */}
       <Dialog open={avatarPickerOpen} onOpenChange={setAvatarPickerOpen}>
         <DialogContent className="max-w-md">
@@ -487,13 +355,13 @@ const Dashboard = () => {
           </DialogHeader>
           <div className="grid grid-cols-4 gap-4 py-4 justify-items-center">
             {PRESET_AVATARS.map((avatar) => {
-              const isSelected = avatarPreview === avatar.src;
+              const isSelected = avatarKey === avatar.id;
               return (
                 <button
                   key={avatar.id}
                   type="button"
                   onClick={() => {
-                    setAvatarPreview(avatar.src);
+                    setAvatarKey(avatar.id);
                     setAvatarPickerOpen(false);
                   }}
                   className={`relative w-16 h-16 rounded-full overflow-hidden border-2 transition-all hover:scale-105 duration-200 ${
@@ -544,20 +412,13 @@ const getDayOfMonth = (dateStr: string): string => {
 };
 
 interface OverviewTabProps {
-  totalPoints: number;
   currentStreak: number;
-  showPointAnim: boolean;
-  pointDelta: number;
-  maxHours: number;
   weeklyData: WeeklyItem[];
   streakDays: StreakDayItem[];
-  pointActions: PointActionItem[];
   recentScores: ScoreItem[];
   skillColors: Record<string, string>;
   skillIcons: Record<string, React.ReactNode>;
   settingsName: string;
-  setShareDialog: (open: boolean) => void;
-  addPoints: (amount: number) => void;
   userPlan: string;
   weekStudySeconds: number;
   completedCount: number;
@@ -565,9 +426,9 @@ interface OverviewTabProps {
 }
 
 const OverviewTab = ({
-  totalPoints, currentStreak, showPointAnim, pointDelta, maxHours,
-  weeklyData, streakDays, pointActions, recentScores, skillColors, skillIcons,
-  settingsName, setShareDialog, addPoints, userPlan, weekStudySeconds,
+  currentStreak,
+  weeklyData, streakDays, recentScores, skillColors, skillIcons,
+  settingsName, userPlan, weekStudySeconds,
   completedCount, skillProgress,
 }: OverviewTabProps) => {
   const isPremium = userPlan.toLowerCase() !== "miễn phí" && userPlan.toLowerCase() !== "free";
@@ -621,13 +482,12 @@ const OverviewTab = ({
       </motion.div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {([
           { icon: <Clock size={20} />, label: "Giờ học tuần này", value: formatStudyTime(weekStudySeconds), color: "text-primary" },
-          { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: `${completedCount}`, color: "text-emerald-500" },
-          { icon: <Zap size={20} />, label: "Điểm thưởng", value: `${totalPoints}`, color: "text-amber-500", isPoints: true },
+          { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: `${completedCount}`, color: "text-emerald-500" },
           { icon: <Flame size={20} />, label: "Chuỗi ngày học", value: `${currentStreak} ngày`, color: "text-orange-500", isStreak: true },
-        ] as { icon: React.ReactNode; label: string; value: string; color: string; isPoints?: boolean; isStreak?: boolean }[]).map((s, i) => (
+        ] as { icon: React.ReactNode; label: string; value: string; color: string; isStreak?: boolean }[]).map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}>
             <Card className="border-border card-press cursor-default group hover:border-primary/30 transition-all duration-300">
               <CardContent className="p-4 lg:p-5">
@@ -635,15 +495,7 @@ const OverviewTab = ({
                   {s.isStreak ? <span className="animate-fire">{s.icon}</span> : s.icon}
                 </div>
                 <div className="relative">
-                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
-                  <AnimatePresence>
-                    {s.isPoints && showPointAnim && (
-                      <motion.span className="absolute -top-4 right-0 text-sm font-bold text-amber-500"
-                        initial={{ opacity: 1, y: 0 }} animate={{ opacity: 0, y: -20 }} exit={{ opacity: 0 }} transition={{ duration: 1 }}>
-                        +{pointDelta}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
               </CardContent>
@@ -652,8 +504,8 @@ const OverviewTab = ({
         ))}
       </div>
 
-      {/* Streak + Points */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      {/* Streak */}
+      <div className="grid gap-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
           <Card className="border-border">
             <CardHeader className="pb-2">
@@ -686,46 +538,12 @@ const OverviewTab = ({
                     </motion.div>
                   );
                 })}
-              </div>
-              <p className="text-xs text-muted-foreground mt-3 text-center">
-                Duy trì streak 7 ngày liên tiếp → <strong className="text-amber-600">+50 điểm thưởng</strong>
-              </p>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-          <Card className="border-border">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Trophy size={20} className="text-amber-500" /> Điểm thưởng
-                </CardTitle>
-                <div className="flex items-center gap-1.5">
-                  <Zap size={16} className="text-amber-500" />
-                  <span className="text-lg font-bold text-foreground">{totalPoints}</span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cách kiếm điểm</p>
-                {pointActions.slice(0, 4).map((pa: PointActionItem) => (
-                  <div key={pa.action} className="flex items-center gap-3 text-sm">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <pa.icon size={14} className="text-primary" />
-                    </div>
-                    <span className="flex-1 text-muted-foreground">{pa.action}</span>
-                    <Badge variant="secondary" className="text-xs font-bold text-amber-600">+{pa.points}</Badge>
-                  </div>
-                ))}
-              </div>
-              <Button variant="outline" className="w-full border-dashed border-primary/40 text-primary hover:bg-primary/5 gap-2" onClick={() => setShareDialog(true)}>
-                <Share2 size={16} /> Chia sẻ & nhận 30 điểm
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
+
       </div>
 
       {/* Chart + Skills */}
@@ -856,7 +674,7 @@ interface SettingsTabProps {
   settingsName: string;
   setSettingsName: (name: string) => void;
   settingsEmail: string;
-  avatarPreview: string | null;
+  avatarKey: string;
   onOpenAvatarPicker: () => void;
   handleSaveProfile: () => void;
   currentPassword: string;
@@ -870,7 +688,7 @@ interface SettingsTabProps {
 
 const SettingsTab = ({
   settingsName, setSettingsName, settingsEmail,
-  avatarPreview, onOpenAvatarPicker, handleSaveProfile,
+  avatarKey, onOpenAvatarPicker, handleSaveProfile,
   currentPassword, setCurrentPassword, newPassword, setNewPassword,
   confirmPassword, setConfirmPassword, handleChangePassword,
 }: SettingsTabProps) => (
@@ -892,7 +710,7 @@ const SettingsTab = ({
             <div className="flex items-center gap-4">
               <div className="relative group">
                 <Avatar className="w-20 h-20">
-                  {avatarPreview ? <AvatarImage src={avatarPreview} alt="Avatar" /> : null}
+                  <AvatarImage src={getAvatarSrc(avatarKey)} alt="Avatar" />
                   <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold">
                     {settingsName.charAt(0)}
                   </AvatarFallback>

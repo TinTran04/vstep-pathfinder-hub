@@ -7,7 +7,7 @@ export const seededAccounts: { email: string; password: string; user: UserData }
     user: {
       name: "Admin VSTEPPro",
       email: "admin@vsteppro.vn",
-      avatar: "",
+      avatarKey: "avatar1",
       plan: "Admin",
       points: 0,
       streak: 0,
@@ -20,7 +20,7 @@ export const seededAccounts: { email: string; password: string; user: UserData }
     user: {
       name: "Nguyễn Văn A",
       email: "user@vsteppro.vn",
-      avatar: "",
+      avatarKey: "avatar1",
       plan: "Gói Tháng",
       points: 350,
       streak: 12,
@@ -33,7 +33,7 @@ export const seededAccounts: { email: string; password: string; user: UserData }
     user: {
       name: "Trần Thị B",
       email: "hocvien@gmail.com",
-      avatar: "",
+      avatarKey: "avatar1",
       plan: "Miễn phí",
       points: 45,
       streak: 3,

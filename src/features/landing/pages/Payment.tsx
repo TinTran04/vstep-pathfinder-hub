@@ -17,17 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { toast } from "sonner";
-import { plans } from "../mocks/landing.mock";
 import { paymentService } from "../services/payment.service";
-
-interface PlanItem {
-  name: string;
-  price: string;
-  rawPrice: number;
-  period: string;
-  popular: boolean;
-  features: string[];
-}
+import { landingService } from "../services/landing.service";
+import type { PlanItem } from "../services/landing.service";
 
 const Payment = () => {
   const location = useLocation();
@@ -35,22 +27,29 @@ const Payment = () => {
   const [searchParams] = useSearchParams();
   const { isLoggedIn, user, updateUser } = useAuth();
 
+  const [availablePlans, setAvailablePlans] = useState<PlanItem[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+
   // Find initial plan from state, query param, or default to Monthly
-  const getInitialPlan = (): PlanItem => {
+  const getInitialPlan = (loadedPlans: PlanItem[]): PlanItem | null => {
     const statePlan = location.state?.plan;
-    if (statePlan) return statePlan;
+    if (statePlan?.subscriptionPlanId) {
+      const matched = loadedPlans.find((plan) => plan.subscriptionPlanId === statePlan.subscriptionPlanId);
+      if (matched) return matched;
+    }
 
     const planParam = searchParams.get("plan")?.toLowerCase();
-    if (planParam === "week" || planParam === "weekly" || planParam === "gói tuần") {
-      const p = plans.find((pl) => pl.rawPrice === 49000);
+    if (planParam === "week" || planParam === "weekly" || planParam === "goi-tuan") {
+      const p = loadedPlans.find((pl) => pl.durationDays === 7 || pl.name.toLowerCase().includes("tuan"));
       if (p) return p;
     }
-    
-    // Default to monthly plan
-    return plans.find((pl) => pl.rawPrice === 199000) || plans[1];
+
+    return loadedPlans.find((pl) => pl.durationDays >= 30 || pl.name.toLowerCase().includes("thang"))
+      || loadedPlans.find((pl) => pl.rawPrice > 0)
+      || null;
   };
 
-  const [selectedPlan, setSelectedPlan] = useState<PlanItem>(getInitialPlan);
+  const [selectedPlan, setSelectedPlan] = useState<PlanItem | null>(null);
   const [payStep, setPayStep] = useState<"qr" | "processing" | "success">("qr");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [processStatus, setProcessStatus] = useState("Đang kết nối cổng thanh toán...");
@@ -70,13 +69,17 @@ const Payment = () => {
       return;
     }
 
+    if (!selectedPlan) {
+      toast.error("Vui l?ng ch?n g?i thanh to?n.");
+      return;
+    }
+
     setLoading(true);
     setPayStep("processing");
     setProcessStatus("Đang tạo link thanh toán PayOS...");
 
     try {
-      const planId = selectedPlan.rawPrice === 49000 ? 2 : 3;
-      const res = await paymentService.createSubscriptionPayment(planId);
+      const res = await paymentService.createSubscriptionPayment(selectedPlan.subscriptionPlanId);
       if (res.checkoutUrl) {
         setProcessStatus("Đang chuyển hướng đến cổng thanh toán...");
         window.location.href = res.checkoutUrl;
@@ -93,6 +96,14 @@ const Payment = () => {
   const formattedTransferContent = user
     ? `VSTEPUP ${txCode} ${user.email.split("@")[0].toUpperCase()}`
     : `VSTEPUP ${txCode} GUEST`;
+
+  if (plansLoading || !selectedPlan) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
@@ -238,7 +249,7 @@ const Payment = () => {
 
                 {/* Plan Options Selector in Payment Page */}
                 <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg text-xs font-medium">
-                  {plans.filter(p => p.rawPrice > 0).map((p) => (
+                  {availablePlans.filter(p => p.rawPrice > 0).map((p) => (
                     <button
                       key={p.name}
                       onClick={() => setSelectedPlan(p)}

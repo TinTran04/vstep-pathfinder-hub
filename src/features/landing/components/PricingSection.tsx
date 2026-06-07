@@ -2,16 +2,8 @@ import { useState, useEffect } from "react";
 import { Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { landingService } from "../services/landing.service";
+import type { PlanItem } from "../services/landing.service";
 import { useNavigate } from "react-router-dom";
-
-interface PlanItem {
-  name: string;
-  price: string;
-  rawPrice: number;
-  period: string;
-  popular: boolean;
-  features: string[];
-}
 
 const PricingSection = () => {
   const [plansList, setPlansList] = useState<PlanItem[]>([]);
