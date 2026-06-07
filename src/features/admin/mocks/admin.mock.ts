@@ -37,9 +37,15 @@ export interface Exam {
 export interface PricePlan {
   id: string;
   name: string;
+  description?: string | null;
   price: number;
   period: string;
   features: string[];
+  durationDays?: number;
+  dailyPracticeLimit?: number | null;
+  canStoreSpeakingAudioForever?: boolean;
+  speakingAudioRetentionDays?: number;
+  isActive?: boolean;
 }
 
 // --- Mock data ---

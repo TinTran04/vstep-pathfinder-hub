@@ -266,7 +266,16 @@ const Admin = () => {
 
   const [priceDialog, setPriceDialog] = useState(false);
   const [editPlan, setEditPlan] = useState<PricePlan | null>(null);
-  const [priceForm, setPriceForm] = useState({ name: "", price: 0, period: "/tháng", features: "" });
+  const [priceForm, setPriceForm] = useState({
+    name: "",
+    description: "",
+    price: 0,
+    durationDays: 30,
+    dailyPracticeLimit: "",
+    canStoreSpeakingAudioForever: true,
+    speakingAudioRetentionDays: 0,
+    isActive: true,
+  });
 
   // Writing Sample states
   const [sampleDialog, setSampleDialog] = useState(false);
@@ -993,22 +1002,90 @@ const Admin = () => {
   };
 
   // Price
-  const openEditPrice = (p: PricePlan) => { setEditPlan(p); setPriceForm({ name: p.name, price: p.price, period: p.period, features: p.features.join("\n") }); setPriceDialog(true); };
+  const resetPriceForm = () => ({
+    name: "",
+    description: "",
+    price: 0,
+    durationDays: 30,
+    dailyPracticeLimit: "",
+    canStoreSpeakingAudioForever: true,
+    speakingAudioRetentionDays: 0,
+    isActive: true,
+  });
+
+  const openAddPrice = () => {
+    setEditPlan(null);
+    setPriceForm(resetPriceForm());
+    setPriceDialog(true);
+  };
+
+  const openEditPrice = (p: PricePlan) => {
+    setEditPlan(p);
+    setPriceForm({
+      name: p.name,
+      description: p.description ?? "",
+      price: p.price,
+      durationDays: p.durationDays ?? 30,
+      dailyPracticeLimit: p.dailyPracticeLimit === null || p.dailyPracticeLimit === undefined ? "" : String(p.dailyPracticeLimit),
+      canStoreSpeakingAudioForever: p.canStoreSpeakingAudioForever ?? true,
+      speakingAudioRetentionDays: p.speakingAudioRetentionDays ?? 0,
+      isActive: p.isActive ?? true,
+    });
+    setPriceDialog(true);
+  };
   
   const savePrice = async () => {
-    if (!editPlan) return;
+    if (!priceForm.name.trim()) {
+      toast.error("Tên gói không được để trống");
+      return;
+    }
+
+    if (priceForm.price < 0 || priceForm.durationDays < 0 || priceForm.speakingAudioRetentionDays < 0) {
+      toast.error("Giá trị số không hợp lệ");
+      return;
+    }
+
+    const payload = {
+      name: priceForm.name,
+      description: priceForm.description,
+      price: priceForm.price,
+      durationDays: priceForm.durationDays,
+      dailyPracticeLimit: priceForm.dailyPracticeLimit === "" ? null : Number(priceForm.dailyPracticeLimit),
+      canStoreSpeakingAudioForever: priceForm.canStoreSpeakingAudioForever,
+      speakingAudioRetentionDays: priceForm.speakingAudioRetentionDays,
+      isActive: priceForm.isActive,
+    };
+
     try {
-      const updated = await adminService.updatePricePlan(editPlan.id, {
-        name: priceForm.name,
-        price: priceForm.price,
-        period: priceForm.period,
-        features: priceForm.features.split("\n").filter(Boolean)
-      });
-      setPlans(p => p.map(pl => pl.id === editPlan.id ? updated : pl));
-      toast.success("Cập nhật giá thành công");
+      if (editPlan) {
+        const updated = await adminService.updatePricePlan(editPlan.id, payload);
+        setPlans(p => p.map(pl => pl.id === editPlan.id ? updated : pl));
+        toast.success("Cập nhật gói giá thành công");
+      } else {
+        const created = await adminService.createPricePlan(payload);
+        setPlans(p => [...p, created]);
+        toast.success("Thêm gói giá thành công");
+      }
       setPriceDialog(false);
     } catch (err) {
-      toast.error("Có lỗi xảy ra");
+      const message = (err as { message?: string })?.message;
+      toast.error(message || "Có lỗi xảy ra");
+    }
+  };
+
+  const deletePrice = async (plan: PricePlan) => {
+    if (plan.id === "1") {
+      toast.error("Không thể ẩn gói miễn phí");
+      return;
+    }
+
+    try {
+      await adminService.deletePricePlan(plan.id);
+      setPlans(p => p.map(item => item.id === plan.id ? { ...item, isActive: false } : item));
+      toast.success("Đã ẩn gói khỏi danh sách public");
+    } catch (err) {
+      const message = (err as { message?: string })?.message;
+      toast.error(message || "Không thể ẩn gói");
     }
   };
 
@@ -2591,13 +2668,18 @@ const Admin = () => {
             {/* === PRICING === */}
             {activeTab === "pricing" && (
               <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div>
-                  <h2 className="text-lg font-bold text-foreground">Quản lí gói giá</h2>
-                  <p className="text-xs text-muted-foreground">Cấu hình giá và tính năng các gói học tập</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground">Quản lí gói giá</h2>
+                    <p className="text-xs text-muted-foreground">Cấu hình giá và quyền lợi các gói subscription từ database</p>
+                  </div>
+                  <Button onClick={openAddPrice} size="sm" className="gradient-primary text-primary-foreground gap-1.5">
+                    <Plus size={14} /> Thêm gói
+                  </Button>
                 </div>
                 <div className="grid md:grid-cols-3 gap-5">
                   {plans.map((p, idx) => (
-                    <Card key={p.id} className={`border-border overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${idx === 1 ? "ring-2 ring-primary/30" : ""}`}>
+                    <Card key={p.id} className={`border-border overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${(p.isActive ?? true) ? "" : "opacity-60"} ${idx === 1 ? "ring-2 ring-primary/30" : ""}`}>
                       {idx === 1 && (
                         <div className="gradient-primary text-primary-foreground text-center text-[10px] font-bold py-1 tracking-wide uppercase">
                           Phổ biến nhất
@@ -2605,12 +2687,20 @@ const Admin = () => {
                       )}
                       <CardContent className="p-5 space-y-4">
                         <div className="text-center space-y-2">
-                          <Badge variant="secondary" className="text-[10px]">{p.period === "Mãi mãi" ? "Free" : p.period}</Badge>
+                          <div className="flex items-center justify-center gap-2">
+                            <Badge variant="secondary" className="text-[10px]">{p.period === "Mãi mãi" ? "Free" : p.period}</Badge>
+                            <Badge variant={(p.isActive ?? true) ? "default" : "outline"} className="text-[10px]">
+                              {(p.isActive ?? true) ? "Đang bật" : "Đã ẩn"}
+                            </Badge>
+                          </div>
                           <h3 className="font-bold text-foreground">{p.name}</h3>
                           <p className="text-3xl font-extrabold text-foreground">
                             {p.price === 0 ? "0" : p.price.toLocaleString("vi-VN")}
                             <span className="text-sm font-normal text-muted-foreground">đ</span>
                           </p>
+                          {p.durationDays !== undefined && (
+                            <p className="text-[11px] text-muted-foreground">Thời hạn {p.durationDays === 0 ? "không giới hạn" : `${p.durationDays} ngày`}</p>
+                          )}
                         </div>
                         <Separator />
                         <ul className="space-y-2 flex flex-col items-center text-center">
@@ -2620,9 +2710,14 @@ const Admin = () => {
                             </li>
                           ))}
                         </ul>
-                        <Button variant="outline" className="w-full gap-1.5 text-xs" onClick={() => openEditPrice(p)}>
-                          <Edit2 size={12} /> Chỉnh sửa
-                        </Button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button variant="outline" className="gap-1.5 text-xs" onClick={() => openEditPrice(p)}>
+                            <Edit2 size={12} /> Sửa
+                          </Button>
+                          <Button variant="outline" className="gap-1.5 text-xs text-destructive hover:text-destructive" onClick={() => deletePrice(p)} disabled={p.id === "1" || !(p.isActive ?? true)}>
+                            <Trash2 size={12} /> Ẩn
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
@@ -3035,14 +3130,51 @@ const Admin = () => {
       {/* Price Dialog */}
       <Dialog open={priceDialog} onOpenChange={setPriceDialog}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Chỉnh sửa gói giá</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editPlan ? "Chỉnh sửa gói giá" : "Thêm gói giá"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5"><Label className="text-xs">Tên gói</Label><Input value={priceForm.name} onChange={e => setPriceForm(p => ({ ...p, name: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Mô tả</Label><Textarea value={priceForm.description} onChange={e => setPriceForm(p => ({ ...p, description: e.target.value }))} rows={3} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">Giá (VND)</Label><Input type="number" value={priceForm.price} onChange={e => setPriceForm(p => ({ ...p, price: Number(e.target.value) }))} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">Chu kỳ</Label><Input value={priceForm.period} onChange={e => setPriceForm(p => ({ ...p, period: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Thời hạn (ngày)</Label><Input type="number" value={priceForm.durationDays} onChange={e => setPriceForm(p => ({ ...p, durationDays: Number(e.target.value) }))} /></div>
             </div>
-            <div className="space-y-1.5"><Label className="text-xs">Tính năng (mỗi dòng 1 tính năng)</Label><Textarea value={priceForm.features} onChange={e => setPriceForm(p => ({ ...p, features: e.target.value }))} rows={4} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Lượt luyện tập/ngày</Label>
+                <Input
+                  type="number"
+                  placeholder="Để trống = không giới hạn"
+                  value={priceForm.dailyPracticeLimit}
+                  onChange={e => setPriceForm(p => ({ ...p, dailyPracticeLimit: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Lưu audio Speaking (ngày)</Label>
+                <Input type="number" value={priceForm.speakingAudioRetentionDays} onChange={e => setPriceForm(p => ({ ...p, speakingAudioRetentionDays: Number(e.target.value) }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Lưu audio vĩnh viễn</Label>
+                <Select value={priceForm.canStoreSpeakingAudioForever ? "true" : "false"} onValueChange={value => setPriceForm(p => ({ ...p, canStoreSpeakingAudioForever: value === "true" }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Có</SelectItem>
+                    <SelectItem value="false">Không</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Trạng thái</Label>
+                <Select value={priceForm.isActive ? "true" : "false"} onValueChange={value => setPriceForm(p => ({ ...p, isActive: value === "true" }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Đang bật</SelectItem>
+                    <SelectItem value="false">Đã ẩn</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPriceDialog(false)}>Hủy</Button>

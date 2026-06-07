@@ -41,6 +41,29 @@ interface BEExamResponse {
   createdAt: string;
 }
 
+interface BESubscriptionPlanResponse {
+  subscriptionPlanId: number;
+  name: string;
+  description: string | null;
+  price: number;
+  durationDays: number;
+  dailyPracticeLimit: number | null;
+  canStoreSpeakingAudioForever: boolean;
+  speakingAudioRetentionDays: number;
+  isActive: boolean;
+}
+
+interface SubscriptionPlanPayload {
+  name: string;
+  description: string | null;
+  price: number;
+  durationDays: number;
+  dailyPracticeLimit: number | null;
+  canStoreSpeakingAudioForever: boolean;
+  speakingAudioRetentionDays: number;
+  isActive: boolean;
+}
+
 export interface ListeningAudioUploadUrlRequest {
   examId?: number | null;
   contentType: string;
@@ -141,6 +164,72 @@ function toExam(e: BEExamResponse): Exam {
   };
 }
 
+function getPlanDisplayName(name: string): string {
+  const normalized = name.toLowerCase();
+  if (normalized === "free") return "Miễn phí";
+  if (normalized === "weekly") return "Gói Tuần";
+  if (normalized === "monthly") return "Gói Tháng";
+  return name;
+}
+
+function getPlanPeriod(plan: Pick<BESubscriptionPlanResponse, "price" | "durationDays">): string {
+  if (plan.price <= 0 || plan.durationDays <= 0) return "Mãi mãi";
+  if (plan.durationDays === 7) return "/tuần";
+  if (plan.durationDays >= 28 && plan.durationDays <= 31) return "/tháng";
+  return `/${plan.durationDays} ngày`;
+}
+
+function getPlanFeatures(plan: BESubscriptionPlanResponse): string[] {
+  const features: string[] = [];
+
+  if (plan.dailyPracticeLimit === null) {
+    features.push("Luyện tập không giới hạn mỗi ngày");
+  } else if (plan.dailyPracticeLimit > 0) {
+    features.push(`${plan.dailyPracticeLimit} lượt luyện tập mỗi ngày`);
+  }
+
+  if (plan.canStoreSpeakingAudioForever) {
+    features.push("Lưu audio Speaking không giới hạn thời gian");
+  } else if (plan.speakingAudioRetentionDays > 0) {
+    features.push(`Lưu audio Speaking ${plan.speakingAudioRetentionDays} ngày`);
+  }
+
+  if (plan.description) {
+    features.unshift(plan.description);
+  }
+
+  return features.length > 0 ? features : ["Quyền lợi cơ bản"];
+}
+
+function toPricePlan(plan: BESubscriptionPlanResponse): PricePlan {
+  return {
+    id: plan.subscriptionPlanId.toString(),
+    name: getPlanDisplayName(plan.name),
+    description: plan.description,
+    price: plan.price,
+    period: getPlanPeriod(plan),
+    features: getPlanFeatures(plan),
+    durationDays: plan.durationDays,
+    dailyPracticeLimit: plan.dailyPracticeLimit,
+    canStoreSpeakingAudioForever: plan.canStoreSpeakingAudioForever,
+    speakingAudioRetentionDays: plan.speakingAudioRetentionDays,
+    isActive: plan.isActive,
+  };
+}
+
+function toSubscriptionPlanPayload(plan: Partial<PricePlan>): SubscriptionPlanPayload {
+  return {
+    name: plan.name?.trim() || "",
+    description: plan.description?.trim() || null,
+    price: Number(plan.price ?? 0),
+    durationDays: Number(plan.durationDays ?? 30),
+    dailyPracticeLimit: plan.dailyPracticeLimit === undefined ? null : plan.dailyPracticeLimit,
+    canStoreSpeakingAudioForever: Boolean(plan.canStoreSpeakingAudioForever),
+    speakingAudioRetentionDays: Number(plan.speakingAudioRetentionDays ?? 0),
+    isActive: plan.isActive ?? true,
+  };
+}
+
 export const adminService = {
   async getUsers(): Promise<User[]> {
     const res = await apiClient.get<BEPagedResponse<BEUserResponse>>("/users?pageSize=100");
@@ -153,8 +242,13 @@ export const adminService = {
   },
 
   async getPricePlans(): Promise<PricePlan[]> {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    return [...plansList];
+    try {
+      const res = await apiClient.get<BESubscriptionPlanResponse[]>("/subscription-plans/admin");
+      return (res ?? []).map(toPricePlan);
+    } catch (error) {
+      console.warn("Fallback to mock subscription plans", error);
+      return [...plansList];
+    }
   },
 
   async getAdminStats() {
@@ -383,27 +477,25 @@ export const adminService = {
     return this.importListeningDocx(docxFile, uploadInfo.audioUrl, isPublished);
   },
   // Price Plan CRUD
-  async createPricePlan(payload: Omit<PricePlan, "id">): Promise<PricePlan> {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const newPlan: PricePlan = {
-      ...payload,
-      id: Date.now().toString(),
-    };
-    plansList.push(newPlan);
-    return newPlan;
+  async createPricePlan(payload: Partial<PricePlan>): Promise<PricePlan> {
+    const res = await apiClient.post<BESubscriptionPlanResponse>(
+      "/subscription-plans",
+      toSubscriptionPlanPayload(payload)
+    );
+    return toPricePlan(res);
   },
 
   async updatePricePlan(planId: string, payload: Partial<PricePlan>): Promise<PricePlan> {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const index = plansList.findIndex((p) => p.id === planId);
-    if (index === -1) throw new Error("Plan not found");
-    plansList[index] = { ...plansList[index], ...payload };
-    return plansList[index];
+    const current = plansList.find((plan) => plan.id === planId);
+    const res = await apiClient.put<BESubscriptionPlanResponse>(
+      `/subscription-plans/${planId}`,
+      toSubscriptionPlanPayload({ ...current, ...payload })
+    );
+    return toPricePlan(res);
   },
 
   async deletePricePlan(planId: string): Promise<boolean> {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    plansList = plansList.filter((p) => p.id !== planId);
+    await apiClient.delete(`/subscription-plans/${planId}`);
     return true;
   },
 
