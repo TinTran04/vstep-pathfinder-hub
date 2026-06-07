@@ -29,6 +29,7 @@ const Payment = () => {
 
   const [availablePlans, setAvailablePlans] = useState<PlanItem[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState<string | null>(null);
 
   // Find initial plan from state, query param, or default to Monthly
   const getInitialPlan = (loadedPlans: PlanItem[]): PlanItem | null => {
@@ -55,6 +56,43 @@ const Payment = () => {
   const [processStatus, setProcessStatus] = useState("Đang kết nối cổng thanh toán...");
   const [txCode] = useState(() => `VSP${Date.now().toString().slice(-8).toUpperCase()}`);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPlans = async () => {
+      setPlansLoading(true);
+      setPlansError(null);
+
+      try {
+        const loadedPlans = await landingService.getPlans();
+        const payablePlans = loadedPlans.filter((plan) => plan.rawPrice > 0);
+        const initialPlan = getInitialPlan(payablePlans);
+
+        if (!isMounted) return;
+
+        setAvailablePlans(payablePlans);
+        setSelectedPlan(initialPlan);
+        if (!initialPlan) {
+          setPlansError("Hiện chưa có gói thanh toán nào đang khả dụng.");
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("Load payment plans failed:", error);
+        setPlansError("Không thể tải danh sách gói thanh toán. Vui lòng thử lại sau.");
+      } finally {
+        if (isMounted) {
+          setPlansLoading(false);
+        }
+      }
+    };
+
+    loadPlans();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.state, searchParams]);
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -97,10 +135,31 @@ const Payment = () => {
     ? `VSTEPUP ${txCode} ${user.email.split("@")[0].toUpperCase()}`
     : `VSTEPUP ${txCode} GUEST`;
 
-  if (plansLoading || !selectedPlan) {
+  if (plansLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (plansError || !selectedPlan) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-card border border-border rounded-2xl p-6 text-center space-y-4 shadow-sm">
+          <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-600 mx-auto flex items-center justify-center">
+            <AlertTriangle size={24} />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-foreground">Không thể mở trang thanh toán</h2>
+            <p className="text-sm text-muted-foreground">
+              {plansError || "Không tìm thấy gói thanh toán phù hợp."}
+            </p>
+          </div>
+          <Button onClick={() => navigate("/")} className="gradient-primary text-primary-foreground">
+            Quay lại trang chủ
+          </Button>
+        </div>
       </div>
     );
   }
