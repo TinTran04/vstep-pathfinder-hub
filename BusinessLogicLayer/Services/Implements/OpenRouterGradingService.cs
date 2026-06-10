@@ -99,9 +99,18 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         }
 
         using var response = await _httpClient.SendAsync(request);
-        var result = await response.Content.ReadFromJsonAsync<OpenRouterChatResponse>(JsonOptions);
+        var rawResponse = await response.Content.ReadAsStringAsync();
 
-        if (!response.IsSuccessStatusCode || result?.Choices.Count is null or 0)
+        if (!response.IsSuccessStatusCode)
+        {
+            var providerMessage = ExtractProviderError(rawResponse);
+            throw new InvalidOperationException(
+                $"OpenRouter grading request failed with HTTP {(int)response.StatusCode} {response.ReasonPhrase}. {providerMessage}");
+        }
+
+        var result = JsonSerializer.Deserialize<OpenRouterChatResponse>(rawResponse, JsonOptions);
+
+        if (result?.Choices.Count is null or 0)
         {
             throw new InvalidOperationException("OpenRouter grading request failed.");
         }
@@ -113,6 +122,39 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         }
 
         return ParseScoreResult(content);
+    }
+
+    private static string ExtractProviderError(string rawResponse)
+    {
+        if (string.IsNullOrWhiteSpace(rawResponse))
+        {
+            return "Provider response body is empty.";
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawResponse);
+            if (document.RootElement.TryGetProperty("error", out var error))
+            {
+                if (error.ValueKind == JsonValueKind.Object &&
+                    error.TryGetProperty("message", out var message) &&
+                    message.ValueKind == JsonValueKind.String)
+                {
+                    return message.GetString() ?? rawResponse;
+                }
+
+                if (error.ValueKind == JsonValueKind.String)
+                {
+                    return error.GetString() ?? rawResponse;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Fall back to the raw provider response below.
+        }
+
+        return rawResponse.Length > 500 ? rawResponse[..500] : rawResponse;
     }
 
     private async Task<byte[]> DownloadAudioAsync(string audioUrl)

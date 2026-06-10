@@ -4,6 +4,7 @@ using BusinessLogicLayer.DTOs.Speaking;
 using BusinessLogicLayer.Services.Interfaces;
 using DataAccessLayer.Entities;
 using DataAccessLayer.UoW;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessLogicLayer.Services.Implements;
 
@@ -14,19 +15,22 @@ public class SpeakingPracticeService : ISpeakingPracticeService
     private readonly IR2StorageService _r2StorageService;
     private readonly IOpenRouterGradingService _openRouterGradingService;
     private readonly IRewardService _rewardService;
+    private readonly ILogger<SpeakingPracticeService> _logger;
 
     public SpeakingPracticeService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IR2StorageService r2StorageService,
         IOpenRouterGradingService openRouterGradingService,
-        IRewardService rewardService)
+        IRewardService rewardService,
+        ILogger<SpeakingPracticeService> logger)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _r2StorageService = r2StorageService;
         _openRouterGradingService = openRouterGradingService;
         _rewardService = rewardService;
+        _logger = logger;
     }
 
     public async Task<SpeakingUploadUrlResponse> CreateUploadUrlAsync(int userId, CreateSpeakingUploadUrlRequest request)
@@ -80,8 +84,14 @@ public class SpeakingPracticeService : ISpeakingPracticeService
         }
         catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or TaskCanceledException)
         {
+            _logger.LogWarning(
+                exception,
+                "Speaking AI grading failed for UserId={UserId}, ExamId={ExamId}, AudioObjectKey={AudioObjectKey}",
+                userId,
+                exam.ExamId,
+                submission.AudioObjectKey);
             submission.Status = "failed";
-            submission.Feedback = "AI grading failed. Please try again later.";
+            submission.Feedback = "Hệ thống chấm điểm AI đang tạm thời không khả dụng. Vui lòng thử lại sau.";
         }
 
         await _unitOfWork.SpeakingSubmissions.AddAsync(submission);
