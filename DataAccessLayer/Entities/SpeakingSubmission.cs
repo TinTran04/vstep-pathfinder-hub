@@ -10,6 +10,8 @@ public class SpeakingSubmission
 
     public int? AttemptId { get; set; }
 
+    public int? PartNumber { get; set; }
+
     public string AudioObjectKey { get; set; } = string.Empty;
 
     public string AudioUrl { get; set; } = string.Empty;
@@ -21,6 +23,10 @@ public class SpeakingSubmission
     public int? DurationUsedSeconds { get; set; }
 
     public string? Feedback { get; set; }
+
+    public string? FeedbackJson { get; set; }
+
+    public string? Transcript { get; set; }
 
     public DateTime? AutoDeleteAt { get; set; }
 

@@ -22,6 +22,8 @@ public class WritingSubmission
 
     public string? Feedback { get; set; }
 
+    public string? FeedbackJson { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

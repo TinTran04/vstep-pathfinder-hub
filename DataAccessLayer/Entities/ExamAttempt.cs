@@ -24,6 +24,18 @@ public class ExamAttempt
 
     public int? DurationUsedSeconds { get; set; }
 
+    public string? DraftStateJson { get; set; }
+
+    public string? CurrentSkill { get; set; }
+
+    public DateTime? ExpiresAt { get; set; }
+
+    public int? DurationMinutes { get; set; }
+
+    public DateTime? LastAutosavedAt { get; set; }
+
+    public DateTime? CompletedAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

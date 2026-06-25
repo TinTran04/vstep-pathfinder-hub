@@ -27,6 +27,8 @@ public class UserRepository : IUserRepository
     public Task<User?> GetTrackedByIdAsync(int userId)
     {
         return _context.Users
+            .Include(user => user.Role)
+            .Include(user => user.SubscriptionPlan)
             .FirstOrDefaultAsync(user => user.UserId == userId);
     }
 

@@ -33,6 +33,8 @@ public class SubmitSpeakingRequest
     public string AudioUrl { get; set; } = string.Empty;
 
     public int? DurationUsedSeconds { get; set; }
+
+    public int? AttemptId { get; set; }
 }
 
 public class SpeakingSubmissionResponse
@@ -56,6 +58,22 @@ public class SpeakingSubmissionResponse
     public int? DurationUsedSeconds { get; set; }
 
     public string? Feedback { get; set; }
+
+    public string? FeedbackJson { get; set; }
+
+    public string? Transcript { get; set; }
+
+    public decimal? Fluency { get; set; }
+
+    public decimal? Pronunciation { get; set; }
+
+    public decimal? Grammar { get; set; }
+
+    public decimal? Vocabulary { get; set; }
+
+    public decimal? TopicDevelopment { get; set; }
+
+    public List<string> FeedbackPoints { get; set; } = new();
 
     public DateTime? AutoDeleteAt { get; set; }
 

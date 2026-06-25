@@ -39,6 +39,22 @@ public class WritingSubmissionRepository : IWritingSubmissionRepository
         return _context.WritingSubmissions.AddAsync(submission).AsTask();
     }
 
+    public Task<WritingSubmission?> GetByAttemptIdAsync(int attemptId)
+    {
+        return _context.WritingSubmissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(submission => submission.AttemptId == attemptId && !submission.IsDeleted);
+    }
+
+    public Task<WritingSubmission?> GetLatestByExamAsync(int userId, int examId)
+    {
+        return _context.WritingSubmissions
+            .AsNoTracking()
+            .Where(submission => submission.UserId == userId && submission.ExamId == examId && !submission.IsDeleted)
+            .OrderByDescending(submission => submission.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
     public void Update(WritingSubmission submission)
     {
         _context.WritingSubmissions.Update(submission);

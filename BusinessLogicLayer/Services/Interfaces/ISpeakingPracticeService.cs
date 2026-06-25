@@ -9,4 +9,6 @@ public interface ISpeakingPracticeService
     Task<SpeakingSubmissionResponse> SubmitAsync(int userId, int examId, SubmitSpeakingRequest request);
 
     Task<SpeakingResultResponse> GetSubmissionAsync(int userId, int submissionId);
+
+    Task<(string ObjectKey, string ObjectUrl)> UploadAudioAsync(int userId, int examId, Stream fileStream, string contentType);
 }

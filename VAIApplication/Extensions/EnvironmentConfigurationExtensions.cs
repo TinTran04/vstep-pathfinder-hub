@@ -36,6 +36,12 @@ public static class EnvironmentConfigurationExtensions
         SetIfPresent(configuration, "SUPABASE_ANON_KEY", "Supabase:AnonKey");
         SetIfPresent(configuration, "SUPABASE_SERVICE_ROLE_KEY", "Supabase:ServiceRoleKey");
 
+        SetIfPresent(configuration, "AI_PRIMARY_PROVIDER", "Ai:PrimaryProvider");
+        SetIfPresent(configuration, "AI_FALLBACK_PROVIDER", "Ai:FallbackProvider");
+        SetIfPresent(configuration, "BAI_API_KEY", "Bai:ApiKey");
+        SetIfPresent(configuration, "BAI_BASE_URL", "Bai:BaseUrl");
+        SetIfPresent(configuration, "BAI_MODEL", "Bai:Model");
+
         return configuration;
     }
 

@@ -45,6 +45,8 @@ public class SectionResponse
     public int DisplayOrder { get; set; }
 
     public List<QuestionResponse> Questions { get; set; } = new();
+
+    public string? SkillType { get; set; }
 }
 
 public class QuestionResponse

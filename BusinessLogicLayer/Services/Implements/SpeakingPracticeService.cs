@@ -13,7 +13,7 @@ public class SpeakingPracticeService : ISpeakingPracticeService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IR2StorageService _r2StorageService;
-    private readonly IOpenRouterGradingService _openRouterGradingService;
+    private readonly IAIGradingService _aiGradingService;
     private readonly IRewardService _rewardService;
     private readonly ILogger<SpeakingPracticeService> _logger;
 
@@ -21,14 +21,14 @@ public class SpeakingPracticeService : ISpeakingPracticeService
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IR2StorageService r2StorageService,
-        IOpenRouterGradingService openRouterGradingService,
+        IAIGradingService aiGradingService,
         IRewardService rewardService,
         ILogger<SpeakingPracticeService> logger)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _r2StorageService = r2StorageService;
-        _openRouterGradingService = openRouterGradingService;
+        _aiGradingService = aiGradingService;
         _rewardService = rewardService;
         _logger = logger;
     }
@@ -58,6 +58,29 @@ public class SpeakingPracticeService : ISpeakingPracticeService
             throw new InvalidOperationException("Free users can only submit this exam once.");
         }
 
+        int? currentAttemptId = request.AttemptId;
+
+        // Create standalone practice attempt if no AttemptId provided
+        if (currentAttemptId == null)
+        {
+            var draftMeta = new { _meta = new { mode = "practice_speaking" } };
+            var newAttempt = new ExamAttempt
+            {
+                UserId = user.UserId,
+                ExamId = exam.ExamId,
+                SkillType = "speaking",
+                Status = "submitted",
+                StartedAt = DateTime.UtcNow,
+                SubmittedAt = DateTime.UtcNow,
+                DurationMinutes = exam.DurationMinutes,
+                CurrentSkill = "speaking",
+                DraftStateJson = System.Text.Json.JsonSerializer.Serialize(draftMeta)
+            };
+            await _unitOfWork.ExamAttempts.AddAsync(newAttempt);
+            await _unitOfWork.SaveChangesAsync();
+            currentAttemptId = newAttempt.AttemptId;
+        }
+
         var submission = new SpeakingSubmission
         {
             UserId = user.UserId,
@@ -67,24 +90,33 @@ public class SpeakingPracticeService : ISpeakingPracticeService
                 ? _r2StorageService.GetObjectUrl(request.AudioObjectKey.Trim())
                 : request.AudioUrl.Trim(),
             DurationUsedSeconds = request.DurationUsedSeconds,
+            AttemptId = currentAttemptId,
             Status = "processing",
             AutoDeleteAt = GetAutoDeleteAt(user)
         };
 
+        await _unitOfWork.SpeakingSubmissions.AddAsync(submission);
+        await _unitOfWork.SaveChangesAsync();
+
         try
         {
             var gradingAudioUrl = await _r2StorageService.CreateReadUrlAsync(submission.AudioObjectKey);
-            var scoreResult = await _openRouterGradingService.GradeSpeakingAsync(
+            var scoreResult = await _aiGradingService.GradeSpeakingAsync(
+                user.UserId,
+                submission.SpeakingSubmissionId,
                 exam.Description,
+                null,
                 gradingAudioUrl,
                 submission.AudioObjectKey);
             submission.Score = scoreResult.Score;
             submission.Feedback = BuildSpeakingFeedback(scoreResult);
+            submission.FeedbackJson = scoreResult.FeedbackJson;
+            submission.Transcript = scoreResult.Transcript;
             submission.Status = "scored";
         }
-        catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        catch (Exception exception)
         {
-            _logger.LogWarning(
+            _logger.LogError(
                 exception,
                 "Speaking AI grading failed for UserId={UserId}, ExamId={ExamId}, AudioObjectKey={AudioObjectKey}",
                 userId,
@@ -94,8 +126,20 @@ public class SpeakingPracticeService : ISpeakingPracticeService
             submission.Feedback = "Hệ thống chấm điểm AI đang tạm thời không khả dụng. Vui lòng thử lại sau.";
         }
 
-        await _unitOfWork.SpeakingSubmissions.AddAsync(submission);
         await _unitOfWork.SaveChangesAsync();
+
+        if (request.AttemptId == null && currentAttemptId.HasValue)
+        {
+            var attempt = await _unitOfWork.ExamAttempts.GetByIdAsync(currentAttemptId.Value);
+            if (attempt != null)
+            {
+                attempt.Status = submission.Status;
+                attempt.Score = submission.Score;
+                attempt.CompletedAt = DateTime.UtcNow;
+                _unitOfWork.ExamAttempts.Update(attempt);
+                await _unitOfWork.SaveChangesAsync();
+            }
+        }
 
         if (submission.Status == "scored")
         {
@@ -120,6 +164,16 @@ public class SpeakingPracticeService : ISpeakingPracticeService
         }
 
         return _mapper.Map<SpeakingResultResponse>(submission);
+    }
+
+    public async Task<(string ObjectKey, string ObjectUrl)> UploadAudioAsync(int userId, int examId, Stream fileStream, string contentType)
+    {
+        var user = await GetExistingUserAsync(userId);
+        var exam = await GetPublishedSpeakingExamAsync(examId);
+
+        var (objectKey, objectUrl) = await _r2StorageService.UploadSpeakingAudioAsync(userId, examId, fileStream, contentType);
+
+        return (objectKey, objectUrl);
     }
 
     private async Task<User> GetExistingUserAsync(int userId)

@@ -9,4 +9,6 @@ public interface IR2StorageService
     Task<string> CreateReadUrlAsync(string objectKey);
 
     string GetObjectUrl(string objectKey);
+
+    Task<(string ObjectKey, string ObjectUrl)> UploadSpeakingAudioAsync(int userId, int examId, Stream fileStream, string contentType);
 }

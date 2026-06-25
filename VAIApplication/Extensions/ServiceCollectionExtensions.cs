@@ -21,6 +21,8 @@ public static class ServiceCollectionExtensions
         services.Configure<MyMemorySettings>(configuration.GetSection("MyMemory"));
         services.Configure<PayOsSettings>(configuration.GetSection("PayOs"));
         services.Configure<OpenRouterSettings>(configuration.GetSection("OpenRouter"));
+        services.Configure<AiSettings>(configuration.GetSection("Ai"));
+        services.Configure<BaiSettings>(configuration.GetSection("Bai"));
 
         services.AddAutoMapper(typeof(AuthMappingProfile).Assembly);
 
@@ -37,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<IUserRewardLedgerRepository, UserRewardLedgerRepository>();
+        services.AddScoped<IAiUsageLogRepository, AiUsageLogRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddHttpClient<IEmailService, EmailService>((provider, client) =>
         {
@@ -55,6 +58,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPracticeService, PracticeService>();
         services.AddScoped<IWritingPracticeService, WritingPracticeService>();
         services.AddScoped<ISpeakingPracticeService, SpeakingPracticeService>();
+        services.AddScoped<IAdminStatsService, AdminStatsService>();
         services.AddScoped<IR2StorageService, R2StorageService>();
         services.AddScoped<ISupabaseStorageService, SupabaseStorageService>();
         services.AddScoped<IDictionaryService, DictionaryService>();
@@ -62,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IRewardService, RewardService>();
         services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
+        services.AddScoped<IUserAvatarService, UserAvatarService>();
 
         services.AddHttpClient<IDictionaryApiService, DictionaryApiService>(client =>
         {
@@ -90,6 +95,25 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(string.IsNullOrWhiteSpace(settings.BaseUrl)
                 ? "https://openrouter.ai/"
                 : settings.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(90);
+        });
+
+        services.AddHttpClient<IAIProvider, BusinessLogicLayer.Services.Implements.Providers.OpenRouterProvider>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(90);
+        });
+
+        var baiSettings = configuration.GetSection("Bai").Get<BaiSettings>() ?? new BaiSettings();
+        if (!string.IsNullOrWhiteSpace(baiSettings.ApiKey) && !string.IsNullOrWhiteSpace(baiSettings.Model))
+        {
+            services.AddHttpClient<IAIProvider, BusinessLogicLayer.Services.Implements.Providers.BaiProvider>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(90);
+            });
+        }
+
+        services.AddHttpClient<IAIGradingService, AIGradingService>(client =>
+        {
             client.Timeout = TimeSpan.FromSeconds(90);
         });
 

@@ -12,10 +12,12 @@ namespace VAIApplication.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IUserAvatarService _avatarService;
 
-    public UsersController(IUserService userService)
+    public UsersController(IUserService userService, IUserAvatarService avatarService)
     {
         _userService = userService;
+        _avatarService = avatarService;
     }
 
     /// <summary>
@@ -211,6 +213,68 @@ public class UsersController : ControllerBase
             .ToDictionary(
                 entry => entry.Key,
                 entry => entry.Value!.Errors.Select(error => error.ErrorMessage).ToArray());
+    }
+
+    /// <summary>
+    /// Lay danh sach avatar cua nguoi dung hien tai (mo khoa va khoa).
+    /// </summary>
+    /// <returns>Danh sach avatar mo khoa va khoa.</returns>
+    [HttpGet("me/avatars")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<UserAvatarResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetMyAvatars()
+    {
+        try
+        {
+            var response = await _avatarService.GetUserAvatarsAsync(GetUserId());
+            return Ok(ApiResponse<UserAvatarResponse>.Ok(response, "Get avatars successfully."));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Dat avatar dang dung cho nguoi dung hien tai.
+    /// </summary>
+    /// <param name="request">Avatar Id can dat lam dang dung.</param>
+    /// <returns>Thong bao thay doi avatar thanh cong.</returns>
+    [HttpPost("me/avatars/set")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<MessageResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> SetActiveAvatar([FromBody] SetActiveAvatarRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Invalid request", GetModelStateErrors()));
+        }
+
+        try
+        {
+            await _avatarService.SetActiveAvatarAsync(GetUserId(), request.AvatarId);
+            var response = new MessageResponse { Message = "Avatar changed successfully." };
+            return Ok(ApiResponse<MessageResponse>.Ok(response, response.Message));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
+        }
     }
 
     private int GetUserId()

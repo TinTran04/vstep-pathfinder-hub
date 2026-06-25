@@ -51,6 +51,48 @@ public class SpeakingPracticeController : ControllerBase
     }
 
     /// <summary>
+    /// Proxy upload file audio Speaking qua backend thay vi frontend upload truc tiep (de tranh loi CORS Cloudflare).
+    /// </summary>
+    [HttpPost("{examId:int}/upload")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<SpeakingUploadUrlResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UploadAudio(int examId, IFormFile audio)
+    {
+        if (audio == null || audio.Length == 0)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Audio file is empty or missing."));
+        }
+
+        try
+        {
+            using var stream = audio.OpenReadStream();
+            var (objectKey, objectUrl) = await _speakingPracticeService.UploadAudioAsync(GetUserId(), examId, stream, audio.ContentType);
+            
+            var response = new SpeakingUploadUrlResponse
+            {
+                UploadUrl = objectUrl, // Trả về objectUrl thay cho uploadUrl để FE tiện lấy
+                AudioObjectKey = objectKey,
+                ContentType = audio.ContentType,
+                ExpiresAt = DateTime.UtcNow.AddYears(1) // Fake cho tuong thich DTO
+            };
+
+            return Ok(ApiResponse<SpeakingUploadUrlResponse>.Ok(response, "Upload speaking audio successfully."));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(exception.Message));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
     /// Luu metadata bai Speaking da upload len R2 va goi OpenRouter de cham diem bang AI.
     /// </summary>
     [HttpPost("{examId:int}/submit")]

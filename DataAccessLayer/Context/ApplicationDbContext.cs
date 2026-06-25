@@ -42,6 +42,8 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<UserRewardLedger> UserRewardLedgers => Set<UserRewardLedger>();
 
+    public DbSet<AiUsageLog> AiUsageLogs => Set<AiUsageLog>();
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTime.UtcNow;
@@ -131,6 +133,10 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(50)
                 .HasDefaultValue("avatar1")
                 .IsRequired();
+
+            entity.Property(user => user.UnlockedAvatarKey)
+                .HasMaxLength(50)
+                .IsRequired(false);
 
             entity.Property(user => user.PasswordHash)
                 .HasMaxLength(255)
@@ -603,6 +609,9 @@ public class ApplicationDbContext : DbContext
             entity.Property(submission => submission.Feedback)
                 .HasMaxLength(2000);
 
+            entity.Property(submission => submission.FeedbackJson)
+                .HasColumnType("jsonb");
+
             entity.Property(submission => submission.IsDeleted)
                 .HasDefaultValue(false);
 
@@ -655,6 +664,12 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(submission => submission.Feedback)
                 .HasMaxLength(2000);
+
+            entity.Property(submission => submission.FeedbackJson)
+                .HasColumnType("jsonb");
+
+            entity.Property(submission => submission.Transcript)
+                .HasColumnType("text");
 
             entity.Property(submission => submission.IsDeleted)
                 .HasDefaultValue(false);
@@ -853,6 +868,16 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasQueryFilter(ledger => ledger.User != null && !ledger.User.IsDeleted);
+        });
+
+        modelBuilder.Entity<AiUsageLog>(entity =>
+        {
+            entity.HasKey(log => log.Id);
+            entity.Property(log => log.Id).ValueGeneratedOnAdd();
+            entity.HasOne(log => log.User).WithMany().HasForeignKey(log => log.UserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(log => log.UserId);
+            entity.HasIndex(log => log.SubmissionId);
+            entity.HasQueryFilter(log => log.User != null && !log.User.IsDeleted);
         });
     }
 }

@@ -39,6 +39,31 @@ public class SpeakingSubmissionRepository : ISpeakingSubmissionRepository
         return _context.SpeakingSubmissions.AddAsync(submission).AsTask();
     }
 
+    public Task<SpeakingSubmission?> GetByAttemptIdAsync(int attemptId)
+    {
+        return _context.SpeakingSubmissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(submission => submission.AttemptId == attemptId && !submission.IsDeleted);
+    }
+
+    public Task<List<SpeakingSubmission>> GetAllByAttemptIdAsync(int attemptId)
+    {
+        return _context.SpeakingSubmissions
+            .AsNoTracking()
+            .Where(submission => submission.AttemptId == attemptId && !submission.IsDeleted)
+            .OrderBy(submission => submission.PartNumber ?? submission.SpeakingSubmissionId)
+            .ToListAsync();
+    }
+
+    public Task<SpeakingSubmission?> GetLatestByExamAsync(int userId, int examId)
+    {
+        return _context.SpeakingSubmissions
+            .AsNoTracking()
+            .Where(submission => submission.UserId == userId && submission.ExamId == examId && !submission.IsDeleted)
+            .OrderByDescending(submission => submission.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
     public void Update(SpeakingSubmission submission)
     {
         _context.SpeakingSubmissions.Update(submission);

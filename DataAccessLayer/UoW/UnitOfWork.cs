@@ -22,7 +22,8 @@ public class UnitOfWork : IUnitOfWork
         IPaymentTransactionRepository paymentTransactions,
         IRefreshTokenRepository refreshTokens,
         IDashboardRepository dashboard,
-        IUserRewardLedgerRepository userRewardLedgers)
+        IUserRewardLedgerRepository userRewardLedgers,
+        IAiUsageLogRepository aiUsageLogs)
     {
         _context = context;
         Users = users;
@@ -38,6 +39,7 @@ public class UnitOfWork : IUnitOfWork
         RefreshTokens = refreshTokens;
         Dashboard = dashboard;
         UserRewardLedgers = userRewardLedgers;
+        AiUsageLogs = aiUsageLogs;
     }
 
     public IUserRepository Users { get; }
@@ -65,6 +67,8 @@ public class UnitOfWork : IUnitOfWork
     public IDashboardRepository Dashboard { get; }
 
     public IUserRewardLedgerRepository UserRewardLedgers { get; }
+
+    public IAiUsageLogRepository AiUsageLogs { get; }
 
     public Task<int> SaveChangesAsync()
     {

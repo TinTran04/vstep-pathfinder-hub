@@ -10,6 +10,10 @@ public class User
 
     public string AvatarKey { get; set; } = "avatar1";
 
+    /// <summary>The 1 extra avatar the user permanently unlocked by reaching 7-day streak. Null = not yet chosen.</summary>
+    public string? UnlockedAvatarKey { get; set; }
+
+
     public string PasswordHash { get; set; } = string.Empty;
 
     public int RoleId { get; set; } = 3;

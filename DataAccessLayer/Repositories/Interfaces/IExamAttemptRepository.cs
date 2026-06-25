@@ -8,6 +8,8 @@ public interface IExamAttemptRepository
 
     Task<ExamAttempt?> GetResultByIdAsync(int attemptId);
 
+    Task<ExamAttempt?> GetInProgressAttemptAsync(int userId);
+
     Task<bool> HasSubmittedAttemptAsync(int userId, int examId);
 
     Task AddAsync(ExamAttempt attempt);
@@ -15,4 +17,6 @@ public interface IExamAttemptRepository
     Task AddAnswerAsync(ExamAttemptAnswer answer);
 
     void Update(ExamAttempt attempt);
+
+    Task<(List<ExamAttempt> Items, int TotalCount)> GetHistoryPagedAsync(int userId, int page, int pageSize, string? status = null, string? mode = null);
 }

@@ -38,7 +38,7 @@ public class ExamRepository : IExamRepository
         }
 
         var page = query.Page < 1 ? 1 : query.Page;
-        var pageSize = query.PageSize is < 1 or > 100 ? 10 : query.PageSize;
+        var pageSize = query.PageSize is < 1 or > 1000 ? 100 : query.PageSize;
         var totalCount = await examsQuery.CountAsync();
         var exams = await examsQuery
             .OrderByDescending(exam => exam.CreatedAt)

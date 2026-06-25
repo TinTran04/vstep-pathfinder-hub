@@ -22,7 +22,7 @@ public class OpenRouterGradingService : IOpenRouterGradingService
 
     public Task<AiScoreResult> GradeWritingAsync(string prompt, string essayText)
     {
-        return SendTextGradingRequestAsync(BuildWritingPrompt(prompt, essayText));
+        return SendTextGradingRequestAsync(BuildWritingPrompt(prompt, essayText), "writing");
     }
 
     public async Task<AiScoreResult> GradeSpeakingAsync(string speakingPrompt, string audioUrl, string audioObjectKey)
@@ -45,11 +45,10 @@ public class OpenRouterGradingService : IOpenRouterGradingService
                         new { type = "text", text = prompt },
                         new
                         {
-                            type = "input_audio",
-                            input_audio = new
+                            type = "image_url",
+                            image_url = new
                             {
-                                data = base64Audio,
-                                format
+                                url = $"data:audio/{format};base64,{base64Audio}"
                             }
                         }
                     }
@@ -57,10 +56,10 @@ public class OpenRouterGradingService : IOpenRouterGradingService
             }
         };
 
-        return await SendChatRequestAsync(request);
+        return await SendChatRequestAsync(request, "speaking");
     }
 
-    private Task<AiScoreResult> SendTextGradingRequestAsync(string prompt)
+    private Task<AiScoreResult> SendTextGradingRequestAsync(string prompt, string skillType = "writing")
     {
         var request = new OpenRouterChatRequest
         {
@@ -75,10 +74,10 @@ public class OpenRouterGradingService : IOpenRouterGradingService
             }
         };
 
-        return SendChatRequestAsync(request);
+        return SendChatRequestAsync(request, skillType);
     }
 
-    private async Task<AiScoreResult> SendChatRequestAsync(OpenRouterChatRequest payload)
+    private async Task<AiScoreResult> SendChatRequestAsync(OpenRouterChatRequest payload, string skillType = "speaking")
     {
         EnsureConfigured();
 
@@ -121,7 +120,7 @@ public class OpenRouterGradingService : IOpenRouterGradingService
             throw new InvalidOperationException("OpenRouter returned an empty grading response.");
         }
 
-        return ParseScoreResult(content);
+        return ParseScoreResult(content, skillType);
     }
 
     private static string ExtractProviderError(string rawResponse)
@@ -190,22 +189,95 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         return destination.ToArray();
     }
 
-    private AiScoreResult ParseScoreResult(string content)
+    private AiScoreResult ParseScoreResult(string content, string skillType)
     {
         var json = ExtractJsonObject(content);
         var parsed = JsonSerializer.Deserialize<OpenRouterScoreResponse>(json, JsonOptions)
             ?? throw new InvalidOperationException("OpenRouter grading response is not valid JSON.");
 
-        var scoreValue = parsed.Score ?? parsed.Overall
-            ?? throw new InvalidOperationException("OpenRouter grading response does not contain a score.");
-        var score = Math.Clamp(scoreValue, 0, 10);
+        // ── Resolve criteria (new field ?? legacy aliases), clamp 0–10 ──
+        var tf = ClampNullable(parsed.TaskFulfillment ?? parsed.TaskResponse ?? parsed.TaskAchievement);
+        var gr = ClampNullable(parsed.Grammar);
+        var vo = ClampNullable(parsed.Vocabulary);
+        var org = ClampNullable(parsed.Organization);
+
+        var fid = ClampNullable(parsed.FluencyIdeaDevelopment ?? parsed.Fluency);
+        var pr = ClampNullable(parsed.Pronunciation);
+        var cc = ClampNullable(parsed.ContentCoherence ?? parsed.TopicDevelopment ?? parsed.Relevance);
+
+        // ── Backend calculates score from rubric ──
+        decimal score;
+        var aiFallbackScore = parsed.Score ?? parsed.OverallScore ?? parsed.Overall;
+
+        if (skillType == "writing" && tf.HasValue && gr.HasValue && vo.HasValue && org.HasValue)
+        {
+            score = Math.Clamp((tf.Value * 2m + gr.Value * 1m + vo.Value * 0.6m + org.Value * 0.4m) / 4m, 0, 10);
+        }
+        else if (skillType == "speaking" && fid.HasValue && pr.HasValue && vo.HasValue && gr.HasValue && cc.HasValue)
+        {
+            score = Math.Clamp((fid.Value + pr.Value + vo.Value + gr.Value + cc.Value) / 5m, 0, 10);
+        }
+        else if (aiFallbackScore.HasValue)
+        {
+            score = Math.Clamp(aiFallbackScore.Value, 0, 10);
+        }
+        else
+        {
+            throw new InvalidOperationException("Grading response does not contain enough data to calculate a score.");
+        }
+
+        var feedbackPoints = new List<string>();
+        if (parsed.Feedback.HasValue)
+        {
+            var f = parsed.Feedback.Value;
+            if (f.ValueKind == JsonValueKind.Array)
+            {
+                feedbackPoints = f.EnumerateArray()
+                    .Where(item => item.ValueKind == JsonValueKind.String)
+                    .Select(item => item.GetString() ?? string.Empty)
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .ToList();
+            }
+            else if (f.ValueKind == JsonValueKind.String)
+            {
+                var str = f.GetString();
+                if (!string.IsNullOrWhiteSpace(str))
+                {
+                    feedbackPoints.Add(str);
+                }
+            }
+        }
 
         return new AiScoreResult
         {
             Score = decimal.Round(score, 2),
             Feedback = TrimForStorage(ParseFeedback(parsed.Feedback)),
-            Transcript = TrimForStorage(parsed.Transcript)
+            Transcript = TrimForStorage(parsed.Transcript),
+            FeedbackJson = json,
+
+            // Writing: new + legacy
+            TaskFulfillment = tf,
+            Grammar = gr,
+            Vocabulary = vo,
+            Organization = org,
+            TaskResponse = tf,
+            TaskAchievement = tf,
+
+            // Speaking: new + legacy
+            FluencyIdeaDevelopment = fid,
+            Pronunciation = pr,
+            ContentCoherence = cc,
+            Fluency = fid,
+            TopicDevelopment = cc,
+            Relevance = cc,
+
+            FeedbackPoints = feedbackPoints
         };
+    }
+
+    private static decimal? ClampNullable(decimal? value)
+    {
+        return value.HasValue ? Math.Clamp(value.Value, 0, 10) : null;
     }
 
     private static string ExtractJsonObject(string content)
@@ -348,53 +420,95 @@ public class OpenRouterGradingService : IOpenRouterGradingService
         {essay}
         ---
 
-        Evaluate strictly based on the official VSTEP Writing rubric (4 criteria, scale 0-10).
+        Evaluate strictly based on the official VSTEP Writing rubric. Score each of the 4 criteria independently on a scale of 0-10 in increments of 0.5.
+        Do not calculate the final overall score. The backend will calculate it from the criteria.
+
         Note on task types:
         - task1: Letter/email around 120 words. Assess format, tone (formal/informal), and whether all required points are addressed.
         - task2: Essay around 250 words. Assess argumentation, clear position, and supporting ideas.
 
-        CRITERION 1 - TASK FULFILLMENT [MOST IMPORTANT, about 50% weight]
-        - 1-2: Completely off-topic or too short to assess. Fails to address the prompt.
-        - 3-4: Attempts to address the task but misses key points or significantly goes off-topic. Wrong format or tone for task1.
-        - 5-6: Generally addresses the task with most key points covered. Minor omissions or slightly inappropriate tone/format.
-        - 7-8: Fully addresses the task. All key points covered clearly. Appropriate format and tone. Clear position with supporting ideas (task2).
-        - 9-10: Excellent task fulfillment. All requirements met thoroughly. Compelling argument or perfectly crafted letter with nuanced tone.
+        CRITERION 1 — taskFulfillment (50% weight)
+        Evaluate whether the student:
+        - Answers the prompt correctly and completely
+        - Addresses all required bullet points / sub-tasks
+        - Uses the correct format (letter/email vs essay)
+        - States a clear opinion/position (task2)
+        - Provides relevant arguments and examples
+        Band descriptors:
+        - 1-2: Completely off-topic or too short. Fails to address the prompt.
+        - 3-4: Attempts the task but misses key points. Wrong format or tone for task1.
+        - 5-6: Generally addresses the task with most points covered. Minor omissions.
+        - 7-8: Fully addresses the task. All points covered clearly. Clear position with supporting ideas.
+        - 9-10: Excellent. All requirements met thoroughly. Compelling argument or perfectly crafted letter.
 
-        CRITERION 2 - GRAMMAR [about 25% weight]
-        - 1-2: Only very basic structures, systematic errors make the writing very hard to understand.
-        - 3-4: Mostly simple sentences. Frequent errors including basic ones (articles, prepositions, verb tense).
-        - 5-6: Mix of simple and some complex sentences. Errors present but meaning is generally clear. Some attempt at complex structures.
-        - 7-8: Good range of complex structures. Minor errors only, do not impede understanding.
-        - 9-10: Wide range of grammatical structures used accurately and flexibly. Near error-free.
+        CRITERION 2 — grammar (25% weight)
+        Evaluate:
+        - Grammatical accuracy (tense, articles, prepositions, verb conjugation)
+        - Range of structures (simple, compound, complex sentences)
+        - Whether errors impede meaning
+        Band descriptors:
+        - 1-2: Only basic structures, systematic errors make writing very hard to understand.
+        - 3-4: Mostly simple sentences. Frequent basic errors.
+        - 5-6: Mix of simple and complex sentences. Errors present but meaning generally clear.
+        - 7-8: Good range of complex structures. Minor errors only.
+        - 9-10: Wide range used accurately and flexibly. Near error-free.
 
-        CRITERION 3 - VOCABULARY [about 15% weight]
-        - 1-2: Very limited vocabulary. Frequent wrong word choices. Meaning often unclear.
-        - 3-4: Basic vocabulary only, highly repetitive. Inappropriate word choices for the topic.
-        - 5-6: Adequate vocabulary for the topic. Some variety but over-reliance on common words. Some spelling/word form errors.
-        - 7-8: Good range including less common words, collocations, and topic-specific terms. Generally accurate.
-        - 9-10: Wide, precise vocabulary including idiomatic expressions and academic language.
+        CRITERION 3 — vocabulary (15% weight)
+        Evaluate:
+        - Range and diversity of vocabulary
+        - Topic-specific terms and collocations
+        - Contextual appropriateness
+        - Avoidance of repetition
+        Band descriptors:
+        - 1-2: Very limited vocabulary. Frequent wrong word choices.
+        - 3-4: Basic vocabulary only, highly repetitive.
+        - 5-6: Adequate vocabulary. Some variety but over-reliance on common words.
+        - 7-8: Good range including less common words, collocations, topic-specific terms.
+        - 9-10: Wide, precise vocabulary including idiomatic and academic language.
 
-        CRITERION 4 - ORGANIZATION [about 10% weight]
-        - 1-2: No clear structure. Ideas are random and incoherent. No use of connectors.
-        - 3-4: Weak structure. Ideas loosely organized. Very limited use of connectors.
-        - 5-6: Basic structure present. Some use of connectors. Paragraphing attempted but not always logical.
-        - 7-8: Clear, logical structure. Well-organized paragraphs with good cohesive devices.
-        - 9-10: Excellent organization. Seamless flow between ideas and paragraphs.
-
-        Scoring rules:
-        - Score each criterion independently in increments of 0.5.
-        - score = weighted average: (task_response * 2 + grammar * 1 + vocabulary * 0.6 + organization * 0.4) / 4.
-        - feedback: 3-5 specific, actionable points in English, each referencing a specific criterion.
+        CRITERION 4 — organization (10% weight)
+        Evaluate:
+        - Paragraph structure and logical flow
+        - Coherence and cohesion
+        - Use of linking words / connectors
+        - Smooth transitions between ideas
+        Band descriptors:
+        - 1-2: No clear structure. Ideas random and incoherent.
+        - 3-4: Weak structure. Ideas loosely organized. Very limited connectors.
+        - 5-6: Basic structure present. Some connectors. Paragraphing attempted.
+        - 7-8: Clear, logical structure. Well-organized with good cohesive devices.
+        - 9-10: Excellent organization. Seamless flow between ideas.
 
         IMPORTANT: Return ONLY valid JSON. No explanation, no markdown, no extra text.
-        The backend parser requires "score" and "feedback". Criterion fields are optional but recommended.
+        All feedback content MUST be in Vietnamese. JSON keys stay in English.
+        The field "improvedVersion" MUST be in English.
+        Provide the full detailed review following this exact schema:
         {
-          "score": <number>,
-          "task_response": <number>,
-          "organization": <number>,
-          "vocabulary": <number>,
-          "grammar": <number>,
-          "feedback": ["<string>", "<string>", "<string>"]
+          "taskFulfillment": <number 0-10>,
+          "grammar": <number 0-10>,
+          "vocabulary": <number 0-10>,
+          "organization": <number 0-10>,
+          "criteriaExplanations": {
+            "taskFulfillment": "<Vietnamese explanation>",
+            "grammar": "<Vietnamese explanation>",
+            "vocabulary": "<Vietnamese explanation>",
+            "organization": "<Vietnamese explanation>"
+          },
+          "feedback": ["<Vietnamese string>", "<Vietnamese string>"],
+          "summary": "<Vietnamese string>",
+          "strengths": ["<Vietnamese string>"],
+          "weaknesses": ["<Vietnamese string>"],
+          "review": {
+            "scoreExplanation": "<Vietnamese string>",
+            "mainReasonsForLostPoints": ["<Vietnamese string>"],
+            "howToImprove": ["<Vietnamese string>"]
+          },
+          "mistakes": [
+            { "word": "<string>", "type": "grammar|spelling|vocabulary|coherence", "suggestion": "<Vietnamese string>", "explanation": "<Vietnamese string>" }
+          ],
+          "improvedVersion": "<English improved essay>",
+          "weaknessTags": ["<Vietnamese string>"],
+          "nextPracticeSuggestions": ["<Vietnamese string>"]
         }
         """;
 
@@ -403,61 +517,108 @@ public class OpenRouterGradingService : IOpenRouterGradingService
 
         Speaking task: {speaking_prompt}
 
-        First transcribe the attached student audio. Then evaluate the transcript strictly based on the official VSTEP Speaking rubric (5 criteria, scale 0-10).
+        First transcribe the attached student audio. Then evaluate the transcript strictly based on the official VSTEP Speaking rubric. Score each of the 5 criteria independently on a scale of 0-10 in increments of 0.5.
+        Do not calculate the final overall score. The backend will calculate it from the criteria.
         The transcript is auto-generated by you from the audio, so minor transcription uncertainty may exist. Score based on meaning, pronunciation evidence, fluency, and linguistic quality.
 
-        CRITERION 1 - FLUENCY & IDEA DEVELOPMENT
+        CRITERION 1 — fluencyIdeaDevelopment
+        Evaluate:
+        - Speaking fluency and natural pace
+        - Hesitations, fillers (uh, um), and pauses
+        - Ability to develop and expand ideas with examples
+        Band descriptors:
         - 1-2: Extremely hesitant, almost no idea development, very fragmented speech.
-        - 3-4: Frequent pauses and repetitions, limited idea development, hard to follow.
-        - 5-6: Some hesitation but generally able to continue. Basic idea development with simple elaboration.
-        - 7-8: Speaks with reasonable fluency. Can develop and expand ideas with some detail and examples.
-        - 9-10: Fully fluent, natural pace. Develops ideas clearly with strong examples and elaboration.
+        - 3-4: Frequent pauses and repetitions, limited idea development.
+        - 5-6: Some hesitation but generally able to continue. Basic idea development.
+        - 7-8: Speaks with reasonable fluency. Develops ideas with some detail and examples.
+        - 9-10: Fully fluent, natural pace. Strong examples and elaboration.
 
-        CRITERION 2 - VOCABULARY
-        - 1-2: Very limited vocabulary, frequent wrong word choices, meaning often unclear.
-        - 3-4: Basic vocabulary only, repetitive, some inappropriate choices for the topic.
-        - 5-6: Adequate vocabulary for the topic. Some variety but limited range of less common words.
-        - 7-8: Good range of vocabulary including less common words. Generally appropriate and accurate.
-        - 9-10: Wide, precise vocabulary including idiomatic expressions and topic-specific terms.
-
-        CRITERION 3 - GRAMMAR
-        - 1-2: Only very basic sentence structures, systematic errors make speech hard to understand.
-        - 3-4: Simple sentences mostly, frequent grammar errors including basic ones.
-        - 5-6: Mix of simple and compound sentences, some complex structures attempted. Errors present but meaning generally clear.
-        - 7-8: Frequent use of compound and complex sentences, flexible structures, minor errors only.
-        - 9-10: Wide range of grammatical structures used accurately and flexibly.
-
-        CRITERION 4 - CONTENT & COHERENCE
-        - 1-2: Response is largely off-topic or too short to assess. No logical organization.
-        - 3-4: Attempts to address the task but frequently goes off-topic. Weak use of connectors.
-        - 5-6: Generally on-topic. Basic logical organization with some connectors.
-        - 7-8: Clearly addresses the task. Well-organized response with appropriate connectors.
-        - 9-10: Fully addresses the task with well-supported, logically structured response.
-
-        CRITERION 5 - PRONUNCIATION
-        - 1-2: Very poor pronunciation, output is largely incoherent.
-        - 3-4: Many basic pronunciation issues.
+        CRITERION 2 — pronunciation
+        Evaluate:
+        - Clarity and accuracy of sounds
+        - Word-final sounds
+        - Word stress and sentence stress
+        - Intonation patterns
+        - Overall intelligibility
+        Band descriptors:
+        - 1-2: Very poor pronunciation, largely incoherent.
+        - 3-4: Many basic pronunciation issues, hard to understand.
         - 5-6: Reasonably clear, with some pronunciation errors.
-        - 7-8: Clear and accurate pronunciation.
+        - 7-8: Clear and accurate pronunciation with good intonation.
         - 9-10: Near-native pronunciation.
 
-        Scoring rules:
-        - Score each criterion independently in increments of 0.5.
-        - score = average of all 5 criteria.
-        - feedback: 3-5 specific, actionable points in English referencing the rubric criteria above.
-        - transcript: concise transcript of the student's answer, or empty string if the audio is not understandable.
+        CRITERION 3 — vocabulary
+        Evaluate:
+        - Range and diversity of vocabulary
+        - Topic-appropriate words and phrases
+        - Use of idioms or less common words (if natural)
+        - Avoidance of word-finding difficulties or repetition
+        Band descriptors:
+        - 1-2: Very limited vocabulary, frequent wrong word choices.
+        - 3-4: Basic vocabulary only, repetitive.
+        - 5-6: Adequate vocabulary. Some variety but limited range.
+        - 7-8: Good range including less common words. Appropriate and accurate.
+        - 9-10: Wide, precise vocabulary including idiomatic expressions.
+
+        CRITERION 4 — grammar
+        Evaluate:
+        - Accuracy of tense and structure usage
+        - Range (simple, compound, complex sentences)
+        - Basic errors (articles, prepositions, agreement)
+        - Whether errors impede understanding
+        Band descriptors:
+        - 1-2: Only basic structures, systematic errors make speech hard to understand.
+        - 3-4: Simple sentences mostly, frequent grammar errors.
+        - 5-6: Mix of simple and compound sentences. Errors present but meaning clear.
+        - 7-8: Compound and complex sentences, flexible structures, minor errors.
+        - 9-10: Wide range used accurately and flexibly.
+
+        CRITERION 5 — contentCoherence
+        Evaluate:
+        - Relevance to the task / staying on topic
+        - Logical arrangement of ideas
+        - Use of spoken connectors and discourse markers
+        Band descriptors:
+        - 1-2: Largely off-topic or too short. No logical organization.
+        - 3-4: Attempts the task but frequently off-topic. Weak connectors.
+        - 5-6: Generally on-topic. Basic logical organization.
+        - 7-8: Clearly addresses the task. Well-organized with appropriate connectors.
+        - 9-10: Fully addresses the task with well-supported, logically structured response.
 
         IMPORTANT: Return ONLY valid JSON. No explanation, no markdown, no extra text.
-        The backend parser requires "score", "feedback", and "transcript". Criterion fields are optional but recommended.
+        All feedback content MUST be in Vietnamese. JSON keys stay in English.
+        The field "betterAnswer" MUST be in English.
+        "transcript": concise transcript of the student's answer, or empty string if audio is not understandable.
+        Provide the full detailed review following this exact schema:
         {
-          "score": <number>,
-          "fluency": <number>,
-          "vocabulary": <number>,
-          "grammar": <number>,
-          "relevance": <number>,
-          "pronunciation": <number>,
-          "feedback": ["<string>", "<string>", "<string>"],
-          "transcript": "<string>"
+          "fluencyIdeaDevelopment": <number 0-10>,
+          "pronunciation": <number 0-10>,
+          "vocabulary": <number 0-10>,
+          "grammar": <number 0-10>,
+          "contentCoherence": <number 0-10>,
+          "criteriaExplanations": {
+            "fluencyIdeaDevelopment": "<Vietnamese explanation>",
+            "pronunciation": "<Vietnamese explanation>",
+            "vocabulary": "<Vietnamese explanation>",
+            "grammar": "<Vietnamese explanation>",
+            "contentCoherence": "<Vietnamese explanation>"
+          },
+          "feedback": ["<Vietnamese string>"],
+          "transcript": "<string>",
+          "summary": "<Vietnamese string>",
+          "strengths": ["<Vietnamese string>"],
+          "weaknesses": ["<Vietnamese string>"],
+          "review": {
+            "scoreExplanation": "<Vietnamese string>",
+            "mainReasonsForLostPoints": ["<Vietnamese string>"],
+            "howToImprove": ["<Vietnamese string>"]
+          },
+          "timestampFeedback": [
+            { "startTime": "<string>", "endTime": "<string>", "type": "fluencyIdeaDevelopment|grammar|vocabulary|pronunciation|contentCoherence", "issue": "<Vietnamese string>", "suggestion": "<Vietnamese string>" }
+          ],
+          "betterAnswer": "<English better answer>",
+          "weaknessTags": ["<Vietnamese string>"],
+          "nextPracticeSuggestions": ["<Vietnamese string>"]
         }
         """;
 
@@ -509,11 +670,34 @@ public class OpenRouterGradingService : IOpenRouterGradingService
     private sealed class OpenRouterScoreResponse
     {
         public decimal? Score { get; set; }
-
         public decimal? Overall { get; set; }
+        [JsonPropertyName("overallScore")]
+        public decimal? OverallScore { get; set; }
 
         public JsonElement? Feedback { get; set; }
-
         public string? Transcript { get; set; }
+
+        // Writing: new primary fields
+        public decimal? TaskFulfillment { get; set; }
+        public decimal? Grammar { get; set; }
+        public decimal? Vocabulary { get; set; }
+        public decimal? Organization { get; set; }
+
+        // Writing: legacy aliases
+        [JsonPropertyName("task_response")]
+        public decimal? TaskResponse { get; set; }
+        [JsonPropertyName("taskAchievement")]
+        public decimal? TaskAchievement { get; set; }
+
+        // Speaking: new primary fields
+        public decimal? FluencyIdeaDevelopment { get; set; }
+        public decimal? Pronunciation { get; set; }
+        public decimal? ContentCoherence { get; set; }
+
+        // Speaking: legacy aliases
+        public decimal? Fluency { get; set; }
+        [JsonPropertyName("topicDevelopment")]
+        public decimal? TopicDevelopment { get; set; }
+        public decimal? Relevance { get; set; }
     }
 }

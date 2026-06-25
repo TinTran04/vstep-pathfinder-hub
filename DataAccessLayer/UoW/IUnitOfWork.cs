@@ -30,6 +30,8 @@ public interface IUnitOfWork
 
     IUserRewardLedgerRepository UserRewardLedgers { get; }
 
+    IAiUsageLogRepository AiUsageLogs { get; }
+
     Task<int> SaveChangesAsync();
 
     Task ExecuteInTransactionAsync(Func<Task> operation);

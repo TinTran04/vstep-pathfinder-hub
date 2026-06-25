@@ -102,6 +102,30 @@ public class R2StorageService : IR2StorageService
         return $"{endpoint}/{bucketName}/{key}";
     }
 
+    public async Task<(string ObjectKey, string ObjectUrl)> UploadSpeakingAudioAsync(int userId, int examId, Stream fileStream, string contentType)
+    {
+        EnsureConfigured();
+
+        var safeContentType = NormalizeAudioContentType(contentType, "audio/webm");
+        var objectId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        var objectKey = $"speaking/{userId}/{examId}/{objectId}.webm";
+
+        using var client = CreateClient();
+        
+        var request = new PutObjectRequest
+        {
+            BucketName = _settings.BucketName,
+            Key = objectKey,
+            InputStream = fileStream,
+            ContentType = safeContentType,
+            DisablePayloadSigning = true // Optional but recommended for R2
+        };
+
+        await client.PutObjectAsync(request);
+
+        return (objectKey, GetObjectUrl(objectKey));
+    }
+
     private AmazonS3Client CreateClient()
     {
         AWSConfigsS3.UseSignatureVersion4 = true;
