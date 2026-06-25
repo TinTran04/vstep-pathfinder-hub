@@ -25,21 +25,19 @@ interface BackendSubscriptionPlan {
 
 const planFeatures: Record<string, string[]> = {
   free: [
-    "Truy cập 10 bài học cơ bản",
+    "Luyện tập cả 4 kỹ năng Listening, Reading, Writing, Speaking",
     "1 đề thi thử miễn phí",
-    "Xem lộ trình học tổng quan",
+    "Xem đáp án sau khi nộp bài",
     "Hỗ trợ cộng đồng",
   ],
   weekly: [
     "Dành cho ôn thi ngắn hạn",
     "Chấm điểm AI không giới hạn",
     "Truy cập đầy đủ ngân hàng đề",
-    "Lộ trình học cá nhân hoá",
     "Phù hợp ôn nước rút trước kỳ thi",
   ],
   monthly: [
     "Chấm điểm AI không giới hạn",
-    "Lộ trình học cá nhân hoá",
     "Toàn bộ bài học 4 kỹ năng",
     "Truy cập đầy đủ ngân hàng đề",
     "Dashboard theo dõi tiến độ",
@@ -70,14 +68,39 @@ const getPeriod = (plan: BackendSubscriptionPlan): string => {
 const mapPlan = (plan: BackendSubscriptionPlan): PlanItem => {
   const key = plan.name.toLowerCase();
 
+  const features: string[] = [];
+
+  if (plan.dailyPracticeLimit === null || plan.dailyPracticeLimit === undefined) {
+    features.push("Luyện tập không giới hạn mỗi ngày");
+  } else if (plan.dailyPracticeLimit > 0) {
+    features.push(`${plan.dailyPracticeLimit} lượt luyện tập mỗi ngày`);
+  }
+
+  if (plan.canStoreSpeakingAudioForever) {
+    features.push("Lưu audio Speaking không giới hạn thời gian");
+  } else if (plan.speakingAudioRetentionDays > 0) {
+    features.push(`Lưu audio Speaking ${plan.speakingAudioRetentionDays} ngày`);
+  }
+
+  if (plan.description) {
+    const customFeatures = plan.description
+      .split(/\r?\n|;/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    features.unshift(...customFeatures);
+  }
+
+  const finalFeatures = Array.from(new Set(features));
+  const mappedFeatures = finalFeatures.length > 0 ? finalFeatures : ["Quyền lợi cơ bản"];
+
   return {
     subscriptionPlanId: plan.subscriptionPlanId,
     name: getDisplayName(plan.name),
     price: formatPrice(Number(plan.price)),
     rawPrice: Number(plan.price),
     period: getPeriod(plan),
-    popular: key === "monthly",
-    features: planFeatures[key] || [plan.description || "Gói học VSTEP"],
+    popular: plan.durationDays >= 28 && plan.durationDays <= 31 && plan.price > 0,
+    features: mappedFeatures,
     durationDays: plan.durationDays,
   };
 };

@@ -39,6 +39,9 @@ export interface IAttemptsService {
   uploadSpeakingRecording(attemptId: string, partId: number, blob: Blob): Promise<string>;
   submitWriting(attemptId: string, writings: Record<number, string>): Promise<void>;
   clearAttempt(): void;
+  getInProgressAttempt(): Promise<any>;
+  autosaveMockTest(attemptId: string, currentSkill: string, draftStateJson: string): Promise<void>;
+  submitMockTest(attemptId: string, draftStateJson: string): Promise<any>;
 }
 
 // ----------------------------------------------------------------

@@ -31,6 +31,12 @@ export interface WritingSubmissionResponse {
   status: string; // "pending" | "processing" | "scored" | "graded" | "failed"
   score: number | null;
   feedback: string | null;
+  feedbackJson?: string | null;
+  taskResponse?: number | null;
+  grammar?: number | null;
+  vocabulary?: number | null;
+  organization?: number | null;
+  feedbackPoints?: string[];
   createdAt: string;
   updatedAt: string | null;
 }

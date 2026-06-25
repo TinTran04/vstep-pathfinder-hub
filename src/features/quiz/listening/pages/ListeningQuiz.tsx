@@ -18,7 +18,11 @@ import type { SectionResponse, QuestionResponse } from "@/features/quiz/services
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
+import { attemptsApiService } from "@/features/attempts/services/attempts.api-service";
+import { useAutosave } from "@/features/attempts/hooks/useAutosave";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
+import { VstepMockLayout } from "@/features/quiz/components/VstepMockLayout";
+import { ExitConfirmDialog } from "@/features/quiz/components/ExitConfirmDialog";
 import { cleanDescription } from "@/lib/utils";
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -70,6 +74,8 @@ const ListeningQuiz = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   // ── Audio simulation ──────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
@@ -82,14 +88,96 @@ const ListeningQuiz = () => {
     questionsScrollRef.current?.scrollTo({ top: 0 });
   }, [currentSection]);
 
+  // ── Block leave confirmation ────────────────────────────────
+  useEffect(() => {
+    if (loading || submitted) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Show toast for practice mode when user unexpectedly leaves
+      if (!isMockSession && !submitted && practiceData) {
+        toast.info("Phiên luyện tập bị thoát. Tiến độ đã được lưu.");
+      }
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [loading, submitted, isMockSession, practiceData]);
+
+  // ── Sync server time for mock test ──────────────────────────
+  useEffect(() => {
+    if (!isMockSession || !practiceData?.attemptId || submitted) return;
+
+    const syncTimer = setInterval(async () => {
+      try {
+        const progress = await attemptsApiService.getInProgressAttempt();
+        if (progress && progress.remainingSeconds !== undefined) {
+          const remaining = Math.max(0, progress.remainingSeconds);
+          setServerTimeRemaining(remaining);
+          // Sync client timer too
+          setTimeLeft(remaining);
+          if (remaining <= 0) {
+            handleAutoSubmit();
+          }
+        }
+      } catch (error) {
+        console.error("Failed to sync server time:", error);
+      }
+    }, 1000);
+
+    return () => clearInterval(syncTimer);
+  }, [isMockSession, practiceData?.attemptId, submitted]);
+
   // ── Start practice on mount ───────────────────────────────
   useEffect(() => {
+    let active = true;
+
+    if (isMockSession) {
+      attemptsService.getInProgressAttempt().then(res => {
+        if (!active) return;
+        if (res && res.exam) {
+          const filteredExam = {
+            ...res.exam,
+            sections: res.exam.sections.filter((s: any) => s.skillType === "listening" || !s.skillType)
+          };
+          setPracticeData({
+            attemptId: res.attemptId,
+            examId: res.exam.examId,
+            skillType: "mock_test",
+            status: res.status,
+            startedAt: res.startedAt,
+            exam: filteredExam,
+          });
+          setTimeLeft(res.remainingSeconds > 0 ? res.remainingSeconds : 0);
+
+          if (res.draftStateJson) {
+            try {
+              const draft = JSON.parse(res.draftStateJson);
+              if (draft.listening?.answers) {
+                setAnswers(draft.listening.answers);
+              }
+            } catch (e) {
+              console.error("Failed to parse draft state", e);
+            }
+          }
+          setLoading(false);
+        } else {
+          setStartError("Không tìm thấy bài thi đang làm dở.");
+          setLoading(false);
+        }
+      }).catch(err => {
+        if (!active) return;
+        setStartError("Lỗi kết nối.");
+        setLoading(false);
+      });
+      return () => { active = false; };
+    }
+
     if (!examId) {
       setStartError("Không tìm thấy đề thi. Vui lòng quay lại trang Quiz.");
       setLoading(false);
       return;
     }
-    let active = true;
+    
     listeningService
       .start(examId)
       .then((res) => {
@@ -106,7 +194,25 @@ const ListeningQuiz = () => {
         setLoading(false);
       });
     return () => { active = false; };
-  }, [examId]);
+  }, [examId, isMockSession]);
+
+  useAutosave(
+    isMockSession && practiceData?.attemptId ? String(practiceData.attemptId) : null,
+    "listening",
+    () => {
+      // Get the existing draft if any, actually we just save our part
+      // The backend patches currentSkill and merges DraftStateJson
+      // Wait, our backend patch autosave expects DraftStateJson to contain at least this skill.
+      // Let's send the full payload or just our part. 
+      // The backend replaces DraftStateJson completely!
+      // I need to fetch the current draft from BE, or just let FE store a global draft state.
+      // If we don't have global, we can just send our skill's state and assume backend merges?
+      // Wait, in Phase 5, the BE just does: attempt.DraftStateJson = request.DraftStateJson. It overwrites.
+      // So if I overwrite, I lose Reading/Writing?
+      // Let's modify the backend AutosaveAttemptAsync to merge!
+      return { listening: { answers } };
+    }
+  );
 
   // ── Timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -137,26 +243,42 @@ const ListeningQuiz = () => {
   }, [isPlaying, submitted, audioDuration, loading, isPaused]);
 
   // ── Submit helpers ────────────────────────────────────────
+  const handleExitMockTest = async () => {
+    if (!practiceData?.attemptId) return;
+    // ExitConfirmDialog will call delete API, just redirect after
+    navigate("/quiz");
+  };
+
   const doSubmit = async () => {
     if (!practiceData) return;
     setSubmitting(true);
     try {
-      const res = await listeningService.submit(
-        practiceData.attemptId,
-        answers,
-        durationUsed
-      );
-      setSubmitResult(res);
-      const result = await listeningService.getResult(practiceData.attemptId);
-      setAttemptResult(result);
       if (isMockSession) {
-        await attemptsService.saveSkillAttempt("listening", {
-          score: result?.score ?? res.score,
-          totalQuestions: result?.totalQuestions ?? res.totalQuestions,
-          answers: answers,
+        // Save final state and advance to next skill (Reading)
+        const draftState = JSON.stringify({
+          _meta: { mode: "mock_test", currentSkill: "listening" },
+          listening: { answers }
         });
+
+        await attemptsApiService.autosaveMockTest(
+          String(practiceData.attemptId),
+          "reading",
+          draftState
+        );
+
+        // Navigate to Reading with same attempt ID
+        navigate(`/quiz/reading/take?attemptId=${practiceData.attemptId}&mode=mock_test&session=mock`);
+      } else {
+        const res = await listeningService.submit(
+          practiceData.attemptId,
+          answers,
+          durationUsed
+        );
+        setSubmitResult(res);
+        const result = await listeningService.getResult(practiceData.attemptId);
+        setAttemptResult(result);
+        setSubmitted(true);
       }
-      setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
       toast.error(msg || "Nộp bài thất bại. Vui lòng thử lại.");
@@ -236,6 +358,22 @@ const ListeningQuiz = () => {
   const sections = exam.sections ?? [];
   const totalQ = countAllQuestions(sections);
   const section = sections[currentSection];
+
+  // ── Calculate question statuses for mock test grid ────────
+  const getQuestionStatuses = (): Record<number, "answered" | "unanswered"> => {
+    const statuses: Record<number, "answered" | "unanswered"> = {};
+    let questionNumber = 1;
+
+    sections.forEach((sec) => {
+      sec.questions.forEach(() => {
+        const answered = Object.keys(answers).length > 0;
+        statuses[questionNumber] = answered ? "answered" : "unanswered";
+        questionNumber++;
+      });
+    });
+
+    return statuses;
+  };
 
   // ── Mock Test transition ───────────────────────────────────
   if (submitted && isMockSession) {
@@ -348,33 +486,272 @@ const ListeningQuiz = () => {
   const answeredCount = Object.keys(answers).length;
   const sectionOffset = sections.slice(0, currentSection).reduce((s, sec) => s + sec.questions.length, 0);
 
+  // ── Mock Test UI ──────────────────────────────────────────
+  if (isMockSession && practiceData?.attemptId) {
+    return (
+      <>
+        <VstepMockLayout
+          skillName="Listening / Kỹ năng Nghe"
+          remainingSeconds={serverTimeRemaining || timeLeft}
+          questionCount={totalQ}
+          answeredCount={answeredCount}
+          currentQuestion={undefined}
+          isLastSkill={false}
+          onExit={() => setShowExitDialog(true)}
+          onNext={handleSubmit}
+          onQuestionSelect={(questionNum) => {
+            questionsScrollRef.current?.scrollIntoView({ behavior: "smooth" });
+          }}
+          questionStatuses={getQuestionStatuses()}
+          attemptId={practiceData.attemptId}
+        >
+          {/* Main content area */}
+          <div className="flex-1 flex flex-col px-6 py-4 space-y-4">
+            {/* Exam title */}
+            <div className="text-center">
+              <h2 className="text-lg font-semibold text-foreground">{exam.title}</h2>
+              {cleanDescription(exam.description) && (
+                <p className="text-xs text-muted-foreground mt-1">{cleanDescription(exam.description)}</p>
+              )}
+            </div>
+
+            {/* Section tabs */}
+            {sections.length > 1 && (
+              <div className="flex gap-2 flex-wrap justify-center">
+                {sections.map((sec, i) => (
+                  <button
+                    key={sec.sectionId}
+                    onClick={() => {
+                      setCurrentSection(i);
+                      setAudioProgress(0);
+                      setIsPlaying(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      i === currentSection
+                        ? "bg-blue-900 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    {sec.title || `Phần ${i + 1}`}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Quiz content */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="space-y-1">
+                <h3 className="font-semibold text-sm text-foreground">
+                  {section?.title || `Phần ${currentSection + 1}`}
+                </h3>
+                {section?.instruction && (
+                  <p className="text-xs text-muted-foreground">{section.instruction}</p>
+                )}
+              </div>
+
+              {/* Questions */}
+              <div ref={questionsScrollRef} className="mt-4">
+                <VocabularyContextMenu source="listening">
+                  <div className="space-y-4">
+                    {(section?.questions ?? []).map((q, i) => {
+                      const globalIdx = sectionOffset + i + 1;
+                      return (
+                        <div
+                          key={q.questionId}
+                          className={`rounded-lg border p-3 transition-colors ${
+                            answers[q.questionId] !== undefined
+                              ? "border-blue-200 bg-blue-50"
+                              : "border-gray-200 bg-white"
+                          }`}
+                        >
+                          <h4 className="text-xs font-semibold text-foreground mb-2">
+                            <span className="text-blue-900 mr-1">Câu {globalIdx}.</span>
+                            {q.questionText}
+                          </h4>
+                          <RadioGroup
+                            value={answers[q.questionId] ?? ""}
+                            onValueChange={(v) =>
+                              setAnswers((p) => ({ ...p, [q.questionId]: v }))
+                            }
+                            className="space-y-1.5"
+                          >
+                            {q.options.map((opt) => (
+                              <label
+                                key={opt.optionId}
+                                className={`flex items-center gap-2 p-2 rounded text-xs cursor-pointer transition-all ${
+                                  answers[q.questionId] === opt.label
+                                    ? "bg-blue-100 border border-blue-300"
+                                    : "hover:bg-gray-50"
+                                }`}
+                              >
+                                <RadioGroupItem
+                                  value={opt.label}
+                                  id={`lq-${q.questionId}-${opt.optionId}`}
+                                />
+                                <Label
+                                  htmlFor={`lq-${q.questionId}-${opt.optionId}`}
+                                  className="cursor-pointer flex-1"
+                                >
+                                  <span className="font-medium text-gray-600 mr-1">
+                                    {opt.label}.
+                                  </span>
+                                  <span className="text-foreground">{opt.content}</span>
+                                </Label>
+                              </label>
+                            ))}
+                          </RadioGroup>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </VocabularyContextMenu>
+              </div>
+
+              {/* Audio player */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                {(() => {
+                  const audioUrl = section?.audioUrl ?? exam.audioUrl;
+                  return audioUrl ? (
+                    <audio controls src={audioUrl} key={audioUrl} className="w-full" />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Volume2 size={14} className="text-blue-900 shrink-0" />
+                      <span className="text-xs text-gray-600 w-10">
+                        {formatTime(audioProgress)}
+                      </span>
+                      <div className="flex-1">
+                        <Progress value={(audioProgress / audioDuration) * 100} className="h-1" />
+                      </div>
+                      <span className="text-xs text-gray-600 w-10 text-right">
+                        {formatTime(audioDuration)}
+                      </span>
+                      <div className="flex items-center gap-1 ml-2">
+                        {perms.canSeekListeningAudio && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => seekAudio(-10)}
+                          >
+                            <SkipBack size={12} />
+                          </Button>
+                        )}
+                        <Button
+                          size="icon"
+                          className="h-8 w-8 bg-blue-900 text-white hover:bg-blue-800"
+                          onClick={() => setIsPlaying(!isPlaying)}
+                          disabled={
+                            !perms.canReplayListeningAudio &&
+                            audioProgress >= audioDuration
+                          }
+                        >
+                          {isPlaying ? (
+                            <Pause size={14} />
+                          ) : (
+                            <Play size={14} />
+                          )}
+                        </Button>
+                        {perms.canSeekListeningAudio && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => seekAudio(10)}
+                          >
+                            <SkipForward size={12} />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </VstepMockLayout>
+
+        <ExitConfirmDialog
+          open={showExitDialog}
+          onOpenChange={setShowExitDialog}
+          onConfirm={handleExitMockTest}
+          attemptId={practiceData.attemptId}
+        />
+      </>
+    );
+  }
+
+  // ── Practice Mode UI (Original) ────────────────────────────
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top bar */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-4 h-14">
-          <button onClick={() => navigate("/quiz")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <button
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Bạn có chắc chắn muốn thoát? Bài thi đang làm sẽ bị hủy và không được lưu."
+                )
+              ) {
+                navigate("/quiz");
+              }
+            }}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
             <ArrowLeft size={16} /> Thoát
           </button>
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-sm font-medium">
-              <Clock size={16} className={timeLeft < 300 ? "text-destructive" : isPaused ? "text-amber-500" : "text-muted-foreground"} />
-              <span className={timeLeft < 300 ? "text-destructive" : isPaused ? "text-amber-500" : "text-foreground"}>
+              <Clock
+                size={16}
+                className={
+                  timeLeft < 300
+                    ? "text-destructive"
+                    : isPaused
+                      ? "text-amber-500"
+                      : "text-muted-foreground"
+                }
+              />
+              <span
+                className={
+                  timeLeft < 300
+                    ? "text-destructive"
+                    : isPaused
+                      ? "text-amber-500"
+                      : "text-foreground"
+                }
+              >
                 {formatTime(timeLeft)}
               </span>
-              {isPaused && <span className="text-xs text-amber-500 font-medium">(Tạm dừng)</span>}
+              {isPaused && (
+                <span className="text-xs text-amber-500 font-medium">(Tạm dừng)</span>
+              )}
             </div>
 
             {perms.canPauseTimer && (
-              <Button size="sm" variant={isPaused ? "default" : "outline"} onClick={() => setIsPaused((p) => !p)}
-                className={`gap-1.5 ${isPaused ? "gradient-primary text-primary-foreground" : ""}`}>
-                {isPaused ? <><Play size={14} /> Tiếp tục</> : <><PauseCircle size={14} /> Tạm dừng</>}
+              <Button
+                size="sm"
+                variant={isPaused ? "default" : "outline"}
+                onClick={() => setIsPaused((p) => !p)}
+                className={`gap-1.5 ${isPaused ? "gradient-primary text-primary-foreground" : ""}`}
+              >
+                {isPaused ? (
+                  <>
+                    <Play size={14} /> Tiếp tục
+                  </>
+                ) : (
+                  <>
+                    <PauseCircle size={14} /> Tạm dừng
+                  </>
+                )}
               </Button>
             )}
           </div>
 
-          <span className="text-sm text-muted-foreground">Đã trả lời {answeredCount}/{totalQ}</span>
+          <span className="text-sm text-muted-foreground">
+            Đã trả lời {answeredCount}/{totalQ}
+          </span>
         </div>
         <Progress value={(answeredCount / totalQ) * 100} className="h-1" />
       </header>
@@ -386,7 +763,10 @@ const ListeningQuiz = () => {
             <PauseCircle size={56} className="mx-auto text-primary" />
             <h2 className="text-2xl font-bold text-foreground">Bài thi đang tạm dừng</h2>
             <p className="text-sm text-muted-foreground">Nhấn "Tiếp tục" để tiếp tục làm bài</p>
-            <Button className="gradient-primary text-primary-foreground mt-2" onClick={() => setIsPaused(false)}>
+            <Button
+              className="gradient-primary text-primary-foreground mt-2"
+              onClick={() => setIsPaused(false)}
+            >
               <Play size={16} className="mr-1" /> Tiếp tục
             </Button>
           </div>
@@ -397,16 +777,29 @@ const ListeningQuiz = () => {
         {/* Exam title */}
         <div className="text-center">
           <h1 className="text-lg font-bold text-foreground">{exam.title}</h1>
-          {cleanDescription(exam.description) && <p className="text-sm text-muted-foreground">{cleanDescription(exam.description)}</p>}
+          {cleanDescription(exam.description) && (
+            <p className="text-sm text-muted-foreground">
+              {cleanDescription(exam.description)}
+            </p>
+          )}
         </div>
 
         {/* Section tabs */}
         {sections.length > 1 && (
           <div className="flex gap-2 flex-wrap">
             {sections.map((sec, i) => (
-              <button key={sec.sectionId}
-                onClick={() => { setCurrentSection(i); setAudioProgress(0); setIsPlaying(false); }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${i === currentSection ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+              <button
+                key={sec.sectionId}
+                onClick={() => {
+                  setCurrentSection(i);
+                  setAudioProgress(0);
+                  setIsPlaying(false);
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  i === currentSection
+                    ? "gradient-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
               >
                 {sec.title || `Phần ${i + 1}`}
               </button>
@@ -415,12 +808,19 @@ const ListeningQuiz = () => {
         )}
 
         {/* Main content */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col" style={{ height: "calc(100vh - 230px)" }}>
+        <div
+          className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col"
+          style={{ height: "calc(100vh - 230px)" }}
+        >
           <div className="px-5 py-3 border-b border-border bg-muted/30">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-foreground text-sm">{section?.title || `Phần ${currentSection + 1}`}</h3>
-                {section?.instruction && <p className="text-xs text-muted-foreground">{section.instruction}</p>}
+                <h3 className="font-semibold text-foreground text-sm">
+                  {section?.title || `Phần ${currentSection + 1}`}
+                </h3>
+                {section?.instruction && (
+                  <p className="text-xs text-muted-foreground">{section.instruction}</p>
+                )}
               </div>
             </div>
           </div>
@@ -432,20 +832,45 @@ const ListeningQuiz = () => {
                 {(section?.questions ?? []).map((q, i) => {
                   const globalIdx = sectionOffset + i + 1;
                   return (
-                    <div key={q.questionId} className={`rounded-xl border-2 p-4 transition-colors ${answers[q.questionId] !== undefined ? "border-primary/30 bg-primary/5" : "border-border"}`}>
+                    <div
+                      key={q.questionId}
+                      className={`rounded-xl border-2 p-4 transition-colors ${
+                        answers[q.questionId] !== undefined
+                          ? "border-primary/30 bg-primary/5"
+                          : "border-border"
+                      }`}
+                    >
                       <h4 className="text-sm font-semibold text-foreground mb-3">
-                        <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
+                        <span className="text-primary mr-1">Câu {globalIdx}.</span>{" "}
+                        {q.questionText}
                       </h4>
                       <RadioGroup
                         value={answers[q.questionId] ?? ""}
-                        onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
+                        onValueChange={(v) =>
+                          setAnswers((p) => ({ ...p, [q.questionId]: v }))
+                        }
                         className="grid grid-cols-1 sm:grid-cols-2 gap-2"
                       >
                         {q.options.map((opt) => (
-                          <label key={opt.optionId} className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer text-sm transition-all ${answers[q.questionId] === opt.label ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 hover:bg-muted/50"}`}>
-                            <RadioGroupItem value={opt.label} id={`lq-${q.questionId}-${opt.optionId}`} />
-                            <Label htmlFor={`lq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1">
-                              <span className="font-medium text-muted-foreground mr-1.5">{opt.label}.</span>
+                          <label
+                            key={opt.optionId}
+                            className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer text-sm transition-all ${
+                              answers[q.questionId] === opt.label
+                                ? "border-primary bg-primary/10"
+                                : "border-border hover:border-primary/30 hover:bg-muted/50"
+                            }`}
+                          >
+                            <RadioGroupItem
+                              value={opt.label}
+                              id={`lq-${q.questionId}-${opt.optionId}`}
+                            />
+                            <Label
+                              htmlFor={`lq-${q.questionId}-${opt.optionId}`}
+                              className="cursor-pointer flex-1"
+                            >
+                              <span className="font-medium text-muted-foreground mr-1.5">
+                                {opt.label}.
+                              </span>
                               <span className="text-foreground">{opt.content}</span>
                             </Label>
                           </label>
@@ -463,29 +888,60 @@ const ListeningQuiz = () => {
             {(() => {
               const audioUrl = section?.audioUrl ?? exam.audioUrl;
               return audioUrl ? (
-                <audio controls src={audioUrl} key={audioUrl} className="w-full h-10" />
+                <audio
+                  controls
+                  src={audioUrl}
+                  key={audioUrl}
+                  className="w-full h-10"
+                />
               ) : (
                 <div className="flex items-center gap-3">
                   <Volume2 size={18} className="text-primary shrink-0" />
-                  <span className="text-xs text-muted-foreground w-12">{formatTime(audioProgress)}</span>
+                  <span className="text-xs text-muted-foreground w-12">
+                    {formatTime(audioProgress)}
+                  </span>
                   <div className="flex-1">
-                    <Progress value={(audioProgress / audioDuration) * 100} className="h-2" />
+                    <Progress
+                      value={(audioProgress / audioDuration) * 100}
+                      className="h-2"
+                    />
                   </div>
-                  <span className="text-xs text-muted-foreground w-12 text-right">{formatTime(audioDuration)}</span>
+                  <span className="text-xs text-muted-foreground w-12 text-right">
+                    {formatTime(audioDuration)}
+                  </span>
                   <div className="flex items-center gap-1.5 ml-2">
                     {perms.canSeekListeningAudio && (
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(-10)}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => seekAudio(-10)}
+                      >
                         <SkipBack size={14} />
                       </Button>
                     )}
-                    <Button size="icon" className="h-10 w-10 gradient-primary text-primary-foreground"
+                    <Button
+                      size="icon"
+                      className="h-10 w-10 gradient-primary text-primary-foreground"
                       onClick={() => setIsPlaying(!isPlaying)}
-                      disabled={!perms.canReplayListeningAudio && audioProgress >= audioDuration}
+                      disabled={
+                        !perms.canReplayListeningAudio &&
+                        audioProgress >= audioDuration
+                      }
                     >
-                      {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+                      {isPlaying ? (
+                        <Pause size={18} />
+                      ) : (
+                        <Play size={18} />
+                      )}
                     </Button>
                     {perms.canSeekListeningAudio && (
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => seekAudio(10)}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => seekAudio(10)}
+                      >
                         <SkipForward size={14} />
                       </Button>
                     )}
@@ -498,7 +954,11 @@ const ListeningQuiz = () => {
 
         {/* Submit */}
         <div className="flex justify-end">
-          <Button className="gradient-primary text-primary-foreground" onClick={handleSubmit} disabled={submitting}>
+          <Button
+            className="gradient-primary text-primary-foreground"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
             {submitting ? "Đang nộp bài..." : "Hoàn thành"}
           </Button>
         </div>

@@ -64,7 +64,7 @@ const HeroSection = () => {
               Chinh phục VSTEP{" "}
               <span className="text-gradient">hiệu quả</span>
               <br />
-              với lộ trình học thông minh
+              với đề thi thực tế & chấm điểm AI
             </motion.h1>
 
             <motion.p
@@ -73,8 +73,8 @@ const HeroSection = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
             >
-              Nền tảng luyện thi VSTEP trực tuyến hàng đầu — học đúng format, luyện đề thực tế, 
-              theo dõi tiến độ chi tiết. Nâng cao cơ hội đạt chuẩn đầu ra nhanh chóng.
+              Nền tảng luyện thi VSTEP trực tuyến — học đúng format, luyện đề thực tế,  
+              chấm điểm AI cho Writing & Speaking, theo dõi tiến độ chi tiết.
             </motion.p>
 
             <motion.div

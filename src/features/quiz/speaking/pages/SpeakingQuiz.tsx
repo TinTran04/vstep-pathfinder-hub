@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { type SpeakingFeedback, type SpeakingPart, parts as mockParts, TOTAL_TIME as MOCK_TOTAL_TIME, speakingFeedbackAITemplates } from "../mocks/speaking.mock";
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
+import { attemptsApiService } from "@/features/attempts/services/attempts.api-service";
 import type { SpeakingFeedbackResult } from "@/features/attempts/types";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { toast } from "sonner";
@@ -19,6 +20,9 @@ import { examService, type ExamDetailResponse } from "@/features/quiz/services/e
 import { speakingApiService, type SpeakingResultResponse } from "../services/speaking.api-service";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 import { cleanDescription } from "@/lib/utils";
+import { useAutosave } from "@/features/attempts/hooks/useAutosave";
+import { VstepMockLayout } from "@/features/quiz/components/VstepMockLayout";
+import { ExitConfirmDialog } from "@/features/quiz/components/ExitConfirmDialog";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -105,6 +109,8 @@ const SpeakingQuiz = () => {
   const [submitted, setSubmitted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [mockTransition, setMockTransition] = useState(false);
+  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   // ── Camera & Mic ──
   const [cameraOn, setCameraOn] = useState(false);
@@ -126,6 +132,7 @@ const SpeakingQuiz = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<Record<number, FeedbackState>>({});
   const [pollingStatus, setPollingStatus] = useState("");
+  const [attemptId, setAttemptId] = useState<string | null>(null);
 
   const groupId = searchParams.get("groupId") ?? "";
 
@@ -133,6 +140,25 @@ const SpeakingQuiz = () => {
   useEffect(() => {
     let active = true;
     const load = async () => {
+      if (isMockSession) {
+        try {
+          const res = await attemptsService.getInProgressAttempt();
+          if (!active) return;
+          if (res) {
+            setAttemptId(String(res.attemptId));
+
+            // Use mock parts for mock test (no need to fetch exams)
+            setPartsData(mockParts);
+            setTotalTime(MOCK_TOTAL_TIME);
+            setTimeLeft(res.remainingSeconds > 0 ? res.remainingSeconds : MOCK_TOTAL_TIME);
+          }
+        } catch (err) {
+          console.error("Failed to load in progress attempt", err);
+        }
+        if (active) setLoading(false);
+        return;
+      }
+
       if (!IS_API_MODE) {
         setPartsData(mockParts);
         setTotalTime(MOCK_TOTAL_TIME);
@@ -187,6 +213,37 @@ const SpeakingQuiz = () => {
     load();
     return () => { active = false; };
   }, [groupId]);
+
+  // ── Block leave confirmation ────────────────────────────────
+  useEffect(() => {
+    if (loading || submitted) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Show toast for practice mode when user unexpectedly leaves
+      if (!isMockSession && !submitted && attemptId) {
+        toast.info("Phiên luyện tập bị thoát. Tiến độ đã được lưu.");
+      }
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [loading, submitted, isMockSession, attemptId]);
+
+  // ── Server time sync (mock test) ──────────────────────────
+  useEffect(() => {
+    if (!isMockSession || !attemptId) return;
+    const timer = setInterval(() => {
+      attemptsApiService.getInProgressAttempt().then(res => {
+        if (res && res.remainingSeconds >= 0) {
+          setServerTimeRemaining(res.remainingSeconds);
+          if (res.remainingSeconds <= 0 && !submitted) {
+            setSubmitted(true);
+          }
+        }
+      }).catch(err => console.error("Failed to fetch remaining time", err));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isMockSession, attemptId, submitted]);
 
   // ── Timer ──
   useEffect(() => {
@@ -305,7 +362,7 @@ const SpeakingQuiz = () => {
       return { submissionId, audioUrl };
     } catch (err) {
       console.error(`[SpeakingQuiz] Upload/submit failed for part ${partId}`, err);
-      toast.error(`Tải file ghi âm Part ${partId} thất bại. Vui lòng kiểm tra kết nối.`);
+      toast.error(`Không tải được file ghi âm Part ${partId}. Vui lòng kiểm tra kết nối hoặc thử ghi âm lại.`);
       return null;
     }
   };
@@ -369,6 +426,11 @@ const SpeakingQuiz = () => {
               feedback: graded.feedback,
               status: graded.status,
             };
+          } else {
+            // Abort AI feedback process if upload fails
+            setAiLoading(false);
+            setPollingStatus("");
+            return;
           }
         }
         setAiFeedback(newFeedbacks);
@@ -406,37 +468,64 @@ const SpeakingQuiz = () => {
     }
   };
 
+  useAutosave(
+    isMockSession && attemptId ? attemptId : null,
+    "speaking",
+    () => ({ speaking: { status: "in_progress" } }) // Cannot serialize blobs easily
+  );
+
+  const handleExitMockTest = () => {
+    setShowExitDialog(true);
+  };
+
+  const getQuestionStatuses = (): Record<number, "answered" | "unanswered"> => {
+    const statuses: Record<number, "answered" | "unanswered"> = {};
+    parts.forEach((part) => {
+      statuses[part.id] = recordings[part.id] ? "answered" : "unanswered";
+    });
+    return statuses;
+  };
+
   // ── handleFinish (mock test) ──────────────────────────────────
   const handleFinish = async () => {
     if (isMockSession) {
       setAiLoading(true);
-      setPollingStatus("Đang xử lý bài...");
+      setPollingStatus("Đang nộp bài thi...");
       try {
-        if (IS_API_MODE) {
-          const uploadedRecordings: Record<number, string> = {};
-          for (const [partIdStr, blob] of Object.entries(recordingBlobs)) {
-            const partId = Number(partIdStr);
-            setPollingStatus(`Đang tải Part ${partId}...`);
-            const res = await uploadAndSubmitRecording(partId, blob);
-            if (res?.audioUrl) {
-              uploadedRecordings[partId] = res.audioUrl;
-            }
+        const uploadedRecordings: Record<number, string> = {};
+        for (const [partIdStr, blob] of Object.entries(recordingBlobs)) {
+          const partId = Number(partIdStr);
+          setPollingStatus(`Đang tải Part ${partId}...`);
+          try {
+             const permanentUrl = await attemptsService.uploadSpeakingRecording(attemptId!, partId, blob);
+             uploadedRecordings[partId] = permanentUrl;
+          } catch(e) {
+             console.error("Failed to upload part", partId);
           }
-          await attemptsService.saveSkillAttempt("speaking", { recordings: uploadedRecordings });
-          await attemptsService.finishMockTest();
-        } else {
-          const attemptId = await getOrCreateAttemptId();
-          await uploadAndResolveRecordings(attemptId);
-          await attemptsService.saveSkillAttempt("speaking", { recordings });
-          await attemptsService.finishMockTest();
         }
+
+        // Format speaking answers for submission
+        const speakingAnswers = Object.entries(uploadedRecordings).map(([partId, audioUrl]) => ({
+          partNumber: parseInt(partId, 10),
+          audioUrl,
+          transcript: ""
+        }));
+
+        // Final submit!
+        setPollingStatus("Đang xử lý kết quả...");
+        const draftState = JSON.stringify({
+          _meta: { mode: "mock_test", currentSkill: "speaking" },
+          speaking: { answers: speakingAnswers }
+        });
+        await attemptsApiService.submitMockTest(attemptId!, draftState);
+        navigate(`/attempts/${attemptId}/result`);
       } catch (e) {
         console.error("[SpeakingQuiz] handleFinish error", e);
+        toast.error("Không thể nộp bài. Vui lòng thử lại.");
       } finally {
         setAiLoading(false);
         setPollingStatus("");
       }
-      setMockTransition(true);
     } else {
       // Practice mode: just save & go to submitted screen
       if (IS_API_MODE) {
@@ -557,7 +646,9 @@ const SpeakingQuiz = () => {
                           {fb.score !== null ? `${fb.score}/10` : "Đang xử lý..."}
                         </span>
                         {fb.status === "failed" && (
-                          <Badge variant="destructive">Chấm điểm thất bại</Badge>
+                          <div className="text-xs text-destructive bg-destructive/10 py-1 px-2 rounded-md">
+                            Chấm điểm thất bại
+                          </div>
                         )}
                       </div>
                       {fb.feedback && (
@@ -630,22 +721,34 @@ const SpeakingQuiz = () => {
                     : "Xem đánh giá AI"}
                 </Button>
               ) : (
-                <Button
-                  className="flex-1 gradient-primary text-primary-foreground"
-                  onClick={() => {
-                    setShowAIFeedback(false);
-                    setSubmitted(false);
-                    setRecordings({});
-                    setRecordingBlobs({});
-                    setAiFeedback({});
-                    setCurrentPart(0);
-                    setTimeLeft(totalTime);
-                    setIsPaused(false);
-                    setPollingStatus("");
-                  }}
-                >
-                  <RotateCcw size={16} /> Làm lại
-                </Button>
+                <>
+                  {Object.values(aiFeedback).some(fb => fb.source === "api" && fb.status === "failed") && (
+                    <Button
+                      className="flex-1"
+                      variant="destructive"
+                      onClick={generateAIFeedback}
+                      disabled={aiLoading}
+                    >
+                      {aiLoading ? <><Loader2 size={16} className="animate-spin" /> Đang thử lại...</> : "Thử lại chấm điểm"}
+                    </Button>
+                  )}
+                  <Button
+                    className="flex-1 gradient-primary text-primary-foreground"
+                    onClick={() => {
+                      setShowAIFeedback(false);
+                      setSubmitted(false);
+                      setRecordings({});
+                      setRecordingBlobs({});
+                      setAiFeedback({});
+                      setCurrentPart(0);
+                      setTimeLeft(totalTime);
+                      setIsPaused(false);
+                      setPollingStatus("");
+                    }}
+                  >
+                    <RotateCcw size={16} /> Làm lại (Ghi âm lại)
+                  </Button>
+                </>
               )}
             </div>
           </CardContent>
@@ -655,12 +758,121 @@ const SpeakingQuiz = () => {
   }
 
   // ─── Speaking quiz main screen ───────────────────────────────
+  if (isMockSession && attemptId) {
+    const questionStatuses = getQuestionStatuses();
+
+    return (
+      <>
+        <VstepMockLayout
+          skillName="Speaking / Kỹ năng Nói"
+          remainingSeconds={serverTimeRemaining}
+          questionCount={parts.length}
+          answeredCount={Object.values(questionStatuses).filter(s => s === "answered").length}
+          currentQuestion={currentPart + 1}
+          isLastSkill={true}
+          onExit={handleExitMockTest}
+          onNext={handleFinish}
+          onQuestionSelect={(partNum) => setCurrentPart(partNum - 1)}
+          questionStatuses={questionStatuses}
+          attemptId={attemptId}
+        >
+          <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
+          {/* Left: Prompt */}
+          <div className="w-1/2 border-r border-border">
+            <VocabularyContextMenu source="speaking">
+              <ScrollArea className="h-[calc(100vh-64px)]">
+                <div className="p-6 space-y-6">
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground">{part.title}</h2>
+                    <Badge variant="outline" className="mt-2 text-xs">⏱ {part.duration}</Badge>
+                  </div>
+                  <Card className="border-border bg-muted/30">
+                    <CardContent className="p-5">
+                      <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
+                      <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{part.prompt}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </ScrollArea>
+            </VocabularyContextMenu>
+          </div>
+
+          {/* Right: Camera & Recording */}
+          <div className="w-1/2 flex flex-col p-6 space-y-4">
+            {/* Video area */}
+            <div className="relative flex-1 bg-muted rounded-2xl overflow-hidden flex items-center justify-center min-h-[300px]">
+              <video ref={videoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${cameraOn ? "" : "hidden"}`} />
+              {!cameraOn && (
+                <div className="text-center text-muted-foreground">
+                  <VideoOff size={48} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Camera đang tắt</p>
+                </div>
+              )}
+              {isRecording && (
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-destructive/90 text-destructive-foreground px-3 py-1.5 rounded-full text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-destructive-foreground animate-pulse" /> Đang ghi âm...
+                </div>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-center gap-3">
+              <Button size="icon" variant={cameraOn ? "default" : "outline"} onClick={toggleCamera} className="rounded-full w-12 h-12">
+                {cameraOn ? <Video size={20} /> : <VideoOff size={20} />}
+              </Button>
+              <Button size="icon" variant={micOn ? "default" : "outline"} onClick={toggleMic} className="rounded-full w-12 h-12">
+                {micOn ? <Mic size={20} /> : <MicOff size={20} />}
+              </Button>
+
+              {!isRecording && !currentRecording && (
+                <Button onClick={startRecording} className="gradient-primary text-primary-foreground gap-2 rounded-full px-6" disabled={isPaused}>
+                  <Mic size={18} /> Bắt đầu ghi âm
+                </Button>
+              )}
+              {isRecording && (
+                <Button onClick={stopRecording} variant="destructive" className="gap-2 rounded-full px-6">
+                  <Square size={18} /> Dừng ghi âm
+                </Button>
+              )}
+            </div>
+
+            {/* Playback */}
+            {currentRecording && !isRecording && (
+              <div className="bg-muted/50 rounded-xl p-4 flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">✅ Đã ghi âm Part {part.id}</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => playback(currentRecording)} disabled={playingBack}>
+                    <Play size={14} /> {playingBack ? "Đang phát..." : "Nghe lại"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={reRecord}><RotateCcw size={14} /> Ghi lại</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        </VstepMockLayout>
+        <ExitConfirmDialog
+          open={showExitDialog}
+          onOpenChange={setShowExitDialog}
+          onConfirm={() => {
+            navigate("/quiz");
+          }}
+          attemptId={attemptId ? Number(attemptId) : undefined}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top bar */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 h-14">
-          <button onClick={() => navigate("/quiz")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <button onClick={() => {
+            if (window.confirm("Bạn có chắc chắn muốn thoát? Bài thi đang làm sẽ bị hủy và không được lưu.")) {
+              navigate("/quiz");
+            }
+          }} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft size={16} /> Thoát
           </button>
           <div className="flex items-center gap-4">

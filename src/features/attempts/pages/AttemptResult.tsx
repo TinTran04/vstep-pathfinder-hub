@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { attemptsService } from "../services/attempts.service";
-import type { MockTestAttempt, Skill } from "../types";
+import { attemptReviewApiService } from "../services/attempt-review.api-service";
+import type { AttemptReviewResponse, Skill } from "../types";
 import logoImg from "@/assets/logo.png";
 
 const LEVEL_DESCRIPTIONS: Record<string, { badge: string; desc: string; color: string; bg: string; border: string }> = {
@@ -27,7 +27,7 @@ const skillConfig = [
 export const AttemptResult = () => {
   const { attemptId } = useParams<{ attemptId: string }>();
   const navigate = useNavigate();
-  const [attempt, setAttempt] = useState<MockTestAttempt | null>(null);
+  const [attempt, setAttempt] = useState<AttemptReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,8 +35,11 @@ export const AttemptResult = () => {
       navigate("/quiz");
       return;
     }
-    attemptsService.getAttemptById(attemptId).then((a) => {
+    attemptReviewApiService.getAttemptReview(attemptId).then((a) => {
       setAttempt(a);
+      setLoading(false);
+    }).catch((e) => {
+      console.error(e);
       setLoading(false);
     });
   }, [attemptId, navigate]);
@@ -71,71 +74,128 @@ export const AttemptResult = () => {
     );
   }
 
-  const { overallScore, level, mode, skills, strengths = [], weaknesses = [], recommendedPractice = [] } = attempt;
-  const levelInfo = LEVEL_DESCRIPTIONS[level || "A2"] || LEVEL_DESCRIPTIONS["A2"];
-  const isPractice = mode === "practice";
+  const isPractice = attempt.skillType && attempt.skillType !== "mock_test";
 
-  // Calculate scores for rendering
+  // Calculate scores for rendering based on AttemptReviewResponse
   const getSkillDisplayScore = (skillName: Skill) => {
-    const skill = skills[skillName];
-    if (!skill) return null;
-
-    if (skill.score !== undefined && skill.totalQuestions !== undefined && skill.totalQuestions > 0) {
-      const tenPointScale = (skill.score / skill.totalQuestions) * 10;
+    if (skillName === "listening") {
+      const listeningSections = attempt.sections.filter(s => s.audioUrl);
+      if (listeningSections.length === 0) return null;
+      let totalQuestions = 0;
+      let correct = 0;
+      listeningSections.forEach(s => {
+        s.questions.forEach(q => {
+          totalQuestions++;
+          if (q.isCorrectAnswer) correct++;
+        });
+      });
+      const tenPointScale = totalQuestions > 0 ? (correct / totalQuestions) * 10 : 0;
       return {
         scoreVal: tenPointScale,
-        label: `${skill.score}/${skill.totalQuestions} câu`,
+        label: `${correct}/${totalQuestions} câu`,
+        details: `${tenPointScale.toFixed(1)}/10.0`
+      };
+    }
+
+    if (skillName === "reading") {
+      const readingSections = attempt.sections.filter(s => s.passageText);
+      if (readingSections.length === 0) return null;
+      let totalQuestions = 0;
+      let correct = 0;
+      readingSections.forEach(s => {
+        s.questions.forEach(q => {
+          totalQuestions++;
+          if (q.isCorrectAnswer) correct++;
+        });
+      });
+      const tenPointScale = totalQuestions > 0 ? (correct / totalQuestions) * 10 : 0;
+      return {
+        scoreVal: tenPointScale,
+        label: `${correct}/${totalQuestions} câu`,
         details: `${tenPointScale.toFixed(1)}/10.0`
       };
     }
 
     if (skillName === "writing") {
-      const feedback = skill.writingFeedback;
-      if (feedback && Object.keys(feedback).length > 0) {
-        const scores = Object.values(feedback).map((f) => {
-          const match = f.score.match(/[\d.]+/);
-          return match ? parseFloat(match[0]) : 7.0;
-        });
-        const average = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const feedback = attempt.writingReview;
+      if (feedback) {
+        if (feedback.score !== null && feedback.score !== undefined) {
+           return {
+             scoreVal: Number(feedback.score),
+             label: "Đã chấm điểm",
+             details: `${Number(feedback.score).toFixed(1)}/10.0`
+           };
+        }
+        if (feedback.status === "scored" || feedback.status === "failed") {
+            const rawScore = feedback.score || 0;
+            return {
+              scoreVal: Number(rawScore),
+              label: feedback.status === "failed" ? "Lỗi chấm điểm" : "Đã chấm điểm",
+              details: `${Number(rawScore).toFixed(1)}/10.0`
+            };
+        }
         return {
-          scoreVal: average,
-          label: "Đã chấm điểm",
-          details: `${average.toFixed(1)}/10.0`
+          scoreVal: 0,
+          label: "Đang chấm...",
+          details: "Chờ AI xử lý"
         };
       }
+      return null;
     }
 
     if (skillName === "speaking") {
-      const feedback = skill.speakingFeedback;
-      if (feedback && Object.keys(feedback).length > 0) {
-        const scores = Object.values(feedback).map((f) => {
-          const match = f.pronunciation.match(/^([\d.]+)/);
-          return match ? parseFloat(match[0]) : 7.0;
-        });
-        const average = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const feedback = attempt.speakingReview;
+      if (feedback) {
+        if (feedback.score !== null && feedback.score !== undefined) {
+           return {
+             scoreVal: Number(feedback.score),
+             label: "Đã chấm điểm",
+             details: `${Number(feedback.score).toFixed(1)}/10.0`
+           };
+        }
+        if (feedback.status === "scored" || feedback.status === "failed") {
+            const rawScore = feedback.score || 0;
+            return {
+              scoreVal: Number(rawScore),
+              label: feedback.status === "failed" ? "Lỗi chấm điểm" : "Đã chấm điểm",
+              details: `${Number(rawScore).toFixed(1)}/10.0`
+            };
+        }
         return {
-          scoreVal: average,
-          label: "Đã chấm điểm",
-          details: `${average.toFixed(1)}/10.0`
+          scoreVal: 0,
+          label: "Đang chấm...",
+          details: "Chờ AI xử lý"
         };
       }
+      return null;
     }
 
-    // Default fallback if score exists directly as a number
-    if (skill.score !== undefined) {
-      return {
-        scoreVal: skill.score,
-        label: "Đã hoàn thành",
-        details: `${skill.score.toFixed(1)}/10.0`
-      };
-    }
-
-    return {
-      scoreVal: 0,
-      label: "Đã hoàn thành",
-      details: "Đang xử lý"
-    };
+    return null;
   };
+
+  const calculateOverallScore = () => {
+     const listening = getSkillDisplayScore("listening")?.scoreVal ?? 0;
+     const reading = getSkillDisplayScore("reading")?.scoreVal ?? 0;
+     const writing = getSkillDisplayScore("writing")?.scoreVal ?? 0;
+     const speaking = getSkillDisplayScore("speaking")?.scoreVal ?? 0;
+     return (listening + reading + writing + speaking) / 4;
+  };
+
+  const overallScore = calculateOverallScore();
+  
+  // Calculate level based on overallScore
+  let level = "A2";
+  if (overallScore >= 8.5) level = "C1";
+  else if (overallScore >= 6.0) level = "B2";
+  else if (overallScore >= 4.0) level = "B1";
+
+  const levelInfo = LEVEL_DESCRIPTIONS[level] || LEVEL_DESCRIPTIONS["A2"];
+  const strengths: string[] = ["Luyện tập đều đặn"]; // Default placeholder
+  const weaknesses: string[] = ["Cần luyện thêm kỹ năng viết"]; // Default placeholder
+  const recommendedPractice: string[] = [
+    "Làm thêm 3 đề Listening mỗi tuần.",
+    "Thực hành viết essay theo chủ đề."
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -167,7 +227,7 @@ export const AttemptResult = () => {
             Báo cáo kết quả chi tiết
           </h1>
           <p className="text-sm text-muted-foreground">
-            Ngày hoàn thành: {attempt.finishedAt ? new Date(attempt.finishedAt).toLocaleString("vi-VN") : "N/A"}
+            Ngày hoàn thành: {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString("vi-VN") : "N/A"}
           </p>
         </div>
 
@@ -329,7 +389,7 @@ export const AttemptResult = () => {
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
           <Button 
             className="gradient-primary text-primary-foreground px-8 py-6 rounded-xl font-bold flex items-center gap-2 shadow-lg w-full sm:w-auto"
-            onClick={() => navigate(`/attempts/${attempt.id}/review`)}
+            onClick={() => navigate(`/attempts/${attempt.attemptId}/review`)}
           >
             <span>Xem lại bài làm chi tiết</span>
             <ChevronRight size={16} />

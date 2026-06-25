@@ -1,29 +1,29 @@
-import { Target, BookOpen, FileText, TrendingUp } from "lucide-react";
+import { UserCircle2, BookOpenCheck, Trophy, BarChart3 } from "lucide-react";
 
 const steps = [
   {
-    icon: Target,
+    icon: UserCircle2,
     step: "01",
-    title: "Chọn mục tiêu VSTEP",
-    desc: "Xác định level mục tiêu (B1 hoặc B2) và thời gian ôn luyện phù hợp với bạn.",
+    title: "Đăng ký & Đăng nhập",
+    desc: "Tạo tài khoản miễn phí trong vài giây để bắt đầu trải nghiệm toàn bộ tính năng luyện thi VSTEP.",
   },
   {
-    icon: BookOpen,
+    icon: BookOpenCheck,
     step: "02",
-    title: "Học theo kỹ năng",
-    desc: "Luyện từng kỹ năng Listening, Reading, Writing, Speaking với bài tập từ cơ bản đến nâng cao.",
+    title: "Luyện tập từng kỹ năng",
+    desc: "Chọn Listening, Reading, Writing hoặc Speaking. Làm bài theo đề thực tế, có thể tạm dừng và xem đáp án chi tiết.",
   },
   {
-    icon: FileText,
+    icon: Trophy,
     step: "03",
-    title: "Luyện đề thực tế",
-    desc: "Làm đề thi mô phỏng hoàn chỉnh, có tính giờ và chấm điểm tự động theo rubric chuẩn.",
+    title: "Thi thử Full Test VSTEP",
+    desc: "Làm bài đủ 4 kỹ năng theo trình tự thực tế. Không tạm dừng, tính giờ chuẩn — giống kỳ thi thật nhất có thể.",
   },
   {
-    icon: TrendingUp,
+    icon: BarChart3,
     step: "04",
-    title: "Cải thiện liên tục",
-    desc: "Xem phân tích chi tiết, nhận gợi ý bài học phù hợp và theo dõi tiến bộ qua từng tuần.",
+    title: "Xem kết quả & điểm AI",
+    desc: "Nhận điểm số ngay sau khi nộp bài. Writing & Speaking được chấm bởi AI, kèm nhận xét chi tiết để cải thiện.",
   },
 ];
 
@@ -32,12 +32,12 @@ const LearningJourney = () => {
     <section id="journey" className="section-padding section-alt">
       <div className="max-w-7xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-14">
-          <span className="text-sm font-semibold text-primary uppercase tracking-wider">Lộ trình học</span>
+          <span className="text-sm font-semibold text-primary uppercase tracking-wider">Cách hoạt động</span>
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-3">
-            Quy trình học VSTEP hiệu quả
+            Bắt đầu luyện thi chỉ trong 4 bước
           </h2>
           <p className="text-muted-foreground mt-4 text-lg">
-            4 bước đơn giản giúp bạn đi từ zero đến đạt chuẩn đầu ra.
+            Đơn giản, trực quan — không cần cài đặt hay cấu hình phức tạp.
           </p>
         </div>
 

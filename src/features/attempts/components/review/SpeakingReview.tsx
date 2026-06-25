@@ -1,218 +1,219 @@
 import { useState } from "react";
-import { Play, Loader2 } from "lucide-react";
+import { Play, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { speakingService } from "@/features/quiz/speaking/services/speaking.service";
-import { parts } from "@/features/quiz/speaking/mocks/speaking.mock";
-import type { SkillAttempt, SpeakingFeedbackResult } from "../../types";
-import { getSpeakingTranscript } from "@/features/quiz/mocks/explanations.mock";
+import type { SpeakingReviewResponse } from "../../types";
+import { normalizeSpeakingFeedback } from "../../utils/feedback-parser";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 
 interface Props {
-  attempt: SkillAttempt;
+  review: SpeakingReviewResponse;
 }
 
-const SpeakingReview = ({ attempt }: Props) => {
-  const { recordings = {} } = attempt;
-  const [feedback, setFeedback] = useState<Record<number, SpeakingFeedbackResult>>(
-    attempt.speakingFeedback ?? {}
-  );
-  const [loading, setLoading] = useState(false);
-  const [feedbackGenerated, setFeedbackGenerated] = useState(
-    Object.keys(attempt.speakingFeedback ?? {}).length > 0
-  );
-  const [activePart, setActivePart] = useState(0);
-  const [playingPart, setPlayingPart] = useState<number | null>(null);
-  const [playbackErrors, setPlaybackErrors] = useState<Record<number, boolean>>({});
+const SpeakingReview = ({ review }: Props) => {
+  const [playing, setPlaying] = useState<boolean>(false);
+  const [playbackError, setPlaybackError] = useState<boolean>(false);
 
-  const handleGenerateFeedback = async () => {
-    setLoading(true);
-    try {
-      const result = await speakingService.generateSpeakingFeedback(recordings);
-      setFeedback(result as Record<number, SpeakingFeedbackResult>);
-      setFeedbackGenerated(true);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const activeFb = normalizeSpeakingFeedback(review.feedbackJson, review.score);
+  const hasRecording = Boolean(review.audioUrl);
 
-  const handlePlayback = (partId: number, url: string) => {
-    if (playingPart !== null) return;
-    const audio = new Audio(url);
+  const handlePlayback = () => {
+    if (playing || !hasRecording) return;
+    const audio = new Audio(review.audioUrl);
     
     audio.onerror = () => {
-      setPlaybackErrors(prev => ({ ...prev, [partId]: true }));
-      setPlayingPart(null);
+      setPlaybackError(true);
+      setPlaying(false);
     };
 
-    setPlayingPart(partId);
+    setPlaying(true);
     audio.play().then(() => {
-      audio.onended = () => setPlayingPart(null);
+      audio.onended = () => setPlaying(false);
     }).catch((e) => {
       console.warn("Audio playback failed:", e);
-      setPlaybackErrors(prev => ({ ...prev, [partId]: true }));
-      setPlayingPart(null);
+      setPlaybackError(true);
+      setPlaying(false);
     });
   };
 
-  const part = parts[activePart];
-  const activeFb = feedback[part.id];
-  const hasRecording = Boolean(recordings[part.id]);
-
   return (
     <div className="space-y-4">
-      {/* Part tabs + AI button */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {parts.map((p, i) => (
-          <button
-            key={i}
-            onClick={() => setActivePart(i)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              i === activePart
-                ? "gradient-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            Part {i + 1}
-            {hasRecording && (
-              <span className="ml-1 text-emerald-500">●</span>
-            )}
-          </button>
-        ))}
-        {!feedbackGenerated && (
-          <Button
-            size="sm"
-            className="ml-auto gradient-primary text-primary-foreground"
-            onClick={handleGenerateFeedback}
-            disabled={loading || Object.keys(recordings).length === 0}
-          >
-            {loading ? (
-              <><Loader2 size={14} className="animate-spin mr-1" /> Đang phân tích...</>
-            ) : (
-              "🤖 Xem đánh giá AI"
-            )}
-          </Button>
-        )}
-      </div>
-
-      {/* Split: prompt + feedback */}
+      {/* Split: transcript + feedback */}
       <div className="flex gap-4 h-[460px]">
-        {/* Left: prompt + recording */}
-        <div className="flex-1 border border-border rounded-xl overflow-hidden">
+        {/* Left: recording + transcript */}
+        <div className="flex-1 border border-border rounded-xl overflow-hidden flex flex-col">
           <div className="px-4 py-2.5 border-b border-border bg-muted/30">
-            <span className="text-xs font-semibold text-foreground">{part.title}</span>
-            <Badge variant="outline" className="ml-2 text-xs">⏱ {part.duration}</Badge>
+            <span className="text-xs font-semibold text-foreground">Bản ghi âm của bạn</span>
           </div>
-          <ScrollArea className="h-[calc(100%-80px)]">
+          <ScrollArea className="flex-1">
             <div className="p-4 space-y-4">
-              <div className="bg-muted/30 rounded-xl p-4 border border-border">
-                <p className="text-xs font-semibold text-muted-foreground mb-2">Đề bài</p>
-                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{part.prompt}</p>
-              </div>
-
-              {/* Sample model answer */}
-              <div className="bg-primary/5 rounded-xl p-4 border border-primary/20">
-                <p className="text-xs font-semibold text-primary mb-2">📝 Bài nói mẫu tham khảo</p>
-                <VocabularyContextMenu source="review">
-                  <p className="text-xs text-foreground whitespace-pre-line leading-relaxed italic">{getSpeakingTranscript(part.id)}</p>
-                </VocabularyContextMenu>
-              </div>
-
-              {/* User transcript if generated */}
-              {activeFb?.transcript && (
+              {activeFb?.transcript ? (
                 <div className="bg-muted/50 rounded-xl p-4 border border-border">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">💬 Bản ghi âm của bạn (Transcript)</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">💬 Transcript do AI nhận dạng</p>
                   <VocabularyContextMenu source="speaking">
-                    <p className="text-xs text-foreground whitespace-pre-line leading-relaxed">{activeFb.transcript}</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{activeFb.transcript}</p>
                   </VocabularyContextMenu>
                 </div>
+              ) : (
+                <div className="text-center py-8 space-y-2">
+                  <p className="text-xs text-muted-foreground">Không có transcript cho phần thi này.</p>
+                </div>
               )}
-
-              <div>
-                <p className="text-xs font-semibold text-foreground mb-2">Hướng dẫn</p>
-                <ul className="space-y-1">
-                  {part.tips.map((t, i) => (
-                    <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
-                      <span className="text-primary">•</span>{t}
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
           </ScrollArea>
+          
           {/* Recording playback */}
           <div className="px-4 py-3 border-t border-border bg-card">
             {hasRecording ? (
               <div className="flex flex-col gap-2 w-full">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-emerald-700 font-medium">✅ Đã ghi âm Part {part.id}</span>
+                  <span className="text-xs text-emerald-700 font-medium">✅ Đã ghi âm xong</span>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handlePlayback(part.id, recordings[part.id]!)}
-                    disabled={playingPart !== null || playbackErrors[part.id]}
+                    onClick={handlePlayback}
+                    disabled={playing || playbackError}
                     className="gap-1.5"
                   >
                     <Play size={12} />
-                    {playingPart === part.id ? "Đang phát..." : "Nghe lại"}
+                    {playing ? "Đang phát..." : "Nghe lại"}
                   </Button>
                 </div>
-                {playbackErrors[part.id] && (
+                {playbackError && (
                   <div className="bg-destructive/10 text-destructive text-xs p-2 rounded border border-destructive/20 mt-1">
-                    ⚠️ <strong>Không thể phát lại bản ghi âm này.</strong> Nếu bạn đã tải lại trang (F5), các Blob URL tạm thời trong bộ nhớ của trình duyệt đã bị thu hồi. Tính năng tải tệp tin lên Cloud Storage sẽ được xử lý khi tích hợp API Backend.
+                    ⚠️ <strong>Không thể phát lại bản ghi âm này.</strong> Audio URL có thể đã hết hạn hoặc không truy cập được.
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">❌ Chưa ghi âm part này</p>
+              <p className="text-xs text-muted-foreground">❌ Không tìm thấy bản ghi âm</p>
             )}
           </div>
         </div>
 
         {/* Right: AI feedback */}
-        <div className="w-72 shrink-0 border border-border rounded-xl overflow-hidden">
+        <div className="w-[350px] shrink-0 border border-border rounded-xl overflow-hidden flex flex-col">
           <div className="px-4 py-2.5 border-b border-border bg-muted/30">
-            <span className="text-xs font-semibold text-foreground">🤖 Đánh giá AI – Part {part.id}</span>
+            <span className="text-xs font-semibold text-foreground">🤖 Đánh giá AI</span>
           </div>
-          <ScrollArea className="h-[calc(100%-40px)]">
-            <div className="p-4 space-y-3">
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-4">
               {activeFb ? (
                 <>
-                  {[
-                    { label: "🎤 Phát âm", value: activeFb.pronunciation },
-                    { label: "💬 Trôi chảy", value: activeFb.fluency },
-                    { label: "📝 Ngữ pháp", value: activeFb.grammar },
-                    { label: "📚 Từ vựng", value: activeFb.vocabulary },
-                  ].map((item) => (
-                    <div key={item.label} className="bg-card rounded-lg p-3 border border-border">
-                      <p className="text-xs font-semibold text-foreground mb-1">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">{item.value}</p>
-                    </div>
-                  ))}
-                  <div>
-                    <p className="text-xs font-semibold text-foreground mb-2">💡 Cải thiện</p>
-                    <ul className="space-y-1.5">
-                      {activeFb.tips.map((tip, i) => (
-                        <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
-                          <span className="text-primary shrink-0">•</span>{tip}
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="text-center p-3 bg-muted/50 rounded-xl">
+                    <p className="text-xs text-muted-foreground">Điểm tổng</p>
+                    <p className="text-3xl font-bold text-primary">{activeFb.overallScore ?? activeFb.score}</p>
                   </div>
+
+                  {activeFb.summary && (
+                    <div className="bg-card rounded-lg p-3 border border-border">
+                      <p className="text-xs font-semibold text-foreground mb-1">📝 Tổng quan</p>
+                      <p className="text-xs text-muted-foreground">{activeFb.summary}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: "Fluency & Ideas", key: "fluencyIdeaDevelopment", value: activeFb.fluencyIdeaDevelopment ?? activeFb.fluency },
+                      { label: "Pronunciation", key: "pronunciation", value: activeFb.pronunciation },
+                      { label: "Vocabulary", key: "vocabulary", value: activeFb.vocabulary },
+                      { label: "Grammar", key: "grammar", value: activeFb.grammar },
+                      { label: "Content & Coherence", key: "contentCoherence", value: activeFb.contentCoherence ?? activeFb.topicDevelopment ?? activeFb.relevance },
+                    ].map((item) => (
+                      <div key={item.label} className="bg-muted/30 rounded-lg p-2 border border-border">
+                        <p className="text-[10px] font-semibold text-muted-foreground">{item.label}</p>
+                        <p className="text-sm font-bold text-foreground">{item.value ?? "-"}</p>
+                        {activeFb.criteriaExplanations?.[item.key] && (
+                          <p className="text-[10px] text-muted-foreground mt-1 leading-snug">{activeFb.criteriaExplanations[item.key]}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {activeFb.scoreExplanation && (
+                    <div className="bg-card rounded-lg p-3 border border-border">
+                      <p className="text-xs font-semibold text-foreground mb-1">📉 Giải thích điểm</p>
+                      <p className="text-xs text-muted-foreground">{activeFb.scoreExplanation}</p>
+                    </div>
+                  )}
+
+                  {activeFb.strengths && activeFb.strengths.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-foreground mb-2">⭐ Điểm mạnh</p>
+                      <ul className="space-y-1.5">
+                        {activeFb.strengths.map((strength, i) => (
+                          <li key={i} className="text-xs text-emerald-600 flex gap-1.5">
+                            <span className="shrink-0">•</span>{strength}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {activeFb.weaknesses && activeFb.weaknesses.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-foreground mb-2">⚠️ Điểm yếu</p>
+                      <ul className="space-y-1.5">
+                        {activeFb.weaknesses.map((weakness, i) => (
+                          <li key={i} className="text-xs text-red-500 flex gap-1.5">
+                            <span className="shrink-0">•</span>{weakness}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {activeFb.timestampFeedback && activeFb.timestampFeedback.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-foreground mb-2">⏱ Phân tích chi tiết</p>
+                      <div className="space-y-2">
+                        {activeFb.timestampFeedback.map((fb, i) => (
+                          <div key={i} className="bg-muted/30 rounded p-2 border border-border">
+                            <Badge variant="outline" className="text-[10px] mb-1">
+                              {fb.startTime || fb.timestamp} {fb.endTime ? `- ${fb.endTime}` : ""}
+                            </Badge>
+                            <p className="text-xs font-medium text-foreground">{fb.issue || fb.feedback}</p>
+                            {fb.suggestion && (
+                              <p className="text-xs text-emerald-600 mt-1">💡 {fb.suggestion}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeFb.tips && activeFb.tips.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-foreground mb-2">💡 Gợi ý cải thiện</p>
+                      <ul className="space-y-1.5">
+                        {activeFb.tips.map((tip, i) => (
+                          <li key={i} className="text-xs text-primary flex gap-1.5">
+                            <span className="shrink-0">•</span>{tip}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {activeFb.betterAnswer && (
+                    <div className="bg-card rounded-lg p-3 border border-border mt-2">
+                      <p className="text-xs font-semibold text-foreground mb-1">✨ Câu trả lời mẫu</p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{activeFb.betterAnswer}</p>
+                    </div>
+                  )}
                 </>
+              ) : review.status === "processing" ? (
+                <div className="text-center py-8 space-y-2">
+                  <Loader2 size={32} className="mx-auto text-primary animate-spin" />
+                  <p className="text-xs text-muted-foreground">Đang chờ AI phân tích bài nói...</p>
+                </div>
               ) : (
                 <div className="text-center py-10 space-y-2">
                   <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto">
                     <span className="text-2xl">🎙️</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {feedbackGenerated
-                      ? "Không có feedback cho part này"
-                      : "Nhấn \"Xem đánh giá AI\" để phân tích bài nói"}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Không có đánh giá chi tiết cho phần thi này.</p>
                 </div>
               )}
             </div>

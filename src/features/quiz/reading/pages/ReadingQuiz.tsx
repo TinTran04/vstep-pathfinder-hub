@@ -21,6 +21,10 @@ import MockTestTransition from "@/features/attempts/components/MockTestTransitio
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 import { examService } from "@/features/quiz/services/exam.service";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
+import { attemptsApiService } from "@/features/attempts/services/attempts.api-service";
+import { useAutosave } from "@/features/attempts/hooks/useAutosave";
+import { VstepMockLayout } from "@/features/quiz/components/VstepMockLayout";
+import { ExitConfirmDialog } from "@/features/quiz/components/ExitConfirmDialog";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -68,6 +72,8 @@ const ReadingQuiz = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   const passageScrollRef = useRef<HTMLDivElement>(null);
   const questionsScrollRef = useRef<HTMLDivElement>(null);
@@ -104,15 +110,73 @@ const ReadingQuiz = () => {
     }
   }, [resolvedExamId, groupId]);
 
+  // ── Block leave confirmation ────────────────────────────────
+  useEffect(() => {
+    if (loading || submitted) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Show toast for practice mode when user unexpectedly leaves
+      if (!isMockSession && !submitted && practiceData) {
+        toast.info("Phiên luyện tập bị thoát. Tiến độ đã được lưu.");
+      }
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [loading, submitted, isMockSession, practiceData]);
+
   // ── Start practice on mount ───────────────────────────────
   useEffect(() => {
+    let active = true;
+
+    if (isMockSession) {
+      attemptsService.getInProgressAttempt().then(res => {
+        if (!active) return;
+        if (res && res.exam) {
+          const filteredExam = {
+            ...res.exam,
+            sections: res.exam.sections.filter((s: any) => s.skillType === "reading" || !s.skillType)
+          };
+          setPracticeData({
+            attemptId: res.attemptId,
+            examId: res.exam.examId,
+            skillType: "mock_test",
+            status: res.status,
+            startedAt: res.startedAt,
+            exam: filteredExam,
+          });
+          setTimeLeft(res.remainingSeconds > 0 ? res.remainingSeconds : 0);
+
+          if (res.draftStateJson) {
+            try {
+              const draft = JSON.parse(res.draftStateJson);
+              if (draft.reading?.answers) {
+                setAnswers(draft.reading.answers);
+              }
+            } catch (e) {
+              console.error("Failed to parse draft state", e);
+            }
+          }
+          setLoading(false);
+        } else {
+          setStartError("Không tìm thấy bài thi đang làm dở.");
+          setLoading(false);
+        }
+      }).catch(err => {
+        if (!active) return;
+        setStartError("Lỗi kết nối.");
+        setLoading(false);
+      });
+      return () => { active = false; };
+    }
+
     if (!resolvedExamId) {
       if (groupId) return; // Wait for resolving
       setStartError("Không tìm thấy đề thi. Vui lòng quay lại trang Quiz.");
       setLoading(false);
       return;
     }
-    let active = true;
+    
     readingService
       .start(resolvedExamId)
       .then((res) => {
@@ -128,7 +192,29 @@ const ReadingQuiz = () => {
         setLoading(false);
       });
     return () => { active = false; };
-  }, [resolvedExamId, groupId]);
+  }, [resolvedExamId, groupId, isMockSession]);
+
+  useAutosave(
+    isMockSession && practiceData?.attemptId ? String(practiceData.attemptId) : null,
+    "reading",
+    () => ({ reading: { answers } })
+  );
+
+  // ── Server time sync (mock test) ──────────────────────────
+  useEffect(() => {
+    if (!isMockSession || !practiceData?.attemptId) return;
+    const timer = setInterval(() => {
+      attemptsApiService.getInProgressAttempt().then(res => {
+        if (res && res.remainingSeconds >= 0) {
+          setServerTimeRemaining(res.remainingSeconds);
+          if (res.remainingSeconds <= 0 && !submitted) {
+            doSubmit();
+          }
+        }
+      }).catch(err => console.error("Failed to fetch remaining time", err));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isMockSession, practiceData?.attemptId, submitted]);
 
   // ── Timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -149,24 +235,46 @@ const ReadingQuiz = () => {
     if (!practiceData || submitting) return;
     setSubmitting(true);
     try {
-      const res = await readingService.submit(practiceData.attemptId, answers, durationUsed);
-      setSubmitResult(res);
-      const result = await readingService.getResult(practiceData.attemptId);
-      setAttemptResult(result);
       if (isMockSession) {
-        await attemptsService.saveSkillAttempt("reading", {
-          score: result?.score ?? res.score,
-          totalQuestions: result?.totalQuestions ?? res.totalQuestions,
-          answers: answers,
+        const draftState = JSON.stringify({
+          _meta: { mode: "mock_test", currentSkill: "reading" },
+          reading: { answers }
         });
+        await attemptsApiService.autosaveMockTest(
+          String(practiceData.attemptId),
+          "writing",
+          draftState
+        );
+        navigate(`/quiz/writing/take?attemptId=${practiceData.attemptId}&mode=mock_test&session=mock`);
+      } else {
+        const res = await readingService.submit(practiceData.attemptId, answers, durationUsed);
+        setSubmitResult(res);
+        const result = await readingService.getResult(practiceData.attemptId);
+        setAttemptResult(result);
+        setSubmitted(true);
       }
-      setSubmitted(true);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message;
       toast.error(msg || "Nộp bài thất bại. Vui lòng thử lại.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleExitMockTest = () => {
+    setShowExitDialog(true);
+  };
+
+  const getQuestionStatuses = (): Record<number, "answered" | "unanswered"> => {
+    const statuses: Record<number, "answered" | "unanswered"> = {};
+    let questionNumber = 1;
+    sections.forEach(() => {
+      for (let i = 1; i <= 10; i++) {
+        statuses[questionNumber] = Object.keys(answers).length > 0 ? "answered" : "unanswered";
+        questionNumber++;
+      }
+    });
+    return statuses;
   };
 
   const handleReset = () => {
@@ -341,12 +449,124 @@ const ReadingQuiz = () => {
   }
 
   // ── Quiz screen ───────────────────────────────────────────
+  if (isMockSession && practiceData?.attemptId) {
+    const questionStatuses = getQuestionStatuses();
+
+    return (
+      <>
+        <VstepMockLayout
+          skillName="Reading / Kỹ năng Đọc"
+          remainingSeconds={serverTimeRemaining}
+          questionCount={totalQ}
+          answeredCount={answeredCount}
+          currentQuestion={sectionOffset}
+          isLastSkill={false}
+          onExit={handleExitMockTest}
+          onNext={doSubmit}
+          onQuestionSelect={(questionNum) => {
+            let passageIdx = 0;
+            let count = 0;
+            for (let i = 0; i < sections.length; i++) {
+            if (count + sections[i].questions.length >= questionNum) {
+              passageIdx = i;
+              setCurrentSection(i);
+              break;
+            }
+            count += sections[i].questions.length;
+          }
+          setTimeout(() => {
+            questionsScrollRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, 0);
+        }}
+        questionStatuses={questionStatuses}
+        attemptId={String(practiceData.attemptId)}
+      >
+        <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
+          {/* Left: Passage text */}
+          <div className="w-1/2 border-r border-border">
+            <div ref={passageScrollRef}>
+              <ScrollArea className="h-[calc(100vh-140px)]">
+                <div className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BookOpen size={20} className="text-primary" />
+                    <h2 className="text-lg font-bold text-foreground">{section?.title || `Đoạn văn ${currentSection + 1}`}</h2>
+                  </div>
+                  {section?.instruction && (
+                    <p className="text-sm text-muted-foreground mb-4 italic">{section.instruction}</p>
+                  )}
+                  <VocabularyContextMenu source="reading">
+                    <div className="prose prose-sm max-w-none">
+                      {(section?.passageText ?? "Chưa có nội dung đoạn văn.").split("\n\n").map((para, i) => (
+                        <p key={i} className="text-sm text-foreground leading-relaxed mb-4">{para}</p>
+                      ))}
+                    </div>
+                  </VocabularyContextMenu>
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+
+          {/* Right: Questions */}
+          <div className="w-1/2">
+            <div ref={questionsScrollRef}>
+              <ScrollArea className="h-[calc(100vh-140px)]">
+                <div className="p-6 space-y-6">
+                  <h3 className="font-semibold text-foreground">
+                    Câu hỏi – {section?.title || `Bài ${currentSection + 1}`}
+                  </h3>
+                  {(section?.questions ?? []).map((q, qi) => {
+                    const globalIdx = sectionOffset + qi + 1;
+                    return (
+                      <div key={q.questionId} className="space-y-3">
+                        <h4 className="text-sm font-semibold text-foreground">
+                          <span className="text-primary mr-1">Câu {globalIdx}.</span> {q.questionText}
+                        </h4>
+                        <RadioGroup
+                          value={answers[q.questionId] ?? ""}
+                          onValueChange={(v) => setAnswers((p) => ({ ...p, [q.questionId]: v }))}
+                          className="space-y-2"
+                        >
+                          {q.options.map((opt) => (
+                            <label key={opt.optionId}
+                              className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all text-sm ${answers[q.questionId] === opt.label ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
+                              <RadioGroupItem value={opt.label} id={`rq-${q.questionId}-${opt.optionId}`} />
+                              <Label htmlFor={`rq-${q.questionId}-${opt.optionId}`} className="cursor-pointer flex-1 text-foreground">
+                                <span className="font-medium text-muted-foreground mr-1">{opt.label}.</span>{opt.content}
+                              </Label>
+                            </label>
+                          ))}
+                        </RadioGroup>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+        </div>
+        </VstepMockLayout>
+        <ExitConfirmDialog
+          open={showExitDialog}
+          onOpenChange={setShowExitDialog}
+          onConfirm={() => {
+            navigate("/quiz");
+          }}
+          attemptId={practiceData.attemptId}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top bar */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 h-14">
-          <button onClick={() => navigate("/quiz")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <button onClick={() => {
+            if (window.confirm("Bạn có chắc chắn muốn thoát? Bài thi đang làm sẽ bị hủy và không được lưu.")) {
+              navigate("/quiz");
+            }
+          }} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft size={16} /> Thoát
           </button>
           <div className="flex items-center gap-3">

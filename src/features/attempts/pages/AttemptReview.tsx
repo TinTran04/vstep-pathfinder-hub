@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { attemptsService } from "../services/attempts.service";
-import type { MockTestAttempt } from "../types";
+import { attemptReviewApiService } from "../services/attempt-review.api-service";
+import type { AttemptReviewResponse, SectionReviewResponse } from "../types";
 import ListeningReview from "../components/review/ListeningReview";
 import ReadingReview from "../components/review/ReadingReview";
 import WritingReview from "../components/review/WritingReview";
@@ -23,7 +23,7 @@ const skillConfig = [
 const AttemptReview = () => {
   const navigate = useNavigate();
   const { attemptId } = useParams<{ attemptId: string }>();
-  const [attempt, setAttempt] = useState<MockTestAttempt | null>(null);
+  const [attempt, setAttempt] = useState<AttemptReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,10 +31,19 @@ const AttemptReview = () => {
       navigate("/quiz");
       return;
     }
-    attemptsService.getAttemptById(attemptId).then((a) => {
-      setAttempt(a);
-      setLoading(false);
-    });
+    
+    const fetchAttempt = async () => {
+      try {
+        const data = await attemptReviewApiService.getAttemptReview(attemptId);
+        setAttempt(data);
+      } catch (err) {
+        console.error("Failed to load attempt review", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchAttempt();
   }, [attemptId, navigate]);
 
   if (loading) {
@@ -62,6 +71,11 @@ const AttemptReview = () => {
     );
   }
 
+  const hasListening = attempt.sections.some(s => s.audioUrl);
+  const hasReading = attempt.sections.some(s => s.passageText);
+  const hasWriting = !!attempt.writingReview;
+  const hasSpeaking = !!attempt.speakingReview;
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -73,11 +87,11 @@ const AttemptReview = () => {
             </Link>
             <span className="font-bold text-foreground text-sm">Xem lại bài làm</span>
             <Badge className="gradient-primary text-primary-foreground text-xs">
-              {attempt.mode === "mock_test" ? "Mock Test" : "Practice"}
+              {attempt.skillType ? attempt.skillType.toUpperCase() : "MOCK TEST"}
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate(`/attempts/${attempt.id}/result`)} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => navigate(`/attempts/${attempt.attemptId}/result`)} className="gap-1.5">
               Xem điểm số
             </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/quiz")}>
@@ -92,20 +106,25 @@ const AttemptReview = () => {
         <div className="flex flex-col gap-1 border-b border-border pb-4">
           <h2 className="text-xl font-bold text-foreground">Chi tiết câu trả lời</h2>
           <p className="text-xs text-muted-foreground">
-            Chế độ: <span className="font-semibold text-foreground">{attempt.mode === "mock_test" ? "Thi thử Full Test" : "Luyện tập từng kỹ năng"}</span>
-            {attempt.finishedAt && ` • Hoàn thành lúc: ${new Date(attempt.finishedAt).toLocaleString("vi-VN")}`}
+            Đề thi: <span className="font-semibold text-foreground">{attempt.examTitle}</span>
+            {attempt.submittedAt && ` • Nộp bài lúc: ${new Date(attempt.submittedAt).toLocaleString("vi-VN")}`}
           </p>
         </div>
 
         {/* Tabs per skill */}
-        <Tabs defaultValue={attempt.skills.listening ? "listening" : attempt.skills.reading ? "reading" : attempt.skills.writing ? "writing" : "speaking"}>
+        <Tabs defaultValue={hasListening ? "listening" : hasReading ? "reading" : hasWriting ? "writing" : "speaking"}>
           <TabsList className="w-full grid grid-cols-4">
             {skillConfig.map((s) => (
               <TabsTrigger key={s.key} value={s.key} className="flex items-center gap-1.5 text-xs md:text-sm">
                 <span className={s.color}>{s.icon}</span>
                 <span className="hidden sm:inline">{s.label}</span>
                 <span className="sm:hidden">{s.label.slice(0, 1)}</span>
-                {!attempt.skills[s.key] && (
+                {!(
+                  (s.key === "listening" && hasListening) ||
+                  (s.key === "reading" && hasReading) ||
+                  (s.key === "writing" && hasWriting) ||
+                  (s.key === "speaking" && hasSpeaking)
+                ) && (
                   <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/45 ml-1" />
                 )}
               </TabsTrigger>
@@ -114,45 +133,45 @@ const AttemptReview = () => {
 
           <div className="mt-4">
             <TabsContent value="listening">
-              {attempt.skills.listening ? (
-                <ListeningReview attempt={attempt.skills.listening} />
+              {hasListening ? (
+                <ListeningReview sections={attempt.sections.filter(s => s.audioUrl)} status={attempt.status} />
               ) : (
                 <div className="text-center py-12 text-muted-foreground bg-card border border-border rounded-2xl">
                   <Headphones size={32} className="mx-auto mb-3 opacity-30 animate-bounce" />
-                  <p className="text-sm">Kỹ năng Listening chưa được làm trong lượt này.</p>
+                  <p className="text-sm">Kỹ năng Listening không có trong lượt này.</p>
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="reading">
-              {attempt.skills.reading ? (
-                <ReadingReview attempt={attempt.skills.reading} />
+              {hasReading ? (
+                <ReadingReview sections={attempt.sections.filter(s => s.passageText)} status={attempt.status} />
               ) : (
                 <div className="text-center py-12 text-muted-foreground bg-card border border-border rounded-2xl">
                   <BookOpen size={32} className="mx-auto mb-3 opacity-30 animate-bounce" />
-                  <p className="text-sm">Kỹ năng Reading chưa được làm trong lượt này.</p>
+                  <p className="text-sm">Kỹ năng Reading không có trong lượt này.</p>
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="writing">
-              {attempt.skills.writing ? (
-                <WritingReview attempt={attempt.skills.writing} />
+              {hasWriting ? (
+                <WritingReview review={attempt.writingReview!} />
               ) : (
                 <div className="text-center py-12 text-muted-foreground bg-card border border-border rounded-2xl">
                   <Pen size={32} className="mx-auto mb-3 opacity-30 animate-bounce" />
-                  <p className="text-sm">Kỹ năng Writing chưa được làm trong lượt này.</p>
+                  <p className="text-sm">Kỹ năng Writing không có trong lượt này.</p>
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="speaking">
-              {attempt.skills.speaking ? (
-                <SpeakingReview attempt={attempt.skills.speaking} />
+              {hasSpeaking ? (
+                <SpeakingReview review={attempt.speakingReview!} />
               ) : (
                 <div className="text-center py-12 text-muted-foreground bg-card border border-border rounded-2xl">
                   <Mic size={32} className="mx-auto mb-3 opacity-30 animate-bounce" />
-                  <p className="text-sm">Kỹ năng Speaking chưa được làm trong lượt này.</p>
+                  <p className="text-sm">Kỹ năng Speaking không có trong lượt này.</p>
                 </div>
               )}
             </TabsContent>

@@ -261,6 +261,18 @@ export const attemptsMockService = {
   clearAttempt(): void {
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
   },
+
+  async getInProgressAttempt(): Promise<any> {
+    return null;
+  },
+
+  async autosaveMockTest(attemptId: string, currentSkill: string, draftStateJson: string): Promise<void> {
+    // No-op
+  },
+
+  async submitMockTest(attemptId: string, draftStateJson: string): Promise<any> {
+    return null;
+  }
 };
 
 export default attemptsMockService;

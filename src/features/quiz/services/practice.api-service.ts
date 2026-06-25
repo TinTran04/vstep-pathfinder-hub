@@ -328,6 +328,13 @@ export const practiceApiService = {
     );
     return normalizeAttemptResult(res);
   },
+
+  /**
+   * Xóa/hủy một attempt (mock test).
+   */
+  async deleteAttempt(attemptId: number): Promise<void> {
+    await apiClient.delete(`/attempts/${attemptId}`);
+  },
 };
 
 export default practiceApiService;

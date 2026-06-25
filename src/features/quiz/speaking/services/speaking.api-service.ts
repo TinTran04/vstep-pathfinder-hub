@@ -3,17 +3,15 @@
 // Speaking Practice API Service
 //
 // Flow:
-//  1. POST /api/speaking-practice/upload-url
-//       body: { examId, contentType }
-//       → { uploadUrl, audioObjectKey, expiresAt }
+//  1. POST /api/speaking-practice/{examId}/upload (multipart/form-data)
+//       body: audio file
+//       → { uploadUrl (objectUrl), audioObjectKey, expiresAt }
 //
-//  2. PUT <uploadUrl>  (direct upload to Cloudflare R2 — no auth header)
-//
-//  3. POST /api/speaking-practice/{examId}/submit
+//  2. POST /api/speaking-practice/{examId}/submit
 //       body: { audioObjectKey, audioUrl }
 //       → 202 Accepted: SpeakingSubmissionResponse
 //
-//  4. GET  /api/speaking-practice/submissions/{submissionId}
+//  3. GET  /api/speaking-practice/submissions/{submissionId}
 //       Poll until status === "scored" / "graded"
 // ============================================================
 
@@ -48,6 +46,15 @@ export interface SpeakingSubmissionResponse {
   status: string; // "pending" | "processing" | "scored" | "graded" | "failed"
   score: number | null;
   feedback: string | null;
+  feedbackJson?: string | null;
+  transcript?: string | null;
+  fluency?: number | null;
+  pronunciation?: number | null;
+  grammar?: number | null;
+  vocabulary?: number | null;
+  topicDevelopment?: number | null;
+  relevance?: number | null; // backward compat
+  feedbackPoints?: string[];
   autoDeleteAt: string | null;
   createdAt: string;
   updatedAt: string | null;
@@ -62,36 +69,16 @@ const POLL_TIMEOUT_MS  = 5 * 60 * 1000; // 5 minutes
 
 export const speakingApiService = {
   /**
-   * Bước 1: Lấy presigned URL để upload audio lên R2.
+   * Proxy upload qua backend thay vi frontend upload truc tiep len R2.
    */
-  async createUploadUrl(
-    examId: number,
-    contentType = "audio/webm"
-  ): Promise<SpeakingUploadUrlResponse> {
-    const body: CreateSpeakingUploadUrlRequest = { examId, contentType };
-    return apiClient.post<SpeakingUploadUrlResponse>(
-      "/speaking-practice/upload-url",
-      body
+  async uploadAudio(examId: number, blob: Blob): Promise<SpeakingUploadUrlResponse> {
+    const formData = new FormData();
+    formData.append("audio", blob, "speaking.webm");
+
+    return apiClient.upload<SpeakingUploadUrlResponse>(
+      `/speaking-practice/${examId}/upload`,
+      formData
     );
-  },
-
-  /**
-   * Bước 2: Upload trực tiếp file audio lên Cloudflare R2 bằng presigned URL.
-   * Không dùng apiClient vì URL này là external, không cần auth header.
-   */
-  async uploadToR2(uploadUrl: string, blob: Blob, contentType = "audio/webm"): Promise<string> {
-    const res = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": contentType },
-      body: blob,
-    });
-
-    if (!res.ok) {
-      throw new Error(`R2 upload failed: HTTP ${res.status} ${res.statusText}`);
-    }
-
-    // Public URL = uploadUrl stripped of query string (presigned params)
-    return uploadUrl.split("?")[0];
   },
 
   /**
@@ -150,13 +137,10 @@ export const speakingApiService = {
     blob: Blob,
     contentType = "audio/webm"
   ): Promise<{ audioObjectKey: string; audioUrl: string; submissionId: number }> {
-    // 1. Get presigned URL
-    const { uploadUrl, audioObjectKey, contentType: signedContentType } = await this.createUploadUrl(examId, contentType);
+    // 1. Upload via proxy backend
+    const { uploadUrl: audioUrl, audioObjectKey } = await this.uploadAudio(examId, blob);
 
-    // 2. Upload to R2
-    const audioUrl = await this.uploadToR2(uploadUrl, blob, signedContentType);
-
-    // 3. Submit metadata
+    // 2. Submit metadata
     const submission = await this.submit(examId, audioObjectKey, audioUrl);
 
     return {

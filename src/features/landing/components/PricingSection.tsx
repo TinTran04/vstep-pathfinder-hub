@@ -59,11 +59,11 @@ const PricingSection = () => {
                   <span className="text-sm text-muted-foreground">{p.period}</span>
                 </div>
               </div>
-              <ul className="space-y-3 mb-8 flex flex-col items-center text-center">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground text-center">
-                    <Check size={16} className="text-accent shrink-0" />
-                    {f}
+              <ul className="space-y-2.5 mb-8 flex flex-col items-start w-full px-6">
+                {p.features.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground text-left">
+                    <Check size={16} className="text-accent shrink-0 mt-0.5" />
+                    <span>{f}</span>
                   </li>
                 ))}
               </ul>

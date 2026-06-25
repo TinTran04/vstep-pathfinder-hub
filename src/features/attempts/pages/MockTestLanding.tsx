@@ -58,67 +58,31 @@ const rules = [
 const MockTestLanding = () => {
   const navigate = useNavigate();
   const { isLoggedIn, isInitialising, user, logout } = useAuth();
-
-  const [mockTests, setMockTests] = useState<{ groupId: string; groupTitle: string; difficulty: string; listeningExamId: string }[]>([]);
-  const [loadingExams, setLoadingExams] = useState(true);
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     if (isInitialising) return;
-
     if (!isLoggedIn) {
       navigate("/auth");
-      return;
     }
-
-    let active = true;
-    examService.getExamsBySkill("listening")
-      .then((exams) => {
-        if (!active) return;
-        const groupsMap: Record<string, { groupId: string; groupTitle: string; difficulty: string; listeningExamId: string }> = {};
-        exams.forEach(e => {
-          if (e.description?.includes("mode:mock_test")) {
-            const groupMatch = e.description.match(/group:([^;|\n]+)/);
-            const titleMatch = e.description.match(/groupTitle:([^;|\n]+)/);
-            const groupId = groupMatch ? groupMatch[1] : "";
-            const groupTitle = titleMatch ? titleMatch[1] : e.title.replace(/\s*-\s*Listening$/i, "");
-            if (groupId) {
-              groupsMap[groupId] = {
-                groupId,
-                groupTitle,
-                difficulty: "Trung bình",
-                listeningExamId: e.id,
-              };
-            }
-          }
-        });
-        const list = Object.values(groupsMap);
-        setMockTests(list);
-        if (list.length > 0) {
-          setSelectedGroupId(list[0].groupId);
-        }
-        setLoadingExams(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        if (active) setLoadingExams(false);
-      });
-    return () => { active = false; };
   }, [isInitialising, isLoggedIn, navigate]);
 
   if (!isLoggedIn || !user) return null;
 
-  const handleStart = async () => {
-    const selected = mockTests.find(m => m.groupId === selectedGroupId);
-    if (!selected) {
-      toast.error("Vui lòng chọn một đề thi thử!");
-      return;
+  const handleStartRandom = async () => {
+    try {
+      setIsStarting(true);
+      const { attemptsApiService } = await import("@/features/attempts/services/attempts.api-service");
+      const attempt = await attemptsApiService.startRandomMockTest();
+      toast.success("Bắt đầu thi thử ngẫu nhiên!");
+      navigate(`/quiz/listening/take?mode=mock_test&session=mock&attemptId=${attempt.id}`);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.response?.data?.message || "Không thể tạo bài thi ngẫu nhiên");
+    } finally {
+      setIsStarting(false);
     }
-    await attemptsService.startMockTest();
-    navigate(`/quiz/listening/take?mode=mock_test&session=mock&examId=${selected.listeningExamId}&groupId=${selected.groupId}`);
-  };
-
-  return (
+  };  return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
@@ -167,51 +131,7 @@ const MockTestLanding = () => {
           </p>
         </div>
 
-        {/* Mock Test Selection */}
-        <Card className="border-border">
-          <CardContent className="p-6 space-y-4">
-            <h2 className="font-bold text-foreground text-sm flex items-center gap-2">
-              🏆 Chọn đề thi thử VSTEP
-            </h2>
-            {loadingExams ? (
-              <div className="flex items-center justify-center py-6 gap-2">
-                <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                <span className="text-sm text-muted-foreground">Đang tải danh sách đề thi thử...</span>
-              </div>
-            ) : mockTests.length === 0 ? (
-              <div className="bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300 p-4 rounded-xl text-sm">
-                ⚠️ Hiện tại chưa có đề thi thử 4 kỹ năng nào được đăng tải trên hệ thống. Vui lòng quay lại sau!
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {mockTests.map((t) => (
-                  <button
-                    key={t.groupId}
-                    onClick={() => setSelectedGroupId(t.groupId)}
-                    className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col gap-1.5 ${
-                      selectedGroupId === t.groupId
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border hover:border-primary/40 bg-card"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <span className="font-bold text-sm text-foreground">{t.groupTitle}</span>
-                      <Badge className="bg-primary/10 text-primary hover:bg-primary/10 border-none text-[10px]">
-                        Full Test 🏆
-                      </Badge>
-                    </div>
-                    <div className="flex gap-3 text-xs text-muted-foreground mt-1">
-                      <span>Độ khó: <strong className="text-foreground">{t.difficulty}</strong></span>
-                      <span>•</span>
-                      <span>4 Kỹ năng</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
+        {/* Removed Mock Test Selection explicitly to enforce random generation per user request */}
         <div className="grid md:grid-cols-2 gap-6">
           {/* Test structure */}
           <Card className="border-border">
@@ -272,13 +192,22 @@ const MockTestLanding = () => {
 
         {/* CTA */}
         <div className="text-center space-y-4">
-          <Button
-            className="gradient-primary text-primary-foreground text-base px-10 py-6 rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform"
-            onClick={handleStart}
-            disabled={mockTests.length === 0 || !selectedGroupId}
-          >
-            🚀 Bắt đầu thi thử ngay
-          </Button>
+          <div className="flex items-center justify-center">
+            <Button
+              className="gradient-primary text-primary-foreground text-base px-12 py-6 rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform w-full sm:w-auto"
+              onClick={handleStartRandom}
+              disabled={isStarting}
+            >
+              {isStarting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mr-2" />
+                  Đang tạo đề...
+                </>
+              ) : (
+                <>🎲 Bắt đầu thi thử ngẫu nhiên</>
+              )}
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">
             Bài thi sẽ bắt đầu từ kỹ năng <strong>Listening</strong>. Đảm bảo bạn đã sẵn sàng trước khi bắt đầu.
           </p>

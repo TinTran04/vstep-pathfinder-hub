@@ -13,16 +13,94 @@
 // does not call missing endpoints such as /api/attempts/start.
 // ============================================================
 
+import { apiClient } from "@/services/api-client";
 import type { MockTestAttempt, Skill, SkillAttempt } from "../types";
 import { attemptsMockService } from "./attempts.mock-service";
 
 export const attemptsApiService = {
+  // We keep mock service for single-skill practice since they use separate skill endpoints.
+  // But for mock_test, we use the new aggregate endpoints.
+
   async startAttempt(mode: "practice" | "mock_test" = "mock_test"): Promise<MockTestAttempt> {
     return attemptsMockService.startAttempt(mode);
   },
 
-  async startMockTest(): Promise<MockTestAttempt> {
-    return attemptsMockService.startMockTest();
+  async startMockTest(examId: number): Promise<MockTestAttempt> {
+    const res = await apiClient.post<any>(`/attempts/start-mock-test/${examId}`);
+    return {
+      id: String(res.attemptId),
+      mode: "mock_test",
+      status: res.status,
+      startedAt: res.startedAt,
+      completedAt: undefined,
+      overallScore: null,
+      skills: {
+        listening: { status: "not_started" },
+        reading: { status: "not_started" },
+        writing: { status: "not_started" },
+        speaking: { status: "not_started" },
+      },
+    };
+  },
+
+  async startRandomMockTest(): Promise<MockTestAttempt> {
+    const res = await apiClient.post<any>(`/attempts/random-mock-test/start`);
+    return {
+      id: String(res.attemptId),
+      mode: "random_mock_test" as any, // Extrapolating the type for simplicity
+      status: "not_started",
+      startedAt: res.startedAt,
+      completedAt: undefined,
+      overallScore: null,
+      skills: {
+        listening: { status: "not_started" },
+        reading: { status: "not_started" },
+        writing: { status: "not_started" },
+        speaking: { status: "not_started" },
+      },
+    };
+  },
+
+  async getHistory(page = 1, pageSize = 10, status?: string, mode?: string): Promise<any> {
+    let url = `/attempts/history?page=${page}&pageSize=${pageSize}`;
+    if (status) url += `&status=${status}`;
+    if (mode) url += `&mode=${mode}`;
+    return apiClient.get<any>(url);
+  },
+
+  async getInProgressAttempt(): Promise<any> {
+    try {
+      const res = await apiClient.get<any>(`/attempts/in-progress`);
+      return res;
+    } catch {
+      return null;
+    }
+  },
+
+  async autosaveMockTest(attemptId: string, currentSkill: string, draftStateJson: string): Promise<void> {
+    await apiClient.patch(`/attempts/${attemptId}/autosave`, {
+      currentSkill,
+      draftStateJson,
+      clientUpdatedAt: new Date().toISOString()
+    });
+  },
+
+  async submitMockTest(attemptId: string, draftStateJson: string): Promise<any> {
+    return await apiClient.post<any>(`/attempts/${attemptId}/submit`, {
+      draftStateJson
+    });
+  },
+
+  async getAttemptResult(id: string): Promise<any> {
+    return await apiClient.get<any>(`/attempts/${id}/result`);
+  },
+
+  async getAttemptReview(id: string): Promise<any> {
+    return await apiClient.get<any>(`/attempts/${id}/review`);
+  },
+
+  async deleteAttempt(id: string | number): Promise<void> {
+    await apiClient.delete(`/attempts/${id}`);
   },
 
   async saveSkillAttempt(
@@ -46,14 +124,6 @@ export const attemptsApiService = {
 
   async getLastAttempt(): Promise<MockTestAttempt | null> {
     return attemptsMockService.getLastAttempt();
-  },
-
-  async getAttemptResult(id: string): Promise<MockTestAttempt | null> {
-    return attemptsMockService.getAttemptResult(id);
-  },
-
-  async getAttemptReview(id: string): Promise<MockTestAttempt | null> {
-    return attemptsMockService.getAttemptReview(id);
   },
 
   async uploadSpeakingRecording(

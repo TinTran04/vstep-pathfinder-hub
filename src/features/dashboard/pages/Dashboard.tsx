@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import VocabularyNotebook from "../components/VocabularyNotebook";
+import HistoryTab from "../components/HistoryTab";
 import { useNavigate, Link } from "react-router-dom";
 import logoImg from "@/assets/logo.png";
 import {
   BarChart3, BookOpen, Clock, TrendingUp, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, Settings, User,
   Flame, Check, Camera, Mail, Lock,
-  BookMarked, FileText, Crown,
+  BookMarked, FileText, Crown, Activity, Navigation,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { getAvatarSrc, normalizeAvatarKey, PRESET_AVATARS } from "@/features/auth/avatarCatalog";
 import { dashboardService, StreakDayItem, SkillProgressResponse } from "../services/dashboard.service";
+import { avatarService, UserAvatarResponse } from "../services/avatar.service";
 
 const skillColors: Record<string, string> = {
   Listening: "bg-blue-500",
@@ -60,7 +62,7 @@ export interface DashboardData {
   skillProgress: SkillProgressResponse;
 }
 
-type TabType = "overview" | "settings" | "vocabulary";
+type TabType = "overview" | "history" | "settings" | "vocabulary";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -68,6 +70,9 @@ const Dashboard = () => {
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userAvatars, setUserAvatars] = useState<UserAvatarResponse | null>(null);
+  const [newlyUnlocked, setNewlyUnlocked] = useState<string[]>([]);
+  const prevUnlockedRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (import.meta.env.DEV) {
@@ -148,6 +153,34 @@ const Dashboard = () => {
     }
   }, [user?.name, user?.email, user?.avatarKey]);
 
+  // Load user avatars when avatar picker opens
+  useEffect(() => {
+    if (avatarPickerOpen) {
+      avatarService.getUserAvatars()
+        .then((data) => {
+          if (!data) return;
+          setUserAvatars(data);
+
+          // Detect newly unlocked avatars for celebration effect
+          const prevIds = prevUnlockedRef.current;
+          const currentIds = data.unlockedAvatars.map(a => a.avatarId);
+          const newOnes = currentIds.filter(id => !prevIds.includes(id) && id !== "avatar1");
+          if (newOnes.length > 0 && prevIds.length > 0) {
+            setNewlyUnlocked(newOnes);
+            // Fire confetti celebration
+            import("canvas-confetti").then(({ default: confetti }) => {
+              confetti({ particleCount: 120, spread: 80, origin: { y: 0.5 } });
+            }).catch(() => {});
+            toast.success(`🎉 Mở khóa avatar mới: ${newOnes.map(id => id).join(", ")}!`, { duration: 4000 });
+          }
+          prevUnlockedRef.current = currentIds;
+        })
+        .catch((err) => {
+          console.error("Failed to load avatars:", err);
+        });
+    }
+  }, [avatarPickerOpen]);
+
   if (isInitialising) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -214,6 +247,7 @@ const Dashboard = () => {
 
   const sidebarItems = [
     { icon: <BarChart3 size={20} />, label: "Tổng quan", tab: "overview" as TabType },
+    { icon: <Activity size={20} />, label: "Lịch sử bài làm", tab: "history" as TabType },
     { icon: <Settings size={20} />, label: "Cài đặt", tab: "settings" as TabType },
     { icon: <BookMarked size={20} />, label: "Sổ tay từ vựng", tab: "vocabulary" as TabType },
   ];
@@ -336,6 +370,12 @@ const Dashboard = () => {
             handleChangePassword={handleChangePassword}
           />}
 
+          {activeTab === "history" && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+              <HistoryTab />
+            </motion.div>
+          )}
+
           {activeTab === "vocabulary" && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
               <VocabularyNotebook />
@@ -344,43 +384,89 @@ const Dashboard = () => {
         </div>
       </main>
 
-      {/* Avatar Picker Dialog */}
       <Dialog open={avatarPickerOpen} onOpenChange={setAvatarPickerOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground font-bold">
               <User size={20} className="text-primary" />
-              Chọn ảnh đại diện mặc định
+              Chọn ảnh đại diện
             </DialogTitle>
+            <p className="text-xs text-muted-foreground pt-1">
+              {userAvatars && userAvatars.lockedAvatars.length === 0
+                ? "✅ Bạn đã mở khóa avatar yêu thích!"
+                : "🔥 Đạt 7 ngày streak liên tiếp để mở khóa thêm 1 avatar bất kỳ."}
+            </p>
           </DialogHeader>
           <div className="grid grid-cols-4 gap-4 py-4 justify-items-center">
-            {PRESET_AVATARS.map((avatar) => {
+            {!userAvatars && (
+              <div className="col-span-4 flex items-center justify-center py-6">
+                <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              </div>
+            )}
+            {userAvatars && PRESET_AVATARS.map((avatar) => {
               const isSelected = avatarKey === avatar.id;
+              const isLocked = !userAvatars.unlockedAvatars.some(a => a.avatarId === avatar.id);
+              const isNewlyUnlocked = newlyUnlocked.includes(avatar.id);
+
               return (
-                <button
-                  key={avatar.id}
-                  type="button"
-                  onClick={() => {
-                    setAvatarKey(avatar.id);
-                    setAvatarPickerOpen(false);
-                  }}
-                  className={`relative w-16 h-16 rounded-full overflow-hidden border-2 transition-all hover:scale-105 duration-200 ${
-                    isSelected ? "border-primary ring-2 ring-primary/20 scale-105" : "border-border hover:border-primary/50"
-                  }`}
-                >
-                  <img src={avatar.src} alt={avatar.id} className="w-full h-full object-cover" />
-                  {isSelected && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <div className="bg-primary text-primary-foreground rounded-full p-0.5">
-                        <Check size={12} strokeWidth={3} />
+                <div key={avatar.id} className="flex flex-col items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!isLocked) {
+                        try {
+                          await avatarService.setActiveAvatar(avatar.id);
+                          setAvatarKey(avatar.id);
+                          setAvatarPickerOpen(false);
+                          toast.success("Cập nhật ảnh đại diện thành công");
+                        } catch (err) {
+                          console.error("Failed to set avatar:", err);
+                          toast.error("Cần 7 ngày streak để dùng avatar này!");
+                        }
+                      }
+                    }}
+                    disabled={isLocked}
+                    title={isLocked ? "Cần 7 ngày streak liên tiếp để mở khóa" : avatar.id}
+                    className={`relative w-16 h-16 rounded-full overflow-hidden border-2 transition-all duration-200
+                      ${isSelected ? "border-primary ring-2 ring-primary/30 scale-110" : "border-border"}
+                      ${isLocked ? "opacity-40 cursor-not-allowed" : "hover:scale-110 hover:border-primary/60"}
+                      ${isNewlyUnlocked ? "ring-4 ring-yellow-400 ring-offset-2 animate-pulse" : ""}
+                    `}
+                  >
+                    <img src={avatar.src} alt={avatar.id} className="w-full h-full object-cover" />
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <div className="bg-primary text-primary-foreground rounded-full p-0.5">
+                          <Check size={12} strokeWidth={3} />
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {isLocked && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <Lock size={14} className="text-white" />
+                      </div>
+                    )}
+                    {isNewlyUnlocked && !isLocked && (
+                      <div className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-bold">
+                        ✨
+                      </div>
+                    )}
+                  </button>
+                  {isLocked && (
+                    <p className="text-[10px] text-muted-foreground text-center leading-tight">
+                      🔥 7 ngày
+                    </p>
                   )}
-                </button>
+                  {!isLocked && isNewlyUnlocked && (
+                    <p className="text-[10px] text-yellow-500 font-bold text-center">Mới!</p>
+                  )}
+                </div>
               );
             })}
           </div>
+
         </DialogContent>
+
       </Dialog>
 
     </div>
@@ -485,7 +571,7 @@ const OverviewTab = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {([
           { icon: <Clock size={20} />, label: "Giờ học tuần này", value: formatStudyTime(weekStudySeconds), color: "text-primary" },
-          { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: `${completedCount}`, color: "text-emerald-500" },
+          { icon: <BookOpen size={20} />, label: "Bài đã hoàn thành", value: `${completedCount}`, color: "text-emerald-500" },
           { icon: <Flame size={20} />, label: "Chuỗi ngày học", value: `${currentStreak} ngày`, color: "text-orange-500", isStreak: true },
         ] as { icon: React.ReactNode; label: string; value: string; color: string; isStreak?: boolean }[]).map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 + i * 0.05 }}>
@@ -495,7 +581,7 @@ const OverviewTab = ({
                   {s.isStreak ? <span className="animate-fire">{s.icon}</span> : s.icon}
                 </div>
                 <div className="relative">
-                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
+                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
               </CardContent>
@@ -538,7 +624,7 @@ const OverviewTab = ({
                     </motion.div>
                   );
                 })}
-              </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -749,9 +835,6 @@ const SettingsTab = ({
                 />
                 <Lock size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
               </div>
-              <p className="text-[11px] text-muted-foreground/80 italic pl-1">
-                * Vui lòng liên hệ quản trị viên nếu bạn cần đổi địa chỉ email.
-              </p>
             </div>
 
             <Button onClick={handleSaveProfile} className="w-full gradient-primary text-primary-foreground">

@@ -1,10 +1,20 @@
 import { apiClient } from "@/services/api-client";
 import {
   User, Exam, PricePlan,
-  initialPlans,
-  usageData, monthlyUsageData, subscriptionPurchaseData, planDistData
+  initialPlans
 } from "../mocks/admin.mock";
 import { task1Samples, task2Samples, type SampleEssay } from "../../quiz/writing/mocks/writing.mock";
+
+export interface AdminStats {
+  usageData: any[];
+  monthlyUsageData: any[];
+  subscriptionPurchaseData: any[];
+  planDistData: any[];
+  totalRevenue: number;
+  monthlyGrowth: number;
+  recentActivities: any[];
+  weeklyData: number[];
+}
 
 let plansList = [...initialPlans];
 
@@ -106,10 +116,10 @@ function getDurationMinutes(skillType: string): number {
 // --- Mappers ---
 function toUser(u: BEUserResponse): User {
   let planName = "Miễn phí";
-  const plan = u.subscriptionPlan?.toLowerCase();
-  if (plan === "weekly") {
+  const plan = u.subscriptionPlan?.toLowerCase().trim();
+  if (plan === "weekly" || plan === "gói tuần") {
     planName = "Gói Tuần";
-  } else if (plan === "monthly") {
+  } else if (plan === "monthly" || plan === "gói tháng") {
     planName = "Gói Tháng";
   }
 
@@ -165,10 +175,10 @@ function toExam(e: BEExamResponse): Exam {
 }
 
 function getPlanDisplayName(name: string): string {
-  const normalized = name.toLowerCase();
+  const normalized = name.toLowerCase().trim();
   if (normalized === "free") return "Miễn phí";
-  if (normalized === "weekly") return "Gói Tuần";
-  if (normalized === "monthly") return "Gói Tháng";
+  if (normalized === "weekly" || normalized === "gói tuần") return "Gói Tuần";
+  if (normalized === "monthly" || normalized === "gói tháng") return "Gói Tháng";
   return name;
 }
 
@@ -195,10 +205,15 @@ function getPlanFeatures(plan: BESubscriptionPlanResponse): string[] {
   }
 
   if (plan.description) {
-    features.unshift(plan.description);
+    const customFeatures = plan.description
+      .split(/\r?\n|;/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    features.unshift(...customFeatures);
   }
 
-  return features.length > 0 ? features : ["Quyền lợi cơ bản"];
+  const finalFeatures = Array.from(new Set(features));
+  return finalFeatures.length > 0 ? finalFeatures : ["Quyền lợi cơ bản"];
 }
 
 function toPricePlan(plan: BESubscriptionPlanResponse): PricePlan {
@@ -251,25 +266,8 @@ export const adminService = {
     }
   },
 
-  async getAdminStats() {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    return {
-      usageData,
-      monthlyUsageData,
-      subscriptionPurchaseData,
-      planDistData,
-      totalRevenue: 4850000,
-      monthlyGrowth: 23,
-      recentActivities: [
-        { text: "Võ Thị F hoàn thành Speaking #1 — 8.0/10", time: "2 phút trước", type: "exam" as const },
-        { text: "Đề thi Reading #2 được thêm mới", time: "1 giờ trước", type: "add" as const },
-        { text: "Trần Thị B đăng ký Gói Tháng", time: "2 giờ trước", type: "payment" as const },
-        { text: "Hoàng Minh E đạt 8.5/10 Writing #1", time: "3 giờ trước", type: "exam" as const },
-        { text: "Nguyễn Văn A hoàn thành Listening #2", time: "4 giờ trước", type: "exam" as const },
-        { text: "Đặng Quốc G đăng ký tài khoản mới", time: "5 giờ trước", type: "user" as const },
-      ],
-      weeklyData: [12, 18, 8, 22, 15, 28, 20],
-    };
+  async getAdminStats(): Promise<AdminStats> {
+    return apiClient.get<AdminStats>("/admin/stats");
   },
 
   // User CRUD
@@ -486,10 +484,10 @@ export const adminService = {
   },
 
   async updatePricePlan(planId: string, payload: Partial<PricePlan>): Promise<PricePlan> {
-    const current = plansList.find((plan) => plan.id === planId);
+    // Do NOT use stale mock plansList — only use the payload from the caller
     const res = await apiClient.put<BESubscriptionPlanResponse>(
       `/subscription-plans/${planId}`,
-      toSubscriptionPlanPayload({ ...current, ...payload })
+      toSubscriptionPlanPayload(payload)
     );
     return toPricePlan(res);
   },

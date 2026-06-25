@@ -11,15 +11,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import AnnotatedText, { type TextError } from "@/features/quiz/writing/components/AnnotatedText";
 import { type WritingTask, tasks as mockTasks, sampleEssays as mockSampleEssays, writingGrammarPatterns } from "../mocks/writing.mock";
 import { getPermissions, MOCK_TEST_NEXT_ROUTE, MOCK_TEST_NEXT_SKILL_LABEL } from "@/features/attempts/config/modePermissions";
 import { attemptsService } from "@/features/attempts/services/attempts.service";
+import { attemptsApiService } from "@/features/attempts/services/attempts.api-service";
 import MockTestTransition from "@/features/attempts/components/MockTestTransition";
 import { examService, type ExamItem, type ExamDetailResponse } from "@/features/quiz/services/exam.service";
 import { writingApiService, type WritingResultResponse } from "../services/writing.api-service";
 import VocabularyContextMenu from "@/features/vocabulary/components/VocabularyContextMenu";
 import { cleanDescription } from "@/lib/utils";
+import { useAutosave } from "@/features/attempts/hooks/useAutosave";
+import { VstepMockLayout } from "@/features/quiz/components/VstepMockLayout";
+import { ExitConfirmDialog } from "@/features/quiz/components/ExitConfirmDialog";
 
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
@@ -110,6 +115,7 @@ const WritingQuiz = () => {
   const [sampleEssays, setSampleEssays] = useState<Record<number, { level: string; content: string }>>(mockSampleEssays);
   // API mode: store examIds aligned by task index (number, matches BE int)
   const [apiExamIds, setApiExamIds] = useState<number[]>([]);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
 
   // ── Quiz state ──
   const [currentTask, setCurrentTask] = useState(0);
@@ -118,6 +124,8 @@ const WritingQuiz = () => {
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
   const [showSample, setShowSample] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   // ── Feedback state ──
   const [feedbackTask, setFeedbackTask] = useState(0);
@@ -142,6 +150,43 @@ const WritingQuiz = () => {
   useEffect(() => {
     let active = true;
     const load = async () => {
+      if (isMockSession) {
+        try {
+          const res = await attemptsService.getInProgressAttempt();
+          if (!active) return;
+          if (res) {
+            setAttemptId(String(res.attemptId));
+
+            // Use mock tasks for mock test (no need to fetch exams)
+            setTasks(mockTasks);
+            setSampleEssays(mockSampleEssays);
+
+            const initialWritings: Record<number, string> = {};
+            mockTasks.forEach((task) => { initialWritings[task.id] = ""; });
+
+            // Restore from DraftStateJson
+            if (res.draftStateJson) {
+              try {
+                const draft = JSON.parse(res.draftStateJson);
+                if (draft.writing?.answers) {
+                  Object.keys(draft.writing.answers).forEach(k => {
+                    initialWritings[Number(k)] = draft.writing.answers[k];
+                  });
+                }
+              } catch (e) {
+                console.error("Failed to parse draft state", e);
+              }
+            }
+            setWritings(initialWritings);
+            setTimeLeft(res.remainingSeconds > 0 ? res.remainingSeconds : 0);
+          }
+        } catch (err) {
+          console.error("Failed to load in progress attempt", err);
+        }
+        if (active) setLoading(false);
+        return;
+      }
+
       if (!IS_API_MODE) {
         setTasks(mockTasks);
         setSampleEssays(mockSampleEssays);
@@ -214,7 +259,38 @@ const WritingQuiz = () => {
     return () => { active = false; };
   }, [examIdParam, groupId]);
 
-  // ── Timer ───────────────────────────────────────────────────
+  // ── Block leave confirmation ────────────────────────────────
+  useEffect(() => {
+    if (loading || submitted) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Show toast for practice mode when user unexpectedly leaves
+      if (!isMockSession && !submitted && practiceData) {
+        toast.info("Phiên luyện tập bị thoát. Tiến độ đã được lưu.");
+      }
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [loading, submitted, isMockSession]);
+
+  // ── Server time sync (mock test) ──────────────────────────
+  useEffect(() => {
+    if (!isMockSession || !attemptId) return;
+    const timer = setInterval(() => {
+      attemptsApiService.getInProgressAttempt().then(res => {
+        if (res && res.remainingSeconds >= 0) {
+          setServerTimeRemaining(res.remainingSeconds);
+          if (res.remainingSeconds <= 0 && !submitted) {
+            setSubmitted(true);
+          }
+        }
+      }).catch(err => console.error("Failed to fetch remaining time", err));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isMockSession, attemptId, submitted]);
+
+  // ── Timer & Autosave ───────────────────────────────────────────────────
   useEffect(() => {
     if (loading || submitted || isPaused) return;
     const timer = setInterval(() => {
@@ -268,7 +344,13 @@ const WritingQuiz = () => {
         };
         const updatedFeedbacks = { ...feedbacks, [taskIndex]: fb };
         setFeedbacks(updatedFeedbacks);
-        await saveWritingAttemptProgress({ writings, writingFeedback: updatedFeedbacks, writingExamIds: apiExamIds });
+        // Only save summary if both tasks are submitted (when using API mode for single skill practice)
+        if (!isMockSession && Object.keys(updatedFeedbacks).length === tasks.length) {
+          await saveWritingAttemptProgress({
+            writings,
+            score: null, // Full score computed later or not tracked here
+          });
+        }
       } else {
         // Mock mode
         const task = tasks[taskIndex];
@@ -298,14 +380,48 @@ const WritingQuiz = () => {
 
   // ── Submit (mock test) ──────────────────────────────────────
   const handleSubmit = async () => {
-    setMockSaving(true);
-    try {
-      await saveWritingAttemptProgress({ writings, writingExamIds: apiExamIds });
-      await new Promise(r => setTimeout(r, 300));
-    } finally {
-      setMockSaving(false);
+    if (isMockSession && attemptId) {
+      setMockSaving(true);
+      try {
+        const draftState = JSON.stringify({
+          _meta: { mode: "mock_test", currentSkill: "writing" },
+          writing: { answers: writings }
+        });
+        await attemptsApiService.autosaveMockTest(
+          attemptId,
+          "speaking",
+          draftState
+        );
+        navigate(`/quiz/speaking/take?attemptId=${attemptId}&mode=mock_test&session=mock`);
+      } catch (err) {
+        console.error("Failed to save and advance", err);
+        toast.error("Lỗi khi chuyển sang kỹ năng tiếp theo");
+      } finally {
+        setMockSaving(false);
+      }
+    } else {
+      setMockSaving(true);
+      try {
+        await saveWritingAttemptProgress({ writings, writingExamIds: apiExamIds });
+        await new Promise(r => setTimeout(r, 300));
+      } finally {
+        setMockSaving(false);
+      }
+      setSubmitted(true);
     }
-    setSubmitted(true);
+  };
+
+  const handleExitMockTest = () => {
+    setShowExitDialog(true);
+  };
+
+  const getQuestionStatuses = (): Record<number, "answered" | "unanswered"> => {
+    const statuses: Record<number, "answered" | "unanswered"> = {};
+    tasks.forEach((_, i) => {
+      const taskId = i + 1;
+      statuses[taskId] = writings[taskId]?.trim().length > 0 ? "answered" : "unanswered";
+    });
+    return statuses;
   };
 
   // ─── Loading / empty states ──────────────────────────────────
@@ -389,7 +505,19 @@ const WritingQuiz = () => {
                     : "🤖 Chấm điểm AI"}
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" onClick={reset}><RotateCcw size={16} /> Làm lại</Button>
+                <div className="flex items-center gap-2">
+                  {feedbacks[feedbackTask]?.source === "api" && feedbacks[feedbackTask]?.status === "failed" && (
+                    <Button 
+                      size="sm" 
+                      variant="destructive" 
+                      onClick={() => generateAIFeedback(feedbackTask)}
+                      disabled={aiLoading}
+                    >
+                      {aiLoading ? <><Loader2 size={16} className="animate-spin" /> Đang thử lại...</> : "Thử lại chấm điểm"}
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={reset}><RotateCcw size={16} /> Làm lại (Viết lại)</Button>
+                </div>
               )}
             </div>
           </div>
@@ -484,7 +612,9 @@ const WritingQuiz = () => {
                           {activeFb.score !== null ? `${activeFb.score}/10` : "Đang chờ..."}
                         </p>
                         {activeFb.status === "failed" && (
-                          <p className="text-xs text-destructive mt-1">Chấm điểm thất bại</p>
+                          <div className="mt-2 text-xs text-destructive bg-destructive/10 py-1.5 px-3 rounded-md inline-block">
+                            Chấm điểm AI thất bại. Hệ thống có thể đang quá tải, vui lòng bấm "Thử lại chấm điểm" ở trên.
+                          </div>
                         )}
                       </div>
                       {activeFb.feedback && (
@@ -557,12 +687,106 @@ const WritingQuiz = () => {
   }
 
   // ─── Writing screen ───────────────────────────────────────────
+  if (isMockSession && attemptId) {
+    const questionStatuses = getQuestionStatuses();
+
+    return (
+      <>
+        <VstepMockLayout
+          skillName="Writing / Kỹ năng Viết"
+          remainingSeconds={serverTimeRemaining}
+          questionCount={tasks.length}
+          answeredCount={Object.values(questionStatuses).filter(s => s === "answered").length}
+          currentQuestion={currentTask + 1}
+          isLastSkill={false}
+          onExit={handleExitMockTest}
+          onNext={handleSubmit}
+          onQuestionSelect={(taskNum) => setCurrentTask(taskNum - 1)}
+          questionStatuses={questionStatuses}
+          attemptId={attemptId}
+        >
+          <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
+          {/* Left: Prompt */}
+          <div className="w-1/2 border-r border-border">
+            <VocabularyContextMenu source="writing">
+              <ScrollArea className="h-[calc(100vh-64px)]">
+                <div className="p-6 space-y-6">
+                  <div className="flex items-center gap-2">
+                    <FileText size={20} className="text-primary" />
+                    <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
+                  </div>
+                  <Card className="border-border bg-muted/30">
+                    <CardContent className="p-5">
+                      <h3 className="font-semibold text-foreground mb-3">Đề bài</h3>
+                      <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">{task.prompt}</div>
+                    </CardContent>
+                  </Card>
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-3">Hướng dẫn</h3>
+                    <ul className="space-y-2">
+                      {task.instructions.map((inst, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="text-primary mt-0.5">•</span>{inst}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </ScrollArea>
+            </VocabularyContextMenu>
+          </div>
+
+          {/* Right: Editor */}
+          <div className="w-1/2 flex flex-col">
+            <div className="flex-1 p-6 flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Type size={18} className="text-primary" />
+                  <span className="font-semibold text-foreground text-sm">Bài viết của bạn</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{task.title}</span>
+              </div>
+              <Textarea
+                className="flex-1 min-h-[400px] resize-none text-sm leading-relaxed rounded-xl"
+                placeholder="Bắt đầu viết bài của bạn tại đây..."
+                value={currentText}
+                onChange={e => setWritings(p => ({ ...p, [task.id]: e.target.value }))}
+              />
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm font-semibold ${meetsMinimum ? "text-emerald-600" : "text-destructive"}`}>
+                    {wordCount} từ
+                  </span>
+                  <span className="text-xs text-muted-foreground">/ tối thiểu {task.minWords} từ</span>
+                </div>
+                <Progress value={Math.min(100, (wordCount / task.minWords) * 100)} className="w-32 h-2" />
+              </div>
+            </div>
+          </div>
+        </div>
+        </VstepMockLayout>
+        <ExitConfirmDialog
+          open={showExitDialog}
+          onOpenChange={setShowExitDialog}
+          onConfirm={() => {
+            navigate("/quiz");
+          }}
+          attemptId={attemptId ? Number(attemptId) : undefined}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top bar */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 h-14">
-          <button onClick={() => navigate("/quiz")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <button onClick={() => {
+            if (window.confirm("Bạn có chắc chắn muốn thoát? Bài thi đang làm sẽ bị hủy và không được lưu.")) {
+              navigate("/quiz");
+            }
+          }} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft size={16} /> Thoát
           </button>
           <div className="flex items-center gap-4">

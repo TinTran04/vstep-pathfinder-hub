@@ -24,23 +24,55 @@ export interface TextError {
   explanation?: string;
 }
 
+export interface TimestampFeedback {
+  timestamp?: string; // backward compat
+  startTime?: string;
+  endTime?: string;
+  type?: string;
+  issue?: string;
+  suggestion?: string;
+  feedback?: string; // backward compat
+}
+
 export interface WritingFeedbackResult {
-  taskAchievement: string;
-  coherence: string;
-  lexical: string;
-  grammar: string;
-  score: string;
-  tips: string[];
-  errors: TextError[];
+  score: number;
+  overallScore?: number;
+  // New primary fields
+  taskFulfillment?: number;
+  grammar?: number;
+  vocabulary?: number;
+  organization?: number;
+  // Legacy aliases
+  taskResponse?: number;
+  feedbackPoints: string[];
+  taskAchievement?: string;
+  coherence?: string;
+  lexical?: string;
+  tips?: string[];
+  errors?: TextError[];
+  // Detailed feedback
+  criteriaExplanations?: Record<string, string>;
 }
 
 export interface SpeakingFeedbackResult {
-  pronunciation: string;
-  fluency: string;
-  grammar: string;
-  vocabulary: string;
-  tips: string[];
+  score: number;
+  overallScore?: number;
+  // New primary fields
+  fluencyIdeaDevelopment?: number;
+  pronunciation?: number;
+  grammar?: number;
+  vocabulary?: number;
+  contentCoherence?: number;
+  // Legacy aliases
+  fluency?: number;
+  topicDevelopment?: number;
+  relevance?: number;
+  feedbackPoints: string[];
   transcript?: string;
+  tips?: string[];
+  timestampFeedback?: TimestampFeedback[];
+  // Detailed feedback
+  criteriaExplanations?: Record<string, string>;
 }
 
 export interface SkillAttempt {
@@ -69,4 +101,82 @@ export interface MockTestAttempt {
   strengths?: string[];
   weaknesses?: string[];
   recommendedPractice?: string[];
+}
+
+// API Review Types
+export interface OptionReviewResponse {
+  optionId: number;
+  questionId: number;
+  label: string;
+  content: string;
+  isCorrect: boolean;
+  displayOrder: number;
+}
+
+export interface QuestionReviewResponse {
+  questionId: number;
+  sectionId: number;
+  questionText: string;
+  questionType: string;
+  correctAnswer: string;
+  explanation: string | null;
+  score: number;
+  displayOrder: number;
+  options: OptionReviewResponse[];
+  userAnswer: string;
+  isCorrectAnswer: boolean;
+  isCorrect?: boolean;
+}
+
+export interface SectionReviewResponse {
+  sectionId: number;
+  examId: number;
+  title: string;
+  instruction: string;
+  passageText: string | null;
+  audioUrl: string | null;
+  displayOrder: number;
+  questions: QuestionReviewResponse[];
+}
+
+export interface WritingReviewResponse {
+  writingSubmissionId: number;
+  prompt: string;
+  essayText: string;
+  status: string;
+  score: number | null;
+  durationUsedSeconds: number | null;
+  feedback: string | null;
+  feedbackJson: string | null; // raw JSON string
+  createdAt: string;
+}
+
+export interface SpeakingReviewResponse {
+  speakingSubmissionId: number;
+  audioUrl: string;
+  status: string;
+  score: number | null;
+  durationUsedSeconds: number | null;
+  feedback: string | null;
+  feedbackJson: string | null; // raw JSON string
+  transcript: string | null;
+  createdAt: string;
+}
+
+export interface AttemptReviewResponse {
+  attemptId: number;
+  examId: number;
+  userId: number;
+  skillType: string;
+  examTitle: string;
+  status: string;
+  totalScore: number | null;
+  totalQuestions: number | null;
+  correctCount: number | null;
+  durationUsedSeconds: number | null;
+  startedAt: string;
+  submittedAt: string | null;
+  sections: SectionReviewResponse[];
+  writingReview: WritingReviewResponse | null;
+  speakingReview: SpeakingReviewResponse | null;
 }

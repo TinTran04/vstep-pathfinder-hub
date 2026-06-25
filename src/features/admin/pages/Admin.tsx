@@ -1,4 +1,4 @@
-﻿import { Fragment, useState, useEffect, useRef } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, DollarSign, Plus, Trash2, Edit2, Search,
@@ -30,10 +30,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import logoImg from "@/assets/logo.png";
 
 import { User, Exam, PricePlan } from "../mocks/admin.mock";
-import { SampleEssay } from "@/features/quiz/writing/mocks/writing.mock";
 import { adminService } from "../services/admin.service";
 
-type Tab = "dashboard" | "users" | "exams" | "pricing" | "sample-answers";
+type Tab = "dashboard" | "users" | "exams" | "pricing";
 type AdminSkill = "Listening" | "Reading" | "Writing" | "Speaking";
 
 const ADMIN_SKILLS: AdminSkill[] = ["Listening", "Reading", "Writing", "Speaking"];
@@ -54,7 +53,6 @@ const sidebarItems = [
   { title: "Tổng quan", value: "dashboard" as Tab, icon: LayoutDashboard, color: "text-blue-500" },
   { title: "Tài khoản", value: "users" as Tab, icon: Users, color: "text-purple-500" },
   { title: "Đề thi", value: "exams" as Tab, icon: FileText, color: "text-emerald-500" },
-  { title: "Bài viết mẫu", value: "sample-answers" as Tab, icon: BookOpen, color: "text-amber-500" },
   { title: "Quản lí giá", value: "pricing" as Tab, icon: DollarSign, color: "text-rose-500" },
 ];
 
@@ -95,7 +93,6 @@ const Admin = () => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [plans, setPlans] = useState<PricePlan[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [writingSamples, setWritingSamples] = useState<{ task1Samples: SampleEssay[]; task2Samples: SampleEssay[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -113,14 +110,12 @@ const Admin = () => {
       adminService.getExams(),
       adminService.getPricePlans(),
       adminService.getAdminStats(),
-      adminService.getWritingSamples(),
-    ]).then(([fetchedUsers, fetchedExams, fetchedPlans, fetchedStats, fetchedSamples]) => {
+    ]).then(([fetchedUsers, fetchedExams, fetchedPlans, fetchedStats]) => {
       if (isMounted) {
         setUsers(fetchedUsers);
         setExams(fetchedExams);
         setPlans(fetchedPlans);
         setStats(fetchedStats);
-        setWritingSamples(fetchedSamples);
         setLoading(false);
       }
     }).catch((err) => {
@@ -277,168 +272,9 @@ const Admin = () => {
     isActive: true,
   });
 
-  // Writing Sample states
-  const [sampleDialog, setSampleDialog] = useState(false);
-  const [editSample, setEditSample] = useState<(SampleEssay & { taskType: "task1" | "task2" }) | null>(null);
-  const [sampleForm, setSampleForm] = useState<{
-    taskType: "task1" | "task2";
-    level: "B1" | "B2";
-    score: string;
-    content: string;
-    reasons: string[];
-  }>({
-    taskType: "task1",
-    level: "B2",
-    score: "8.0/10",
-    content: "",
-    reasons: [""]
-  });
 
-  const [searchSample, setSearchSample] = useState("");
-  const [filterSampleTask, setFilterSampleTask] = useState("all");
-  const [filterSampleLevel, setFilterSampleLevel] = useState("all");
 
-  const openAddSample = () => {
-    setEditSample(null);
-    setSampleForm({
-      taskType: "task1",
-      level: "B2",
-      score: "8.0/10",
-      content: "",
-      reasons: [""]
-    });
-    setSampleDialog(true);
-  };
 
-  const openEditSample = (s: SampleEssay, taskType: "task1" | "task2") => {
-    setEditSample({ ...s, taskType });
-    setSampleForm({
-      taskType: taskType,
-      level: s.level,
-      score: s.score,
-      content: s.content,
-      reasons: s.reasons.length > 0 ? [...s.reasons] : [""]
-    });
-    setSampleDialog(true);
-  };
-
-  const saveSample = async () => {
-    if (!sampleForm.content || !sampleForm.score) {
-      toast.error("Vui lòng điền đầy đủ thông tin");
-      return;
-    }
-    const filteredReasons = sampleForm.reasons.filter(r => r.trim() !== "");
-    if (filteredReasons.length === 0) {
-      toast.error("Vui lòng nhập ít nhất một lý do chấm điểm");
-      return;
-    }
-
-    try {
-      if (editSample) {
-        if (editSample.taskType !== sampleForm.taskType) {
-          await adminService.deleteWritingSample(editSample.id);
-          const created = await adminService.createWritingSample({
-            taskType: sampleForm.taskType,
-            level: sampleForm.level,
-            score: sampleForm.score,
-            content: sampleForm.content,
-            reasons: filteredReasons
-          });
-          const fetched = await adminService.getWritingSamples();
-          setWritingSamples(fetched);
-        } else {
-          const updated = await adminService.updateWritingSample(editSample.id, {
-            level: sampleForm.level,
-            score: sampleForm.score,
-            content: sampleForm.content,
-            reasons: filteredReasons
-          });
-          setWritingSamples(p => {
-            if (!p) return p;
-            if (sampleForm.taskType === "task1") {
-              return {
-                ...p,
-                task1Samples: p.task1Samples.map(x => x.id === editSample.id ? updated : x)
-              };
-            } else {
-              return {
-                ...p,
-                task2Samples: p.task2Samples.map(x => x.id === editSample.id ? updated : x)
-              };
-            }
-          });
-        }
-        toast.success("Cập nhật bài mẫu thành công");
-      } else {
-        const created = await adminService.createWritingSample({
-          taskType: sampleForm.taskType,
-          level: sampleForm.level,
-          score: sampleForm.score,
-          content: sampleForm.content,
-          reasons: filteredReasons
-        });
-        setWritingSamples(p => {
-          if (!p) return p;
-          if (sampleForm.taskType === "task1") {
-            return {
-              ...p,
-              task1Samples: [...p.task1Samples, created]
-            };
-          } else {
-            return {
-              ...p,
-              task2Samples: [...p.task2Samples, created]
-            };
-          }
-        });
-        toast.success("Thêm bài mẫu thành công");
-      }
-      setSampleDialog(false);
-    } catch (err) {
-      toast.error("Có lỗi xảy ra khi lưu bài mẫu");
-    }
-  };
-
-  const deleteSample = async (id: number) => {
-    try {
-      await adminService.deleteWritingSample(id);
-      setWritingSamples(p => {
-        if (!p) return p;
-        return {
-          task1Samples: p.task1Samples.filter(x => x.id !== id),
-          task2Samples: p.task2Samples.filter(x => x.id !== id)
-        };
-      });
-      toast.success("Xóa bài mẫu thành công");
-    } catch (err) {
-      toast.error("Có lỗi xảy ra khi xóa bài mẫu");
-    }
-  };
-
-  const addReasonField = () => {
-    setSampleForm(p => ({
-      ...p,
-      reasons: [...p.reasons, ""]
-    }));
-  };
-
-  const removeReasonField = (index: number) => {
-    setSampleForm(p => ({
-      ...p,
-      reasons: p.reasons.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateReasonField = (index: number, val: string) => {
-    setSampleForm(p => {
-      const copy = [...p.reasons];
-      copy[index] = val;
-      return {
-        ...p,
-        reasons: copy
-      };
-    });
-  };
 
   // User CRUD
   const openAddUser = () => { setEditUser(null); setUserForm({ name: "", email: "", role: "student", status: "active", plan: "Miễn phí" }); setUserDialog(true); };
@@ -1159,19 +995,7 @@ const Admin = () => {
     }));
   };
 
-  const getFilteredSamples = () => {
-    if (!writingSamples) return [];
-    const t1 = writingSamples.task1Samples.map(s => ({ ...s, taskType: "task1" as const, taskTitle: "Task 1 (Email/Letter)" }));
-    const t2 = writingSamples.task2Samples.map(s => ({ ...s, taskType: "task2" as const, taskTitle: "Task 2 (Essay)" }));
-    const combined = [...t1, ...t2];
-    
-    return combined.filter(s => {
-      const matchesSearch = s.content.toLowerCase().includes(searchSample.toLowerCase()) || s.score.toLowerCase().includes(searchSample.toLowerCase());
-      const matchesTask = filterSampleTask === "all" || s.taskType === filterSampleTask;
-      const matchesLevel = filterSampleLevel === "all" || s.level === filterSampleLevel;
-      return matchesSearch && matchesTask && matchesLevel;
-    });
-  };
+
 
   const totalStudents = users.filter(u => u.role === "student").length;
   const activeStudents = users.filter(u => u.role === "student" && u.status === "active").length;
@@ -1743,7 +1567,7 @@ const Admin = () => {
                         }`}
                       >
                         <item.icon className={`h-5 w-5 shrink-0 ${item.color || "text-muted-foreground"}`} />
-                        <span className="md:block hidden group-data-[collapsible=icon]:hidden font-medium text-xs">{item.title}</span>
+                        <span className="md:block hidden group-data-[collapsible=icon]:hidden font-medium text-xs truncate whitespace-nowrap">{item.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
@@ -1880,7 +1704,7 @@ const Admin = () => {
                     { label: "Tổng học viên", value: totalStudents, sub: `${activeStudents} đang hoạt động`, icon: Users, trend: "+12%", up: true, color: "from-blue-500 to-indigo-600", accent: "bg-blue-600", glow: "hover:shadow-blue-500/10", spark: "M5,15 L15,10 L25,18 L35,8 L45,12 L55,5" },
                     { label: "Đề thi", value: totalExams, sub: `${activeExams} đang active`, icon: FileText, trend: "+3", up: true, color: "from-emerald-500 to-teal-600", accent: "bg-emerald-600", glow: "hover:shadow-emerald-500/10", spark: "M5,12 L15,15 L25,10 L35,14 L45,6 L55,3" },
                     { label: "Doanh thu tháng", value: `${(totalRevenue / 1e6).toFixed(1)}M`, sub: "VND", icon: DollarSign, trend: `+${monthlyGrowth}%`, up: true, color: "from-amber-500 to-orange-600", accent: "bg-amber-600", glow: "hover:shadow-amber-500/10", spark: "M5,18 L15,14 L25,15 L35,10 L45,8 L55,4" },
-                    { label: "Lượt thi hôm nay", value: 28, sub: "↑ so với hôm qua", icon: Activity, trend: "+5", up: true, color: "from-purple-500 to-violet-600", accent: "bg-purple-600", glow: "hover:shadow-purple-500/10", spark: "M5,16 L15,8 L25,12 L35,15 L45,6 L55,2" },
+                    { label: "Lượt thi hôm nay", value: weeklyData[weeklyData.length - 1] ?? 0, sub: "↑ so với hôm qua", icon: Activity, trend: "+5", up: true, color: "from-purple-500 to-violet-600", accent: "bg-purple-600", glow: "hover:shadow-purple-500/10", spark: "M5,16 L15,8 L25,12 L35,15 L45,6 L55,2" },
                   ].map((stat, i) => (
                     <Card key={stat.label} className={`border border-border/80 overflow-hidden relative group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${stat.glow}`} style={{ animationDelay: `${i * 100}ms` }}>
                       <CardContent className="p-5 relative">
@@ -1913,8 +1737,8 @@ const Admin = () => {
                   <div className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Học viên Online</p>
-                      <p className="text-base font-extrabold text-foreground">12 <span className="text-xs font-normal text-muted-foreground">người</span></p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Học viên đang hoạt động</p>
+                      <p className="text-base font-extrabold text-foreground">{activeStudents} <span className="text-xs font-normal text-muted-foreground">người</span></p>
                     </div>
                   </div>
                   <Separator orientation="vertical" className="h-8 hidden md:block" />
@@ -1922,15 +1746,15 @@ const Admin = () => {
                     <Activity size={18} className="text-indigo-500" />
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Lượt thi hôm nay</p>
-                      <p className="text-base font-extrabold text-foreground">28 <span className="text-xs font-normal text-emerald-600">↑ 15%</span></p>
+                      <p className="text-base font-extrabold text-foreground">{weeklyData[weeklyData.length - 1] ?? 0} <span className="text-xs font-normal text-muted-foreground">lượt</span></p>
                     </div>
                   </div>
                   <Separator orientation="vertical" className="h-8 hidden md:block" />
                   <div className="flex items-center gap-3">
                     <Plus size={18} className="text-emerald-500" />
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Đề mới tuần này</p>
-                      <p className="text-base font-extrabold text-foreground">4 <span className="text-xs font-normal text-muted-foreground">đề đã duyệt</span></p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Đề nháp cần duyệt</p>
+                      <p className="text-base font-extrabold text-foreground">{exams.filter(e => e.status === "draft").length} <span className="text-xs font-normal text-muted-foreground">đề nháp</span></p>
                     </div>
                   </div>
                 </div>
@@ -2443,9 +2267,9 @@ const Admin = () => {
                             const isQuiz = e.skill === "Listening" || e.skill === "Reading";
                             return (
                               <TableRow key={e.id} className="hover:bg-muted/20 transition-colors">
-                                <TableCell className="font-medium text-sm">
-                                  <div className="flex flex-col">
-                                    <span className="font-semibold text-foreground">{e.title}</span>
+                                <TableCell className="font-medium text-sm max-w-[260px] overflow-hidden">
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="font-semibold text-foreground truncate" title={e.title}>{e.title}</span>
                                     {e.skill === "Listening" && e.audioUrl && (
                                       <span className="text-[10px] text-primary truncate max-w-[200px] mt-0.5">🎧 Audio: {e.audioUrl.split('/').pop()}</span>
                                     )}
@@ -2514,12 +2338,12 @@ const Admin = () => {
                             return (
                               <Fragment key={row.groupId}>
                                 <TableRow className="bg-blue-50/10 dark:bg-blue-950/5 hover:bg-blue-50/20 dark:hover:bg-blue-950/10 transition-colors border-l-4 border-l-blue-500">
-                                  <TableCell className="font-medium text-sm">
-                                    <div className="flex items-center gap-2">
-                                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => toggleGroup(row.groupId)}>
+                                  <TableCell className="font-medium text-sm max-w-[260px] overflow-hidden">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => toggleGroup(row.groupId)}>
                                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                       </Button>
-                                      <span className="font-bold text-foreground">{row.groupTitle}</span>
+                                      <span className="font-bold text-foreground truncate" title={row.groupTitle}>{row.groupTitle}</span>
                                     </div>
                                   </TableCell>
                                   <TableCell>
@@ -2678,147 +2502,59 @@ const Admin = () => {
                   </Button>
                 </div>
                 <div className="grid md:grid-cols-3 gap-5">
-                  {plans.map((p, idx) => (
-                    <Card key={p.id} className={`border-border overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${(p.isActive ?? true) ? "" : "opacity-60"} ${idx === 1 ? "ring-2 ring-primary/30" : ""}`}>
-                      {idx === 1 && (
-                        <div className="gradient-primary text-primary-foreground text-center text-[10px] font-bold py-1 tracking-wide uppercase">
-                          Phổ biến nhất
-                        </div>
-                      )}
-                      <CardContent className="p-5 space-y-4">
-                        <div className="text-center space-y-2">
-                          <div className="flex items-center justify-center gap-2">
-                            <Badge variant="secondary" className="text-[10px]">{p.period === "Mãi mãi" ? "Free" : p.period}</Badge>
-                            <Badge variant={(p.isActive ?? true) ? "default" : "outline"} className="text-[10px]">
-                              {(p.isActive ?? true) ? "Đang bật" : "Đã ẩn"}
-                            </Badge>
+                  {plans.map((p) => {
+                    const popular = (p.durationDays ?? 0) === 7 && p.price > 0;
+                    return (
+                      <Card key={p.id} className={`border-border overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${(p.isActive ?? true) ? "" : "opacity-60"} ${popular ? "ring-2 ring-primary/30" : ""}`}>
+                        {popular && (
+                          <div className="gradient-primary text-primary-foreground text-center text-[10px] font-bold py-1 tracking-wide uppercase">
+                            ⭐ Phổ biến nhất
                           </div>
-                          <h3 className="font-bold text-foreground">{p.name}</h3>
-                          <p className="text-3xl font-extrabold text-foreground">
-                            {p.price === 0 ? "0" : p.price.toLocaleString("vi-VN")}
-                            <span className="text-sm font-normal text-muted-foreground">đ</span>
-                          </p>
-                          {p.durationDays !== undefined && (
-                            <p className="text-[11px] text-muted-foreground">Thời hạn {p.durationDays === 0 ? "không giới hạn" : `${p.durationDays} ngày`}</p>
-                          )}
-                        </div>
-                        <Separator />
-                        <ul className="space-y-2 flex flex-col items-center text-center">
-                          {p.features.map((f, i) => (
-                            <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground text-center">
-                              <span className="text-primary">✓</span> {f}
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button variant="outline" className="gap-1.5 text-xs" onClick={() => openEditPrice(p)}>
-                            <Edit2 size={12} /> Sửa
-                          </Button>
-                          <Button variant="outline" className="gap-1.5 text-xs text-destructive hover:text-destructive" onClick={() => deletePrice(p)} disabled={p.id === "1" || !(p.isActive ?? true)}>
-                            <Trash2 size={12} /> Ẩn
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        )}
+                        <CardContent className="p-5 space-y-4">
+                          <div className="text-center space-y-2">
+                            <div className="flex items-center justify-center gap-2">
+                              <Badge variant="secondary" className="text-[10px]">{p.period === "Mãi mãi" ? "Free" : p.period}</Badge>
+                              <Badge variant={(p.isActive ?? true) ? "default" : "outline"} className="text-[10px]">
+                                {(p.isActive ?? true) ? "Đang bật" : "Đã ẩn"}
+                              </Badge>
+                            </div>
+                            <h3 className="font-bold text-foreground">{p.name}</h3>
+                            <div className="flex items-baseline justify-center gap-0.5">
+                              <span className="text-3xl font-extrabold text-foreground">{p.price === 0 ? "0" : p.price.toLocaleString("vi-VN")}</span>
+                              <span className="text-xs text-muted-foreground font-semibold">đ</span>
+                              {p.period !== "Mãi mãi" && <span className="text-xs text-muted-foreground font-semibold">{p.period}</span>}
+                            </div>
+                            {p.durationDays !== undefined && (
+                              <p className="text-[10px] text-muted-foreground">Thời hạn {p.durationDays === 0 ? "không giới hạn" : `${p.durationDays} ngày`}</p>
+                            )}
+                          </div>
+                          <Separator />
+                          <ul className="space-y-2 flex flex-col items-start px-2">
+                            {p.features.map((f, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground text-left">
+                                <span className="text-emerald-500 font-bold shrink-0 mt-0.5">✓</span>
+                                <span>{f}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button variant="outline" className="gap-1.5 text-xs" onClick={() => openEditPrice(p)}>
+                              <Edit2 size={12} /> Sửa
+                            </Button>
+                            <Button variant="outline" className="gap-1.5 text-xs text-destructive hover:text-destructive" onClick={() => deletePrice(p)} disabled={p.id === "1" || !(p.isActive ?? true)}>
+                              <Trash2 size={12} /> Ẩn
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* === SAMPLE ANSWERS === */}
-            {activeTab === "sample-answers" && (
-              <div className="space-y-4 max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold text-foreground">Quản lí bài viết mẫu</h2>
-                    <p className="text-xs text-muted-foreground">
-                      {writingSamples ? getFilteredSamples().length : 0} bài viết mẫu đang hiển thị cho học viên
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                    <div className="relative flex-1 sm:w-48">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <Input placeholder="Tìm theo nội dung, điểm số..." className="pl-8 h-9 text-sm" value={searchSample} onChange={e => setSearchSample(e.target.value)} />
-                    </div>
-                    <Select value={filterSampleTask} onValueChange={setFilterSampleTask}>
-                      <SelectTrigger className="h-9 w-[140px] text-xs">
-                        <SelectValue placeholder="Phân loại Task" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tất cả các Task</SelectItem>
-                        <SelectItem value="task1">Task 1 (Thư/Email)</SelectItem>
-                        <SelectItem value="task2">Task 2 (Essay)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterSampleLevel} onValueChange={setFilterSampleLevel}>
-                      <SelectTrigger className="h-9 w-[110px] text-xs">
-                        <SelectValue placeholder="Trình độ" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tất cả trình độ</SelectItem>
-                        <SelectItem value="B1">B1</SelectItem>
-                        <SelectItem value="B2">B2</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button onClick={openAddSample} size="sm" className="gradient-primary text-primary-foreground gap-1.5 shrink-0">
-                      <Plus size={14} /> Thêm bài mẫu
-                    </Button>
-                  </div>
-                </div>
-
-                <Card className="border-border overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="text-xs font-semibold w-[150px]">Loại bài</TableHead>
-                          <TableHead className="text-xs font-semibold w-[90px]">Trình độ</TableHead>
-                          <TableHead className="text-xs font-semibold w-[90px]">Điểm số</TableHead>
-                          <TableHead className="text-xs font-semibold">Nội dung bài viết mẫu</TableHead>
-                          <TableHead className="text-xs font-semibold w-[180px]">Số lý do chấm điểm</TableHead>
-                          <TableHead className="text-xs font-semibold text-right w-[110px]">Hành động</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {getFilteredSamples().map(s => (
-                          <TableRow key={s.id} className="hover:bg-muted/20 transition-colors">
-                            <TableCell className="font-semibold text-xs text-foreground shrink-0">{s.taskTitle}</TableCell>
-                            <TableCell>
-                              <Badge className={s.level === "B2" ? "gradient-primary text-primary-foreground text-[10px]" : "bg-secondary text-secondary-foreground text-[10px]"}>
-                                {s.level}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Star size={12} className="text-amber-500 fill-amber-500" />
-                                <span className="text-xs font-bold">{s.score}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <p className="text-xs text-muted-foreground truncate max-w-[320px]">{s.content}</p>
-                            </TableCell>
-                            <TableCell className="text-xs font-medium text-foreground">{s.reasons.length} lý do</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-0.5">
-                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditSample(s, s.taskType)}><Edit2 size={13} /></Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteSample(s.id)}><Trash2 size={13} /></Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {getFilteredSamples().length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
-                              Không tìm thấy bài viết mẫu nào
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </Card>
-              </div>
-            )}
           </main>
         </div>
       </div>
@@ -3129,8 +2865,32 @@ const Admin = () => {
 
       {/* Price Dialog */}
       <Dialog open={priceDialog} onOpenChange={setPriceDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editPlan ? "Chỉnh sửa gói giá" : "Thêm gói giá"}</DialogTitle></DialogHeader>
+          
+          {/* Live Preview */}
+          <div className="bg-muted/40 rounded-xl p-4 text-center border border-border space-y-1 mt-1">
+            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+              Xem trước hiển thị (Preview)
+            </p>
+            <p className="text-sm font-bold text-foreground">{priceForm.name || "Tên gói"}</p>
+            <div className="flex items-baseline justify-center gap-0.5">
+              <span className="text-2xl font-extrabold text-foreground">
+                {priceForm.price === 0 ? "0" : Number(priceForm.price).toLocaleString("vi-VN")}
+              </span>
+              <span className="text-xs text-muted-foreground font-semibold">đ</span>
+              {priceForm.durationDays >= 28 && priceForm.durationDays <= 31 ? (
+                <span className="text-xs text-muted-foreground font-semibold">/tháng</span>
+              ) : priceForm.durationDays === 7 ? (
+                <span className="text-xs text-muted-foreground font-semibold">/tuần</span>
+              ) : priceForm.durationDays === 0 ? (
+                <span className="text-xs text-muted-foreground font-semibold">/mãi mãi</span>
+              ) : (
+                <span className="text-xs text-muted-foreground font-semibold">/{priceForm.durationDays} ngày</span>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div className="space-y-1.5"><Label className="text-xs">Tên gói</Label><Input value={priceForm.name} onChange={e => setPriceForm(p => ({ ...p, name: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label className="text-xs">Mô tả</Label><Textarea value={priceForm.description} onChange={e => setPriceForm(p => ({ ...p, description: e.target.value }))} rows={3} /></div>
@@ -3183,77 +2943,7 @@ const Admin = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Writing Sample Dialog */}
-      <Dialog open={sampleDialog} onOpenChange={setSampleDialog}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {editSample ? "Chỉnh sửa bài viết mẫu" : "Thêm bài viết mẫu mới"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="overflow-y-auto flex-1 pr-1 -mr-2 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Loại bài</Label>
-                <Select value={sampleForm.taskType} onValueChange={v => setSampleForm(p => ({ ...p, taskType: v as "task1" | "task2" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="task1">Task 1 (Email/Letter)</SelectItem>
-                    <SelectItem value="task2">Task 2 (Essay)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Trình độ</Label>
-                <Select value={sampleForm.level} onValueChange={v => setSampleForm(p => ({ ...p, level: v as "B1" | "B2" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="B1">B1</SelectItem>
-                    <SelectItem value="B2">B2</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Điểm số</Label>
-                <Input value={sampleForm.score} onChange={e => setSampleForm(p => ({ ...p, score: e.target.value }))} placeholder="Ví dụ: 8.5/10" />
-              </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Nội dung bài mẫu</Label>
-              <Textarea value={sampleForm.content} onChange={e => setSampleForm(p => ({ ...p, content: e.target.value }))} placeholder="Nhập hoặc dán nội dung bài viết mẫu vào đây..." rows={8} />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Các lý do đạt điểm (Rubric Reasons)</Label>
-                <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addReasonField}>
-                  <Plus size={12} /> Thêm lý do
-                </Button>
-              </div>
-              <div className="space-y-2.5">
-                {sampleForm.reasons.map((reason, idx) => (
-                  <div key={idx} className="flex gap-2 items-start bg-muted/40 p-2.5 rounded-lg border border-border">
-                    <div className="flex-1 space-y-1">
-                      <Label className="text-[10px] text-muted-foreground font-semibold">Lý do #{idx + 1}</Label>
-                      <Textarea value={reason} onChange={e => updateReasonField(idx, e.target.value)} placeholder="Nhập lý do phân tích tiêu chí đạt điểm (ví dụ: Task Achievement, Grammar...)" rows={2} className="text-xs animate-none" />
-                    </div>
-                    {sampleForm.reasons.length > 1 && (
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0 mt-5" onClick={() => removeReasonField(idx)}>
-                        <Trash2 size={14} />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="pt-2 border-t border-border mt-4">
-            <Button variant="outline" onClick={() => setSampleDialog(false)}>Hủy</Button>
-            <Button onClick={saveSample} className="gradient-primary text-primary-foreground gap-1.5"><Save size={14} /> Lưu</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </SidebarProvider>
   );
 };

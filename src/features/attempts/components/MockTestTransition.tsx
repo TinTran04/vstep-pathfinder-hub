@@ -22,22 +22,29 @@ const MockTestTransition = ({ completedSkillLabel, nextSkillLabel, nextRoute }: 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const groupId = searchParams.get("groupId");
+    const attemptId = searchParams.get("attemptId");
 
-    if (nextRoute.includes("/mock-test/review")) {
+    if (nextRoute.includes("/mock-test/review") || nextRoute.includes("/attempts/summary")) {
       (async () => {
-        const current =
-          (await attemptsService.getCurrentAttempt()) ??
-          (await attemptsService.getLastAttempt());
-        resolvedRouteRef.current = current
-          ? `/attempts/${current.id}/result`
-          : "/quiz";
+        if (attemptId) {
+          resolvedRouteRef.current = `/attempts/${attemptId}/result`;
+        } else {
+          const current =
+            (await attemptsService.getCurrentAttempt()) ??
+            (await attemptsService.getLastAttempt());
+          resolvedRouteRef.current = current
+            ? `/attempts/${current.id}/result`
+            : "/quiz";
+        }
       })();
     } else {
-      if (groupId) {
-        resolvedRouteRef.current = `${nextRoute}${nextRoute.includes("?") ? "&" : "?"}groupId=${groupId}`;
-      } else {
-        resolvedRouteRef.current = nextRoute;
-      }
+      let route = nextRoute;
+      const params = new URLSearchParams();
+      if (groupId) params.set("groupId", groupId);
+      if (attemptId) params.set("attemptId", attemptId);
+      const queryStr = params.toString();
+      
+      resolvedRouteRef.current = queryStr ? `${route}${route.includes("?") ? "&" : "?"}${queryStr}` : route;
     }
   }, [nextRoute]);
 
