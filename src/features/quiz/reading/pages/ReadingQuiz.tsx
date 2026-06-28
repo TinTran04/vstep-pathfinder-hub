@@ -268,11 +268,13 @@ const ReadingQuiz = () => {
   const getQuestionStatuses = (): Record<number, "answered" | "unanswered"> => {
     const statuses: Record<number, "answered" | "unanswered"> = {};
     let questionNumber = 1;
-    sections.forEach(() => {
-      for (let i = 1; i <= 10; i++) {
-        statuses[questionNumber] = Object.keys(answers).length > 0 ? "answered" : "unanswered";
+    sections.forEach((section) => {
+      section.questions.forEach((question) => {
+        statuses[questionNumber] = answers[question.questionId] !== undefined
+          ? "answered"
+          : "unanswered";
         questionNumber++;
-      }
+      });
     });
     return statuses;
   };

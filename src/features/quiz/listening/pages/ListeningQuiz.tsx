@@ -365,9 +365,10 @@ const ListeningQuiz = () => {
     let questionNumber = 1;
 
     sections.forEach((sec) => {
-      sec.questions.forEach(() => {
-        const answered = Object.keys(answers).length > 0;
-        statuses[questionNumber] = answered ? "answered" : "unanswered";
+      sec.questions.forEach((question) => {
+        statuses[questionNumber] = answers[question.questionId] !== undefined
+          ? "answered"
+          : "unanswered";
         questionNumber++;
       });
     });

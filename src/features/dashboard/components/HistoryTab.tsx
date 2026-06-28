@@ -74,9 +74,12 @@ const HistoryTab = () => {
     fetchHistory(page);
   }, [page]);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, remainingSeconds: number = 0) => {
     switch (status) {
       case "in_progress":
+        if (remainingSeconds > 0) {
+          return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"><Activity size={12} className="mr-1 animate-pulse"/> Đang làm</Badge>;
+        }
         return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100 border-none"><XCircle size={12} className="mr-1"/> Đã hủy</Badge>;
       case "submitted":
       case "scored":
@@ -123,24 +126,36 @@ const HistoryTab = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-foreground">{item.title}</h3>
-                      {getStatusBadge(item.status)}
+                      {getStatusBadge(item.status, item.remainingSeconds)}
                     </div>
                     <div className="text-sm text-muted-foreground flex items-center gap-4 flex-wrap">
                       <span>{new Date(item.startedAt).toLocaleDateString("vi-VN")}</span>
                       <span className="flex items-center gap-1">
-                        {item.skills.map((skill) => (
-                          <span key={skill} className="px-1.5 py-0.5 rounded-md bg-muted text-xs capitalize">{skill}</span>
-                        ))}
+                        {item.type === "mock_test" ? (
+                          <span className="px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs font-medium">
+                            Mock Test
+                          </span>
+                        ) : (
+                          item.skills.map((skill) => (
+                            <span key={skill} className="px-1.5 py-0.5 rounded-md bg-muted text-xs capitalize">
+                              {skill}
+                            </span>
+                          ))
+                        )}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
                     {item.status === "in_progress" ? (
-                      <span className="text-sm text-muted-foreground italic">Đã hủy bỏ</span>
+                      item.remainingSeconds > 0 ? (
+                        <span className="text-sm text-blue-600 italic">Đang diễn ra</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground italic">Đã hủy bỏ</span>
+                      )
                     ) : (
                       <>
-                        <Button variant="secondary" size="sm" onClick={() => navigate(`/attempts/${item.attemptId}/review`)}>
+                        <Button variant="secondary" size="sm" onClick={() => navigate(`/attempts/${item.attemptId}/review?from=history`)}>
                           Xem lại
                         </Button>
                         <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteConfirm(item.attemptId)}>

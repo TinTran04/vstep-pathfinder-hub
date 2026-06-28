@@ -12,7 +12,7 @@ interface Props {
 
 const WritingReview = ({ review }: Props) => {
   const text = review.essayText || "";
-  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const wordCount = countEnglishWords(text);
   
   const activeFb = normalizeWritingFeedback(review.feedbackJson, review.score);
 
@@ -160,5 +160,9 @@ const WritingReview = ({ review }: Props) => {
     </VocabularyContextMenu>
   );
 };
+
+function countEnglishWords(value: string): number {
+  return value.match(/\b[A-Za-z][A-Za-z']+\b/g)?.length ?? 0;
+}
 
 export default WritingReview;

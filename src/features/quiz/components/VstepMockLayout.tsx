@@ -16,6 +16,7 @@ interface VstepMockLayoutProps {
   onQuestionSelect?: (questionNum: number) => void;
   children: React.ReactNode;
   questionStatuses?: Record<number, "answered" | "unanswered" | "reviewing">;
+  attemptId?: string | number;
 }
 
 const formatTime = (seconds: number): string => {
@@ -37,6 +38,7 @@ export const VstepMockLayout: React.FC<VstepMockLayoutProps> = ({
   onQuestionSelect,
   children,
   questionStatuses = {},
+  attemptId,
 }) => {
   const [showExitDialog, setShowExitDialog] = useState(false);
 
@@ -124,6 +126,7 @@ export const VstepMockLayout: React.FC<VstepMockLayoutProps> = ({
         open={showExitDialog}
         onOpenChange={setShowExitDialog}
         onConfirm={handleExitConfirm}
+        attemptId={attemptId}
       />
     </div>
   );

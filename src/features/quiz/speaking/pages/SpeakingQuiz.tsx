@@ -133,6 +133,7 @@ const SpeakingQuiz = () => {
   const [aiFeedback, setAiFeedback] = useState<Record<number, FeedbackState>>({});
   const [pollingStatus, setPollingStatus] = useState("");
   const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [mockSpeakingExamId, setMockSpeakingExamId] = useState<number | null>(null);
 
   const groupId = searchParams.get("groupId") ?? "";
 
@@ -146,6 +147,17 @@ const SpeakingQuiz = () => {
           if (!active) return;
           if (res) {
             setAttemptId(String(res.attemptId));
+
+            if (res.draftStateJson) {
+              try {
+                const draft = JSON.parse(res.draftStateJson);
+                if (draft._meta?.selectedExamIds?.speaking) {
+                  setMockSpeakingExamId(draft._meta.selectedExamIds.speaking);
+                }
+              } catch (e) {
+                console.error("Failed to parse draft state for speaking exam id", e);
+              }
+            }
 
             // Use mock parts for mock test (no need to fetch exams)
             setPartsData(mockParts);
@@ -497,7 +509,13 @@ const SpeakingQuiz = () => {
           const partId = Number(partIdStr);
           setPollingStatus(`Đang tải Part ${partId}...`);
           try {
-             const permanentUrl = await attemptsService.uploadSpeakingRecording(attemptId!, partId, blob);
+             let permanentUrl = "";
+             if (IS_API_MODE && mockSpeakingExamId) {
+                const res = await speakingApiService.uploadAudio(mockSpeakingExamId, blob);
+                permanentUrl = res.uploadUrl;
+             } else {
+                permanentUrl = await attemptsService.uploadSpeakingRecording(attemptId!, partId, blob);
+             }
              uploadedRecordings[partId] = permanentUrl;
           } catch(e) {
              console.error("Failed to upload part", partId);

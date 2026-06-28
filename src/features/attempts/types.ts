@@ -137,6 +137,7 @@ export interface SectionReviewResponse {
   audioUrl: string | null;
   displayOrder: number;
   questions: QuestionReviewResponse[];
+  skillType?: string; // Set by BE composite exam builder ("listening" | "reading" | "writing" | "speaking")
 }
 
 export interface WritingReviewResponse {
@@ -171,12 +172,15 @@ export interface AttemptReviewResponse {
   examTitle: string;
   status: string;
   totalScore: number | null;
+  overallScore: number | null;
   totalQuestions: number | null;
   correctCount: number | null;
   durationUsedSeconds: number | null;
   startedAt: string;
   submittedAt: string | null;
+  completedAt: string | null;
   sections: SectionReviewResponse[];
   writingReview: WritingReviewResponse | null;
   speakingReview: SpeakingReviewResponse | null;
+  speakingReviews: SpeakingReviewResponse[]; // All speaking parts for mock test
 }

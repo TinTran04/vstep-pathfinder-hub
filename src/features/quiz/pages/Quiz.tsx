@@ -362,7 +362,6 @@ const Quiz = () => {
         <AnimatePresence>
           {selectedMode === "practice" && !selectedSkill && (
             <motion.div
-              ref={skillSectionRef}
               key="skill-selection"
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
@@ -370,7 +369,7 @@ const Quiz = () => {
               transition={{ duration: 0.35, ease: "easeOut" }}
               className="space-y-8"
             >
-              <div className="text-center max-w-xl mx-auto space-y-2">
+              <div ref={skillSectionRef} className="text-center max-w-xl mx-auto space-y-2">
                 <h2 className="text-2xl font-bold text-foreground">Chọn kỹ năng muốn luyện</h2>
                 <p className="text-muted-foreground text-sm">
                   Bạn có thể tạm dừng, tua audio và xem giải thích sau khi làm bài.

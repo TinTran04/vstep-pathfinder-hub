@@ -1,7 +1,7 @@
 // src/features/attempts/pages/AttemptResult.tsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Trophy, Headphones, BookOpen, Pen, Mic, ArrowRight, BookOpenCheck, CheckCircle2, ChevronRight } from "lucide-react";
+import { Trophy, Headphones, BookOpen, Pen, Mic, BookOpenCheck, CheckCircle2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,11 +24,20 @@ const skillConfig = [
   { key: "speaking" as const, label: "Speaking", icon: Mic, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
 ];
 
+type SkillDisplayScore = {
+  scoreVal: number;
+  label: string;
+  details: string;
+  isPending?: boolean;
+};
+
 export const AttemptResult = () => {
   const { attemptId } = useParams<{ attemptId: string }>();
   const navigate = useNavigate();
   const [attempt, setAttempt] = useState<AttemptReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const backLabel = "Dashboard";
+  const backPath = "/dashboard";
 
   useEffect(() => {
     if (!attemptId) {
@@ -66,8 +75,8 @@ export const AttemptResult = () => {
             <h2 className="text-2xl font-bold text-foreground">Không tìm thấy kết quả bài làm</h2>
             <p className="text-sm text-muted-foreground">Vui lòng kiểm tra lại đường dẫn hoặc quay về trang chủ luyện thi.</p>
           </div>
-          <Button className="gradient-primary text-primary-foreground w-full" onClick={() => navigate("/quiz")}>
-            Quay lại luyện đề
+          <Button className="gradient-primary text-primary-foreground w-full" onClick={() => navigate(backPath)}>
+            {backLabel}
           </Button>
         </Card>
       </div>
@@ -77,9 +86,9 @@ export const AttemptResult = () => {
   const isPractice = attempt.skillType && attempt.skillType !== "mock_test";
 
   // Calculate scores for rendering based on AttemptReviewResponse
-  const getSkillDisplayScore = (skillName: Skill) => {
+  const getSkillDisplayScore = (skillName: Skill): SkillDisplayScore | null => {
     if (skillName === "listening") {
-      const listeningSections = attempt.sections.filter(s => s.audioUrl);
+      const listeningSections = attempt.sections.filter(s => s.skillType === "listening" || (!s.skillType && s.audioUrl));
       if (listeningSections.length === 0) return null;
       let totalQuestions = 0;
       let correct = 0;
@@ -98,7 +107,7 @@ export const AttemptResult = () => {
     }
 
     if (skillName === "reading") {
-      const readingSections = attempt.sections.filter(s => s.passageText);
+      const readingSections = attempt.sections.filter(s => s.skillType === "reading" || (!s.skillType && s.passageText && !s.audioUrl));
       if (readingSections.length === 0) return null;
       let totalQuestions = 0;
       let correct = 0;
@@ -137,7 +146,8 @@ export const AttemptResult = () => {
         return {
           scoreVal: 0,
           label: "Đang chấm...",
-          details: "Chờ AI xử lý"
+          details: "Chờ AI xử lý",
+          isPending: true
         };
       }
       return null;
@@ -164,7 +174,15 @@ export const AttemptResult = () => {
         return {
           scoreVal: 0,
           label: "Đang chấm...",
-          details: "Chờ AI xử lý"
+          details: "Chờ AI xử lý",
+          isPending: true
+        };
+      }
+      if (!isPractice) {
+        return {
+          scoreVal: 0,
+          label: "Không nộp bài",
+          details: "0.0/10.0"
         };
       }
       return null;
@@ -173,11 +191,22 @@ export const AttemptResult = () => {
     return null;
   };
 
+  const skillScores: Record<Skill, SkillDisplayScore | null> = {
+    listening: getSkillDisplayScore("listening"),
+    reading: getSkillDisplayScore("reading"),
+    writing: getSkillDisplayScore("writing"),
+    speaking: getSkillDisplayScore("speaking"),
+  };
+
+  const hasPendingAiScore = Boolean(skillScores.writing?.isPending || skillScores.speaking?.isPending);
+
   const calculateOverallScore = () => {
-     const listening = getSkillDisplayScore("listening")?.scoreVal ?? 0;
-     const reading = getSkillDisplayScore("reading")?.scoreVal ?? 0;
-     const writing = getSkillDisplayScore("writing")?.scoreVal ?? 0;
-     const speaking = getSkillDisplayScore("speaking")?.scoreVal ?? 0;
+     if (hasPendingAiScore) return null;
+
+     const listening = skillScores.listening?.scoreVal ?? 0;
+     const reading = skillScores.reading?.scoreVal ?? 0;
+     const writing = skillScores.writing?.scoreVal ?? 0;
+     const speaking = skillScores.speaking?.scoreVal ?? 0;
      return (listening + reading + writing + speaking) / 4;
   };
 
@@ -185,18 +214,11 @@ export const AttemptResult = () => {
   
   // Calculate level based on overallScore
   let level = "A2";
-  if (overallScore >= 8.5) level = "C1";
-  else if (overallScore >= 6.0) level = "B2";
-  else if (overallScore >= 4.0) level = "B1";
+  if (overallScore !== null && overallScore >= 8.5) level = "C1";
+  else if (overallScore !== null && overallScore >= 6.0) level = "B2";
+  else if (overallScore !== null && overallScore >= 4.0) level = "B1";
 
   const levelInfo = LEVEL_DESCRIPTIONS[level] || LEVEL_DESCRIPTIONS["A2"];
-  const strengths: string[] = ["Luyện tập đều đặn"]; // Default placeholder
-  const weaknesses: string[] = ["Cần luyện thêm kỹ năng viết"]; // Default placeholder
-  const recommendedPractice: string[] = [
-    "Làm thêm 3 đề Listening mỗi tuần.",
-    "Thực hành viết essay theo chủ đề."
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -212,8 +234,8 @@ export const AttemptResult = () => {
             </Badge>
           </div>
           <div>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/quiz")} className="text-muted-foreground hover:text-foreground">
-              Về trang luyện thi
+            <Button variant="ghost" size="sm" onClick={() => navigate(backPath)} className="text-muted-foreground hover:text-foreground">
+              {backLabel}
             </Button>
           </div>
         </div>
@@ -243,16 +265,23 @@ export const AttemptResult = () => {
               <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Điểm số trung bình</p>
               <div className="mt-2 flex items-baseline gap-1">
                 <span className="text-6xl font-black text-foreground">
-                  {overallScore !== undefined ? overallScore.toFixed(1) : "0.0"}
+                  {overallScore === null ? "Chờ AI" : overallScore.toFixed(1)}
                 </span>
-                <span className="text-lg text-muted-foreground font-bold">/ 10</span>
+                {overallScore !== null && <span className="text-lg text-muted-foreground font-bold">/ 10</span>}
               </div>
 
               {/* Band level badge */}
-              <div className={`mt-6 px-4 py-1.5 rounded-full border ${levelInfo.color} ${levelInfo.bg} ${levelInfo.border} text-sm font-extrabold flex items-center gap-1.5`}>
-                <CheckCircle2 size={16} />
-                <span>Bậc VSTEP: {levelInfo.badge}</span>
-              </div>
+              {overallScore === null ? (
+                <div className="mt-6 px-4 py-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400 text-sm font-extrabold flex items-center gap-1.5">
+                  <CheckCircle2 size={16} />
+                  <span>Đang chờ chấm AI</span>
+                </div>
+              ) : (
+                <div className={`mt-6 px-4 py-1.5 rounded-full border ${levelInfo.color} ${levelInfo.bg} ${levelInfo.border} text-sm font-extrabold flex items-center gap-1.5`}>
+                  <CheckCircle2 size={16} />
+                  <span>Bậc VSTEP: {levelInfo.badge}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -261,17 +290,19 @@ export const AttemptResult = () => {
             <CardContent className="p-8 space-y-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <BookOpenCheck className="text-primary" size={20} />
-                <span>Phân tích cấp độ bậc {level || "A2"}</span>
+                <span>{overallScore === null ? "Đang chờ hoàn tất chấm AI" : `Phân tích cấp độ bậc ${level || "A2"}`}</span>
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {levelInfo.desc}
+                {overallScore === null ? "Kết quả tổng hợp sẽ hiển thị sau khi Writing và Speaking được chấm xong." : levelInfo.desc}
               </p>
-              <div className="bg-muted/40 p-4 rounded-xl space-y-2 border border-border/50">
-                <span className="text-xs font-semibold text-accent uppercase tracking-wider block">Yêu cầu đạt chuẩn</span>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Để tăng bậc lên cấp tiếp theo, bạn cần tiếp tục luyện tập đồng đều cả 4 kỹ năng và đặc biệt chú ý khắc phục các kỹ năng yếu có điểm số dưới 6.0.
-                </p>
-              </div>
+              {overallScore !== null && (
+                <div className="bg-muted/40 p-4 rounded-xl space-y-2 border border-border/50">
+                  <span className="text-xs font-semibold text-accent uppercase tracking-wider block">Yêu cầu đạt chuẩn</span>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Để tăng bậc lên cấp tiếp theo, bạn cần tiếp tục luyện tập đồng đều cả 4 kỹ năng và đặc biệt chú ý khắc phục các kỹ năng yếu có điểm số dưới 6.0.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -281,7 +312,7 @@ export const AttemptResult = () => {
           <h2 className="text-xl font-extrabold text-foreground">Điểm số theo kỹ năng</h2>
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
             {skillConfig.map((skill) => {
-              const scoreObj = getSkillDisplayScore(skill.key);
+              const scoreObj = skillScores[skill.key];
               const Icon = skill.icon;
               
               if (!scoreObj) {
@@ -326,70 +357,11 @@ export const AttemptResult = () => {
           </div>
         </div>
 
-        {/* Strengths & Weaknesses analysis */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Strengths */}
-          <Card className="border-border bg-card shadow-md">
-            <CardContent className="p-6 space-y-4">
-              <h3 className="text-base font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={18} />
-                <span>Điểm mạnh (Strengths)</span>
-              </h3>
-              <ul className="space-y-2.5">
-                {strengths.map((str, idx) => (
-                  <li key={idx} className="text-sm text-muted-foreground leading-relaxed flex items-start gap-2">
-                    <span className="text-emerald-500 font-bold mt-0.5">•</span>
-                    <span>{str}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-
-          {/* Weaknesses */}
-          <Card className="border-border bg-card shadow-md">
-            <CardContent className="p-6 space-y-4">
-              <h3 className="text-base font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                <Trophy size={18} className="rotate-180" />
-                <span>Điểm cần cải thiện (Weaknesses)</span>
-              </h3>
-              <ul className="space-y-2.5">
-                {weaknesses.map((weak, idx) => (
-                  <li key={idx} className="text-sm text-muted-foreground leading-relaxed flex items-start gap-2">
-                    <span className="text-amber-500 font-bold mt-0.5">•</span>
-                    <span>{weak}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recommended Practice */}
-        <Card className="border-border bg-gradient-to-r from-card to-muted/20 shadow-md">
-          <CardContent className="p-6 space-y-4">
-            <h3 className="text-base font-bold text-primary flex items-center gap-2">
-              <ArrowRight size={18} />
-              <span>Gợi ý lộ trình luyện tập tiếp theo</span>
-            </h3>
-            <div className="grid sm:grid-cols-2 gap-4">
-              {recommendedPractice.map((rec, idx) => (
-                <div key={idx} className="flex items-start gap-3 bg-background/50 border border-border p-3.5 rounded-xl">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                    {idx + 1}
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{rec}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
           <Button 
             className="gradient-primary text-primary-foreground px-8 py-6 rounded-xl font-bold flex items-center gap-2 shadow-lg w-full sm:w-auto"
-            onClick={() => navigate(`/attempts/${attempt.attemptId}/review`)}
+            onClick={() => navigate(`/attempts/${attempt.attemptId}/review?from=history`)}
           >
             <span>Xem lại bài làm chi tiết</span>
             <ChevronRight size={16} />

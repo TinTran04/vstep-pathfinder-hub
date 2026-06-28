@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, Headphones, BookOpen, Pen, Mic } from "lucide-react";
+import { Headphones, BookOpen, Pen, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,8 @@ const AttemptReview = () => {
   const { attemptId } = useParams<{ attemptId: string }>();
   const [attempt, setAttempt] = useState<AttemptReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const backLabel = "Dashboard";
+  const backPath = "/dashboard";
 
   useEffect(() => {
     if (!attemptId) {
@@ -63,18 +65,20 @@ const AttemptReview = () => {
         <Card className="w-full max-w-md border-border text-center p-8 space-y-4">
           <h2 className="text-2xl font-bold text-foreground">Không tìm thấy kết quả bài làm</h2>
           <p className="text-sm text-muted-foreground">Vui lòng kiểm tra lại đường dẫn hoặc quay về trang chủ.</p>
-          <Button className="gradient-primary text-primary-foreground w-full" onClick={() => navigate("/quiz")}>
-            Quay lại luyện đề
+          <Button className="gradient-primary text-primary-foreground w-full" onClick={() => navigate(backPath)}>
+            {backLabel}
           </Button>
         </Card>
       </div>
     );
   }
 
-  const hasListening = attempt.sections.some(s => s.audioUrl);
-  const hasReading = attempt.sections.some(s => s.passageText);
+  const listeningSections = attempt.sections.filter(s => s.skillType === "listening" || (!s.skillType && s.audioUrl));
+  const readingSections = attempt.sections.filter(s => s.skillType === "reading" || (!s.skillType && s.passageText && !s.audioUrl));
+  const hasListening = listeningSections.length > 0;
+  const hasReading = readingSections.length > 0;
   const hasWriting = !!attempt.writingReview;
-  const hasSpeaking = !!attempt.speakingReview;
+  const hasSpeaking = !!attempt.speakingReview || (attempt.speakingReviews && attempt.speakingReviews.length > 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,11 +95,11 @@ const AttemptReview = () => {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate(`/attempts/${attempt.attemptId}/result`)} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => navigate(`/attempts/${attempt.attemptId}/result?from=history`)} className="gap-1.5">
               Xem điểm số
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/quiz")}>
-              <ArrowLeft size={16} className="mr-1" /> Trang luyện thi
+            <Button variant="ghost" size="sm" onClick={() => navigate(backPath)}>
+              {backLabel}
             </Button>
           </div>
         </div>
@@ -134,7 +138,7 @@ const AttemptReview = () => {
           <div className="mt-4">
             <TabsContent value="listening">
               {hasListening ? (
-                <ListeningReview sections={attempt.sections.filter(s => s.audioUrl)} status={attempt.status} />
+                <ListeningReview sections={listeningSections} status={attempt.status} />
               ) : (
                 <div className="text-center py-12 text-muted-foreground bg-card border border-border rounded-2xl">
                   <Headphones size={32} className="mx-auto mb-3 opacity-30 animate-bounce" />
@@ -145,7 +149,7 @@ const AttemptReview = () => {
 
             <TabsContent value="reading">
               {hasReading ? (
-                <ReadingReview sections={attempt.sections.filter(s => s.passageText)} status={attempt.status} />
+                <ReadingReview sections={readingSections} status={attempt.status} />
               ) : (
                 <div className="text-center py-12 text-muted-foreground bg-card border border-border rounded-2xl">
                   <BookOpen size={32} className="mx-auto mb-3 opacity-30 animate-bounce" />

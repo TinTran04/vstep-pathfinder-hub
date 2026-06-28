@@ -29,6 +29,8 @@ import { ExitConfirmDialog } from "@/features/quiz/components/ExitConfirmDialog"
 // ─── Config ──────────────────────────────────────────────────
 const IS_API_MODE = import.meta.env.VITE_DATA_SOURCE === "api";
 const TOTAL_TIME = 60 * 60;
+const countEnglishWords = (value: string): number =>
+  value.match(/\b[A-Za-z][A-Za-z']+\b/g)?.length ?? 0;
 
 // ─── Type helpers ────────────────────────────────────────────
 
@@ -355,7 +357,7 @@ const WritingQuiz = () => {
         // Mock mode
         const task = tasks[taskIndex];
         const text = writings[task.id] ?? "";
-        const wc = text.trim() ? text.trim().split(/\s+/).length : 0;
+        const wc = countEnglishWords(text);
         const errors = findErrors(text);
         const { writingFeedbackAITemplates } = await import("../mocks/writing.mock");
         let fb: MockFeedback;
@@ -385,7 +387,7 @@ const WritingQuiz = () => {
       try {
         const draftState = JSON.stringify({
           _meta: { mode: "mock_test", currentSkill: "writing" },
-          writing: { answers: writings }
+          writing: writings
         });
         await attemptsApiService.autosaveMockTest(
           attemptId,
@@ -459,7 +461,7 @@ const WritingQuiz = () => {
 
   const task = tasks[currentTask];
   const currentText = writings[task.id] ?? "";
-  const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
+  const wordCount = countEnglishWords(currentText);
   const meetsMinimum = wordCount >= task.minWords;
 
   // ── Mock test transition ──────────────────────────────────────
@@ -477,7 +479,7 @@ const WritingQuiz = () => {
   if (submitted) {
     const activeTask = tasks[feedbackTask];
     const activeText = writings[activeTask.id] ?? "";
-    const activeWc = activeText.trim() ? activeText.trim().split(/\s+/).length : 0;
+    const activeWc = countEnglishWords(activeText);
     const activeFb = feedbacks[feedbackTask];
     const hasFeedback = !!activeFb;
 
