@@ -21,6 +21,8 @@ public static class ServiceCollectionExtensions
         services.Configure<MyMemorySettings>(configuration.GetSection("MyMemory"));
         services.Configure<PayOsSettings>(configuration.GetSection("PayOs"));
         services.Configure<OpenRouterSettings>(configuration.GetSection("OpenRouter"));
+        services.Configure<GeminiSettings>(configuration.GetSection("Gemini"));
+        services.Configure<DeepgramSettings>(configuration.GetSection("Deepgram"));
         services.Configure<AiSettings>(configuration.GetSection("Ai"));
         services.Configure<BaiSettings>(configuration.GetSection("Bai"));
 
@@ -103,14 +105,15 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(90);
         });
 
-        var baiSettings = configuration.GetSection("Bai").Get<BaiSettings>() ?? new BaiSettings();
-        if (!string.IsNullOrWhiteSpace(baiSettings.ApiKey) && !string.IsNullOrWhiteSpace(baiSettings.Model))
+        services.AddHttpClient<IAIProvider, BusinessLogicLayer.Services.Implements.Providers.GeminiProvider>(client =>
         {
-            services.AddHttpClient<IAIProvider, BusinessLogicLayer.Services.Implements.Providers.BaiProvider>(client =>
-            {
-                client.Timeout = TimeSpan.FromSeconds(90);
-            });
-        }
+            client.Timeout = TimeSpan.FromSeconds(90);
+        });
+
+        services.AddHttpClient<ISpeechToTextService, DeepgramSttService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+        });
 
         services.AddHttpClient<IAIGradingService, AIGradingService>(client =>
         {

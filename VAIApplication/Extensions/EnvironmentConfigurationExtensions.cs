@@ -26,6 +26,15 @@ public static class EnvironmentConfigurationExtensions
         SetIfPresent(configuration, "OPENROUTER_SITE_URL", "OpenRouter:SiteUrl");
         SetIfPresent(configuration, "OPENROUTER_APP_NAME", "OpenRouter:AppName");
         SetIfPresent(configuration, "OPENROUTER_MAX_AUDIO_BYTES", "OpenRouter:MaxAudioBytes");
+        SetIfPresent(configuration, "GEMINI_API_KEY", "Gemini:ApiKey");
+        SetIfPresent(configuration, "GEMINI_MODEL", "Gemini:Model");
+        SetIfPresent(configuration, "GEMINI_BASE_URL", "Gemini:BaseUrl");
+        SetIfPresent(configuration, "GEMINI_MAX_OUTPUT_TOKENS", "Gemini:MaxOutputTokens");
+        SetIfPresent(configuration, "STT_PRIMARY_PROVIDER", "Ai:SttPrimaryProvider");
+        SetIfPresent(configuration, "SPEAKING_USE_STT", "Ai:SpeakingUseStt");
+        SetIfPresent(configuration, "DEEPGRAM_API_KEY", "Deepgram:ApiKey");
+        SetIfPresent(configuration, "DEEPGRAM_MODEL", "Deepgram:Model");
+        SetIfPresent(configuration, "DEEPGRAM_BASE_URL", "Deepgram:BaseUrl");
         SetIfPresent(configuration, "PAYOS_CLIENT_ID", "PayOs:ClientId");
         SetIfPresent(configuration, "PAYOS_API_KEY", "PayOs:ApiKey");
         SetIfPresent(configuration, "PAYOS_CHECKSUM_KEY", "PayOs:ChecksumKey");
@@ -38,9 +47,6 @@ public static class EnvironmentConfigurationExtensions
 
         SetIfPresent(configuration, "AI_PRIMARY_PROVIDER", "Ai:PrimaryProvider");
         SetIfPresent(configuration, "AI_FALLBACK_PROVIDER", "Ai:FallbackProvider");
-        SetIfPresent(configuration, "BAI_API_KEY", "Bai:ApiKey");
-        SetIfPresent(configuration, "BAI_BASE_URL", "Bai:BaseUrl");
-        SetIfPresent(configuration, "BAI_MODEL", "Bai:Model");
 
         return configuration;
     }
