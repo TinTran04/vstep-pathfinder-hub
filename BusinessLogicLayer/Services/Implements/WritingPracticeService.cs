@@ -79,7 +79,18 @@ public class WritingPracticeService : IWritingPracticeService
 
         try
         {
-            var scoreResult = await _aiGradingService.GradeWritingAsync(user.UserId, submission.WritingSubmissionId, submission.Prompt, submission.EssayText);
+            var fullPrompt = exam.Description ?? "";
+            if (exam.Sections != null && exam.Sections.Any())
+            {
+                var sectionPrompts = exam.Sections.Select(s => $"{s.Title}\n{s.Instruction}\n{s.PassageText}".Trim());
+                fullPrompt += "\n\nExam Details:\n---\n" + string.Join("\n---\n", sectionPrompts.Where(p => !string.IsNullOrEmpty(p)));
+            }
+
+            var combinedPrompt = string.IsNullOrWhiteSpace(submission.Prompt) 
+                ? fullPrompt 
+                : $"{fullPrompt}\n\nSubmitted Task Prompt:\n{submission.Prompt}";
+
+            var scoreResult = await _aiGradingService.GradeWritingAsync(user.UserId, submission.WritingSubmissionId, combinedPrompt.Trim(), submission.EssayText);
             submission.Score = scoreResult.Score;
             submission.Feedback = scoreResult.Feedback;
             submission.FeedbackJson = scoreResult.FeedbackJson;

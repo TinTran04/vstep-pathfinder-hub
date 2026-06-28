@@ -34,7 +34,7 @@ public class OpenRouterProvider : IAIProvider
             request.Model = _settings.Model;
         }
 
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(_settings.BaseUrl), "api/v1/chat/completions"))
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, new Uri(GetBaseUri(), "chat/completions"))
         {
             Content = JsonContent.Create(request, options: JsonOptions)
         };
@@ -88,5 +88,20 @@ public class OpenRouterProvider : IAIProvider
         }
 
         return result;
+    }
+
+    private Uri GetBaseUri()
+    {
+        var baseUrl = string.IsNullOrWhiteSpace(_settings.BaseUrl)
+            ? "https://openrouter.ai/"
+            : _settings.BaseUrl.Trim();
+
+        baseUrl = baseUrl.TrimEnd('/');
+        if (!baseUrl.EndsWith("/api/v1", StringComparison.OrdinalIgnoreCase))
+        {
+            baseUrl += "/api/v1";
+        }
+
+        return new Uri(baseUrl + "/");
     }
 }

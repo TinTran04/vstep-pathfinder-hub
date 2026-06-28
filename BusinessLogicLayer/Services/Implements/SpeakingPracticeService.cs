@@ -1,10 +1,14 @@
 using AutoMapper;
+using BusinessLogicLayer.Core.Settings;
 using BusinessLogicLayer.DTOs.AI;
 using BusinessLogicLayer.DTOs.Speaking;
 using BusinessLogicLayer.Services.Interfaces;
 using DataAccessLayer.Entities;
 using DataAccessLayer.UoW;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace BusinessLogicLayer.Services.Implements;
 
@@ -13,23 +17,32 @@ public class SpeakingPracticeService : ISpeakingPracticeService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IR2StorageService _r2StorageService;
+    private readonly ISpeechToTextService _speechToTextService;
     private readonly IAIGradingService _aiGradingService;
     private readonly IRewardService _rewardService;
+    private readonly AiSettings _aiSettings;
+    private readonly DeepgramSettings _deepgramSettings;
     private readonly ILogger<SpeakingPracticeService> _logger;
 
     public SpeakingPracticeService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         IR2StorageService r2StorageService,
+        ISpeechToTextService speechToTextService,
         IAIGradingService aiGradingService,
         IRewardService rewardService,
+        IOptions<AiSettings> aiOptions,
+        IOptions<DeepgramSettings> deepgramOptions,
         ILogger<SpeakingPracticeService> logger)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _r2StorageService = r2StorageService;
+        _speechToTextService = speechToTextService;
         _aiGradingService = aiGradingService;
         _rewardService = rewardService;
+        _aiSettings = aiOptions.Value;
+        _deepgramSettings = deepgramOptions.Value;
         _logger = logger;
     }
 
@@ -100,18 +113,57 @@ public class SpeakingPracticeService : ISpeakingPracticeService
 
         try
         {
-            var gradingAudioUrl = await _r2StorageService.CreateReadUrlAsync(submission.AudioObjectKey);
+            var fullPrompt = exam.Description ?? "";
+            if (exam.Sections != null && exam.Sections.Any())
+            {
+                var sectionPrompts = exam.Sections.Select(s => $"{s.Title}\n{s.Instruction}\n{s.PassageText}".Trim());
+                fullPrompt += "\n\nExam Details:\n---\n" + string.Join("\n---\n", sectionPrompts.Where(p => !string.IsNullOrEmpty(p)));
+            }
+
+            if (!_aiSettings.SpeakingUseStt)
+            {
+                throw new InvalidOperationException("Speaking STT grading is disabled.");
+            }
+
+            SttResult sttResult;
+            try
+            {
+                await using var audioStream = await _r2StorageService.DownloadObjectStreamAsync(submission.AudioObjectKey);
+                sttResult = await _speechToTextService.TranscribeAsync(
+                    audioStream,
+                    InferContentType(submission.AudioObjectKey, submission.AudioUrl));
+                submission.Transcript = sttResult.Transcript;
+                await LogSttUsageAsync(user.UserId, submission.SpeakingSubmissionId, "success", null);
+            }
+            catch (Exception sttException)
+            {
+                await LogSttUsageAsync(user.UserId, submission.SpeakingSubmissionId, "failed", sttException.Message);
+                throw new InvalidOperationException("Speech-to-text provider failed.", sttException);
+            }
+
+            if (!HasMinimumEnglishWords(sttResult.Transcript))
+            {
+                var invalidResult = BuildInvalidSpeakingAudioResult(sttResult.Transcript);
+                submission.Score = invalidResult.Score;
+                submission.Feedback = invalidResult.Feedback;
+                submission.FeedbackJson = invalidResult.FeedbackJson;
+                submission.Transcript = sttResult.Transcript;
+                submission.Status = "scored";
+                await _unitOfWork.SaveChangesAsync();
+                return _mapper.Map<SpeakingSubmissionResponse>(submission);
+            }
+
             var scoreResult = await _aiGradingService.GradeSpeakingAsync(
                 user.UserId,
                 submission.SpeakingSubmissionId,
-                exam.Description,
-                null,
-                gradingAudioUrl,
-                submission.AudioObjectKey);
+                fullPrompt.Trim(),
+                sttResult.Transcript);
             submission.Score = scoreResult.Score;
             submission.Feedback = BuildSpeakingFeedback(scoreResult);
             submission.FeedbackJson = scoreResult.FeedbackJson;
-            submission.Transcript = scoreResult.Transcript;
+            submission.Transcript = string.IsNullOrWhiteSpace(scoreResult.Transcript)
+                ? sttResult.Transcript
+                : scoreResult.Transcript;
             submission.Status = "scored";
         }
         catch (Exception exception)
@@ -123,7 +175,7 @@ public class SpeakingPracticeService : ISpeakingPracticeService
                 exam.ExamId,
                 submission.AudioObjectKey);
             submission.Status = "failed";
-            submission.Feedback = "Hệ thống chấm điểm AI đang tạm thời không khả dụng. Vui lòng thử lại sau.";
+            submission.Feedback = "Hệ thống xử lý giọng nói đang tạm lỗi. Vui lòng thử lại sau.";
         }
 
         await _unitOfWork.SaveChangesAsync();
@@ -238,5 +290,110 @@ public class SpeakingPracticeService : ISpeakingPracticeService
         var combined = $"{feedback}\nTranscript: {transcript}".Trim();
 
         return combined.Length <= 1800 ? combined : combined[..1800];
+    }
+
+    private async Task LogSttUsageAsync(int userId, int submissionId, string status, string? errorMessage)
+    {
+        try
+        {
+            await _unitOfWork.AiUsageLogs.AddAsync(new AiUsageLog
+            {
+                UserId = userId,
+                SubmissionId = submissionId,
+                SkillType = "speaking",
+                ActionType = "stt",
+                PrimaryProvider = _aiSettings.SttPrimaryProvider,
+                ProviderUsed = "DEEPGRAM",
+                ModelUsed = string.IsNullOrWhiteSpace(_deepgramSettings.Model) ? "nova-3" : _deepgramSettings.Model.Trim(),
+                FallbackUsed = false,
+                Status = status,
+                ErrorMessage = string.IsNullOrWhiteSpace(errorMessage)
+                    ? null
+                    : errorMessage.Length <= 500 ? errorMessage : errorMessage[..500]
+            });
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to save STT usage log.");
+        }
+    }
+
+    private static bool HasMinimumEnglishWords(string? transcript)
+    {
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            return false;
+        }
+
+        return Regex.Matches(transcript, @"\b[A-Za-z][A-Za-z']+\b").Count >= 3;
+    }
+
+    private static string InferContentType(string? audioObjectKey, string? audioUrl)
+    {
+        var source = !string.IsNullOrWhiteSpace(audioObjectKey) ? audioObjectKey : audioUrl ?? string.Empty;
+        var extension = Path.GetExtension(source.Split('?', '#')[0]).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".wav" => "audio/wav",
+            ".mp3" => "audio/mpeg",
+            ".m4a" => "audio/mp4",
+            ".mp4" => "audio/mp4",
+            ".ogg" => "audio/ogg",
+            ".oga" => "audio/ogg",
+            ".flac" => "audio/flac",
+            _ => "audio/webm"
+        };
+    }
+
+    private static AiScoreResult BuildInvalidSpeakingAudioResult(string? transcript)
+    {
+        const string message = "Khong du du lieu giong noi de cham. Vui long ghi am ro hon.";
+        var feedbackJson = JsonSerializer.Serialize(new
+        {
+            fluencyIdeaDevelopment = 0,
+            pronunciation = 0,
+            vocabulary = 0,
+            grammar = 0,
+            contentCoherence = 0,
+            criteriaExplanations = new
+            {
+                fluencyIdeaDevelopment = message,
+                pronunciation = message,
+                vocabulary = message,
+                grammar = message,
+                contentCoherence = message
+            },
+            feedback = new[] { message },
+            transcript = transcript ?? string.Empty,
+            summary = message,
+            strengths = Array.Empty<string>(),
+            weaknesses = new[] { "Ban ghi am qua ngan hoac khong co du tu tieng Anh ro rang." },
+            review = new
+            {
+                scoreExplanation = message,
+                mainReasonsForLostPoints = new[] { "Khong co du du lieu giong noi de danh gia." },
+                howToImprove = new[] { "Ghi am lai trong moi truong yen tinh va noi toi thieu vai cau tieng Anh ro rang." }
+            },
+            timestampFeedback = Array.Empty<object>(),
+            betterAnswer = string.Empty,
+            weaknessTags = new[] { "Thieu du lieu ghi am" },
+            nextPracticeSuggestions = new[] { "Kiem tra microphone va ghi am lai cau tra loi day du." }
+        });
+
+        return new AiScoreResult
+        {
+            Score = 0,
+            Feedback = message,
+            Transcript = transcript,
+            FeedbackJson = feedbackJson,
+            FluencyIdeaDevelopment = 0,
+            Pronunciation = 0,
+            Vocabulary = 0,
+            Grammar = 0,
+            ContentCoherence = 0,
+            FeedbackPoints = new List<string> { message }
+        };
     }
 }

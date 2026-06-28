@@ -50,6 +50,7 @@ public class MockTestSpeakingAnswer
 {
     public int QuestionId { get; set; }
     public int? PartNumber { get; set; }
+    public string? AudioObjectKey { get; set; }
     public string? AudioUrl { get; set; }
     public string? Transcript { get; set; }
     public string? Status { get; set; }

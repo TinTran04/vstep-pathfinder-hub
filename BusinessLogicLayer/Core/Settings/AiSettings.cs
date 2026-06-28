@@ -2,8 +2,10 @@ namespace BusinessLogicLayer.Core.Settings;
 
 public class AiSettings
 {
-    public string PrimaryProvider { get; set; } = "OPENROUTER";
-    public string FallbackProvider { get; set; } = "BAI";
+    public string PrimaryProvider { get; set; } = "GEMINI";
+    public string FallbackProvider { get; set; } = "OPENROUTER";
+    public string SttPrimaryProvider { get; set; } = "DEEPGRAM";
+    public bool SpeakingUseStt { get; set; } = true;
 }
 
 public class BaiSettings

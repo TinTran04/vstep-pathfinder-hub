@@ -87,6 +87,18 @@ public class R2StorageService : IR2StorageService
         return Task.FromResult(client.GetPreSignedURL(request));
     }
 
+    public async Task<Stream> DownloadObjectStreamAsync(string objectKey)
+    {
+        EnsureConfigured();
+
+        using var client = CreateClient();
+        using var response = await client.GetObjectAsync(_settings.BucketName, objectKey.TrimStart('/'));
+        var memoryStream = new MemoryStream();
+        await response.ResponseStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+        return memoryStream;
+    }
+
     public string GetObjectUrl(string objectKey)
     {
         EnsureConfigured();

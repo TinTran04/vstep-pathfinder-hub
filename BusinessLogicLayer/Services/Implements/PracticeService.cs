@@ -1,10 +1,14 @@
 using AutoMapper;
+using BusinessLogicLayer.Core.Settings;
 using BusinessLogicLayer.DTOs.Common;
 using BusinessLogicLayer.DTOs.Exam;
 using BusinessLogicLayer.Services.Interfaces;
 using DataAccessLayer.Entities;
 using DataAccessLayer.UoW;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace BusinessLogicLayer.Services.Implements;
 
@@ -28,7 +32,42 @@ public class PracticeService : IPracticeService
         var user = await GetExistingUserAsync(userId);
         var exam = await GetPublishedExamAsync(examId, expectedSkillType);
 
-        var draftMeta = new { _meta = new { mode = $"practice_{expectedSkillType}" } };
+        var mode = expectedSkillType == "mock_test" ? "mock_test" : $"practice_{expectedSkillType}";
+        object draftMeta = new { _meta = new { mode } };
+
+        if (expectedSkillType == "mock_test" && !string.IsNullOrEmpty(exam.Description))
+        {
+            var groupMatch = System.Text.RegularExpressions.Regex.Match(exam.Description, @"group:([^;\n]+)");
+            if (groupMatch.Success)
+            {
+                var groupName = groupMatch.Groups[1].Value;
+                var allExams = await _unitOfWork.Exams.GetPagedAsync(new DataAccessLayer.Core.Parameters.ExamQueryParameters { Page = 1, PageSize = 1000, IsPublished = true });
+                var groupExams = allExams.Exams.Where(e => (e.Description ?? "").Contains($"group:{groupName}") && e.SkillType != "mock_test").ToList();
+
+                var listening = groupExams.FirstOrDefault(e => e.SkillType == "listening");
+                var reading = groupExams.FirstOrDefault(e => e.SkillType == "reading");
+                var writing = groupExams.FirstOrDefault(e => e.SkillType == "writing");
+                var speaking = groupExams.FirstOrDefault(e => e.SkillType == "speaking");
+
+                if (listening != null && reading != null && writing != null && speaking != null)
+                {
+                    draftMeta = new
+                    {
+                        _meta = new
+                        {
+                            mode = "mock_test",
+                            selectedExamIds = new
+                            {
+                                listening = listening.ExamId,
+                                reading = reading.ExamId,
+                                writing = writing.ExamId,
+                                speaking = speaking.ExamId
+                            }
+                        }
+                    };
+                }
+            }
+        }
         var attempt = new ExamAttempt
         {
             UserId = user.UserId,
@@ -86,9 +125,35 @@ public class PracticeService : IPracticeService
             throw new InvalidOperationException("Free users can only submit this exam once.");
         }
 
-        var questions = await _unitOfWork.Exams.GetQuestionsForScoringAsync(attempt.ExamId);
+        var examIds = new List<int> { attempt.ExamId };
 
-        if (questions.Count == 0)
+        if (attempt.SkillType == "mock_test" && !string.IsNullOrEmpty(attempt.DraftStateJson))
+        {
+            try
+            {
+                var draftNode = System.Text.Json.Nodes.JsonNode.Parse(attempt.DraftStateJson);
+                var selected = draftNode?["_meta"]?["selectedExamIds"];
+                if (selected != null)
+                {
+                    examIds.Clear();
+                    if (selected["listening"]?.GetValue<int>() is int listeningId) examIds.Add(listeningId);
+                    if (selected["reading"]?.GetValue<int>() is int readingId) examIds.Add(readingId);
+                }
+            }
+            catch
+            {
+                // Ignore parse errors
+            }
+        }
+
+        var questions = new List<ExamQuestion>();
+        foreach (var id in examIds)
+        {
+            var q = await _unitOfWork.Exams.GetQuestionsForScoringAsync(id);
+            questions.AddRange(q);
+        }
+
+        if (questions.Count == 0 && attempt.SkillType != "mock_test")
         {
             throw new InvalidOperationException("Exam has no scorable questions.");
         }
@@ -340,7 +405,10 @@ public class PracticeService : IPracticeService
             CurrentSkill = attempt.CurrentSkill,
             DraftStateJson = attempt.DraftStateJson,
             SkillDurations = skillDurations,
-            Exam = await GetCompositeExamForAttemptAsync(attempt, attempt.Exam, true)
+            Exam = await GetCompositeExamForAttemptAsync(
+                attempt,
+                attempt.Exam ?? throw new InvalidOperationException("Attempt exam is not loaded."),
+                true)
         };
     }
 
@@ -413,8 +481,47 @@ public class PracticeService : IPracticeService
             throw new InvalidOperationException("Invalid draft state format.");
         }
 
-        var questions = await _unitOfWork.Exams.GetQuestionsForScoringAsync(attempt.ExamId);
-        
+        var examIds = new List<int> { attempt.ExamId };
+        int? writingExamId = null;
+        int? speakingExamId = null;
+
+        if (!string.IsNullOrEmpty(json))
+        {
+            try
+            {
+                var draftNode = System.Text.Json.Nodes.JsonNode.Parse(json);
+                var selected = draftNode?["_meta"]?["selectedExamIds"];
+                if (selected != null)
+                {
+                    examIds.Clear();
+                    if (selected["listening"]?.GetValue<int>() is int listeningId) examIds.Add(listeningId);
+                    if (selected["reading"]?.GetValue<int>() is int readingId) examIds.Add(readingId);
+                    if (selected["writing"]?.GetValue<int>() is int writingId) writingExamId = writingId;
+                    if (selected["speaking"]?.GetValue<int>() is int speakingId) speakingExamId = speakingId;
+                }
+            }
+            catch
+            {
+                // Ignore parse errors
+            }
+        }
+
+        var writingExam = writingExamId.HasValue
+            ? await _unitOfWork.Exams.GetDetailByIdAsync(writingExamId.Value)
+            : null;
+        var speakingExam = speakingExamId.HasValue
+            ? await _unitOfWork.Exams.GetDetailByIdAsync(speakingExamId.Value)
+            : null;
+        var writingPrompt = BuildExamPrompt(writingExam ?? attempt.Exam);
+        var speakingPrompt = BuildExamPrompt(speakingExam ?? attempt.Exam);
+
+        var questions = new List<ExamQuestion>();
+        foreach (var id in examIds)
+        {
+            var q = await _unitOfWork.Exams.GetQuestionsForScoringAsync(id);
+            questions.AddRange(q);
+        }
+
         var answerMap = new Dictionary<int, string>();
         if (payload?.Listening?.Answers != null)
         {
@@ -462,9 +569,9 @@ public class PracticeService : IPracticeService
                 writingSubmission = new WritingSubmission
                 {
                     UserId = userId,
-                    ExamId = attempt.ExamId,
+                    ExamId = writingExam?.ExamId ?? attempt.ExamId,
                     AttemptId = attempt.AttemptId,
-                    Prompt = "Mock Test Writing",
+                    Prompt = writingPrompt,
                     EssayText = essayText,
                     Status = "processing"
                 };
@@ -478,14 +585,18 @@ public class PracticeService : IPracticeService
         {
             foreach (var ans in payload.Speaking.Answers)
             {
-                if (!string.IsNullOrWhiteSpace(ans.AudioUrl) || !string.IsNullOrWhiteSpace(ans.Transcript))
+                if (!string.IsNullOrWhiteSpace(ans.AudioObjectKey) ||
+                    !string.IsNullOrWhiteSpace(ans.AudioUrl) ||
+                    !string.IsNullOrWhiteSpace(ans.Transcript))
                 {
+                    var audioObjectKey = ans.AudioObjectKey?.Trim() ?? string.Empty;
                     var speakingSubmission = new SpeakingSubmission
                     {
                         UserId = userId,
-                        ExamId = attempt.ExamId,
+                        ExamId = speakingExam?.ExamId ?? attempt.ExamId,
                         AttemptId = attempt.AttemptId,
                         PartNumber = ans.PartNumber,
+                        AudioObjectKey = audioObjectKey,
                         AudioUrl = ans.AudioUrl ?? string.Empty,
                         Transcript = ans.Transcript ?? string.Empty,
                         Status = "processing"
@@ -515,6 +626,10 @@ public class PracticeService : IPracticeService
                 using var scope = _scopeFactory.CreateScope();
                 var aiGradingService = scope.ServiceProvider.GetRequiredService<IAIGradingService>();
                 var backgroundUoW = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                var speechToTextService = scope.ServiceProvider.GetRequiredService<ISpeechToTextService>();
+                var r2StorageService = scope.ServiceProvider.GetRequiredService<IR2StorageService>();
+                var aiSettings = scope.ServiceProvider.GetRequiredService<IOptions<AiSettings>>().Value;
+                var deepgramSettings = scope.ServiceProvider.GetRequiredService<IOptions<DeepgramSettings>>().Value;
 
                 if (writingSubmission != null)
                 {
@@ -549,17 +664,74 @@ public class PracticeService : IPracticeService
                 {
                     try
                     {
-                        var scoreResult = await aiGradingService.GradeSpeakingAsync(userId, sSub.SpeakingSubmissionId, "Mock Test Speaking", sSub.Transcript, sSub.AudioUrl);
                         var s = await backgroundUoW.SpeakingSubmissions.GetByIdAsync(sSub.SpeakingSubmissionId);
-                        if (s != null)
+                        if (s == null)
                         {
-                            s.Score = scoreResult.Score;
-                            s.Feedback = scoreResult.Feedback;
-                            s.FeedbackJson = scoreResult.FeedbackJson;
-                            s.Status = "scored";
+                            continue;
+                        }
+
+                        var transcript = s.Transcript ?? string.Empty;
+                        if (!HasMinimumEnglishWords(transcript) && !string.IsNullOrWhiteSpace(s.AudioObjectKey))
+                        {
+                            try
+                            {
+                                await using var audioStream = await r2StorageService.DownloadObjectStreamAsync(s.AudioObjectKey);
+                                var sttResult = await speechToTextService.TranscribeAsync(
+                                    audioStream,
+                                    InferContentType(s.AudioObjectKey, s.AudioUrl));
+                                transcript = sttResult.Transcript;
+                                s.Transcript = transcript;
+                                await LogSttUsageAsync(
+                                    backgroundUoW,
+                                    userId,
+                                    s.SpeakingSubmissionId,
+                                    aiSettings.SttPrimaryProvider,
+                                    deepgramSettings.Model,
+                                    "success",
+                                    null);
+                                backgroundUoW.SpeakingSubmissions.Update(s);
+                                await backgroundUoW.SaveChangesAsync();
+                            }
+                            catch (Exception sttException)
+                            {
+                                await LogSttUsageAsync(
+                                    backgroundUoW,
+                                    userId,
+                                    s.SpeakingSubmissionId,
+                                    aiSettings.SttPrimaryProvider,
+                                    deepgramSettings.Model,
+                                    "failed",
+                                    sttException.Message);
+                                s.Status = "failed";
+                                s.Feedback = "Hệ thống xử lý giọng nói đang tạm lỗi. Vui lòng thử lại sau.";
+                                backgroundUoW.SpeakingSubmissions.Update(s);
+                                await backgroundUoW.SaveChangesAsync();
+                                continue;
+                            }
+                        }
+
+                        if (!HasMinimumEnglishWords(transcript))
+                        {
+                            SetInvalidSpeakingAudioResult(s, transcript);
                             backgroundUoW.SpeakingSubmissions.Update(s);
                             await backgroundUoW.SaveChangesAsync();
+                            continue;
                         }
+
+                        var scoreResult = await aiGradingService.GradeSpeakingAsync(
+                            userId,
+                            s.SpeakingSubmissionId,
+                            speakingPrompt,
+                            transcript,
+                            s.AudioUrl,
+                            s.AudioObjectKey);
+                        s.Score = scoreResult.Score;
+                        s.Feedback = scoreResult.Feedback;
+                        s.FeedbackJson = scoreResult.FeedbackJson;
+                        s.Transcript = string.IsNullOrWhiteSpace(scoreResult.Transcript) ? transcript : scoreResult.Transcript;
+                        s.Status = "scored";
+                        backgroundUoW.SpeakingSubmissions.Update(s);
+                        await backgroundUoW.SaveChangesAsync();
                     }
                     catch (Exception)
                     {
@@ -669,7 +841,7 @@ public class PracticeService : IPracticeService
             }
         }
 
-        return response;
+        return response ?? new ExamDetailResponse();
     }
     private static string MergeDraftStateJson(string? existingJson, string? newJson)
     {
@@ -762,9 +934,12 @@ public class PracticeService : IPracticeService
                                                 if (existingItem != null)
                                                 {
                                                     var existingItemObj = existingItem as System.Text.Json.Nodes.JsonObject;
-                                                    foreach (var prop in newItemObj)
+                                                    if (existingItemObj != null)
                                                     {
-                                                        existingItemObj[prop.Key] = prop.Value?.DeepClone();
+                                                        foreach (var prop in newItemObj)
+                                                        {
+                                                            existingItemObj[prop.Key] = prop.Value?.DeepClone();
+                                                        }
                                                     }
                                                 }
                                                 else
@@ -1078,8 +1253,8 @@ public class PracticeService : IPracticeService
         }
         catch { }
 
-        var fallbackExam = _mapper.Map<ExamDetailResponse>(originalExam);
-        if (fallbackExam?.Sections == null)
+        var fallbackExam = _mapper.Map<ExamDetailResponse>(originalExam) ?? new ExamDetailResponse();
+        if (fallbackExam.Sections == null)
         {
             fallbackExam.Sections = new List<SectionResponse>();
         }
@@ -1104,6 +1279,134 @@ public class PracticeService : IPracticeService
 
         _unitOfWork.ExamAttempts.Update(attempt);
         await _unitOfWork.SaveChangesAsync();
+    }
+
+    private static string BuildExamPrompt(Exam? exam)
+    {
+        if (exam == null)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>
+        {
+            exam.Title,
+            exam.Description
+        };
+
+        foreach (var section in exam.Sections.OrderBy(section => section.DisplayOrder))
+        {
+            var sectionParts = new List<string>
+            {
+                section.Title,
+                section.Instruction,
+                section.PassageText ?? string.Empty
+            };
+
+            foreach (var question in section.Questions.OrderBy(question => question.DisplayOrder))
+            {
+                sectionParts.Add($"Question {question.DisplayOrder}: {question.QuestionText}");
+            }
+
+            parts.Add(string.Join("\n", sectionParts.Where(part => !string.IsNullOrWhiteSpace(part))));
+        }
+
+        return string.Join("\n\n", parts.Where(part => !string.IsNullOrWhiteSpace(part))).Trim();
+    }
+
+    private static async Task LogSttUsageAsync(
+        IUnitOfWork unitOfWork,
+        int userId,
+        int submissionId,
+        string primaryProvider,
+        string model,
+        string status,
+        string? errorMessage)
+    {
+        await unitOfWork.AiUsageLogs.AddAsync(new AiUsageLog
+        {
+            UserId = userId,
+            SubmissionId = submissionId,
+            SkillType = "speaking",
+            ActionType = "stt",
+            PrimaryProvider = string.IsNullOrWhiteSpace(primaryProvider) ? "DEEPGRAM" : primaryProvider,
+            ProviderUsed = "DEEPGRAM",
+            ModelUsed = string.IsNullOrWhiteSpace(model) ? "nova-3" : model.Trim(),
+            FallbackUsed = false,
+            Status = status,
+            ErrorMessage = string.IsNullOrWhiteSpace(errorMessage)
+                ? null
+                : errorMessage.Length <= 500 ? errorMessage : errorMessage[..500]
+        });
+        await unitOfWork.SaveChangesAsync();
+    }
+
+    private static bool HasMinimumEnglishWords(string? transcript)
+    {
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            return false;
+        }
+
+        return Regex.Matches(transcript, @"\b[A-Za-z][A-Za-z']+\b").Count >= 3;
+    }
+
+    private static string InferContentType(string? audioObjectKey, string? audioUrl)
+    {
+        var source = !string.IsNullOrWhiteSpace(audioObjectKey) ? audioObjectKey : audioUrl ?? string.Empty;
+        var extension = Path.GetExtension(source.Split('?', '#')[0]).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".wav" => "audio/wav",
+            ".mp3" => "audio/mpeg",
+            ".m4a" => "audio/mp4",
+            ".mp4" => "audio/mp4",
+            ".ogg" => "audio/ogg",
+            ".oga" => "audio/ogg",
+            ".flac" => "audio/flac",
+            _ => "audio/webm"
+        };
+    }
+
+    private static void SetInvalidSpeakingAudioResult(SpeakingSubmission submission, string? transcript)
+    {
+        const string message = "Không đủ dữ liệu giọng nói để chấm. Vui lòng ghi âm rõ hơn.";
+        submission.Score = 0;
+        submission.Feedback = message;
+        submission.Transcript = transcript;
+        submission.Status = "scored";
+        submission.FeedbackJson = JsonSerializer.Serialize(new
+        {
+            fluencyIdeaDevelopment = 0,
+            pronunciation = 0,
+            vocabulary = 0,
+            grammar = 0,
+            contentCoherence = 0,
+            criteriaExplanations = new
+            {
+                fluencyIdeaDevelopment = message,
+                pronunciation = message,
+                vocabulary = message,
+                grammar = message,
+                contentCoherence = message
+            },
+            feedback = new[] { message },
+            transcript = transcript ?? string.Empty,
+            summary = message,
+            strengths = Array.Empty<string>(),
+            weaknesses = new[] { "Bản ghi âm quá ngắn hoặc không có đủ từ tiếng Anh rõ ràng." },
+            review = new
+            {
+                scoreExplanation = message,
+                mainReasonsForLostPoints = new[] { "Không có đủ dữ liệu giọng nói để đánh giá." },
+                howToImprove = new[] { "Ghi âm lại trong môi trường yên tĩnh và nói tối thiểu vài câu tiếng Anh rõ ràng." }
+            },
+            timestampFeedback = Array.Empty<object>(),
+            betterAnswer = string.Empty,
+            weaknessTags = new[] { "Thiếu dữ liệu ghi âm" },
+            nextPracticeSuggestions = new[] { "Kiểm tra microphone và ghi âm lại câu trả lời đầy đủ." }
+        });
     }
 
     private static Dictionary<string, int>? ExtractSkillDurations(string? draftStateJson)

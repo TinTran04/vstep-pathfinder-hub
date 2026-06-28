@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using BusinessLogicLayer.Core.Settings;
 using BusinessLogicLayer.DTOs.AI;
 using BusinessLogicLayer.Services.Interfaces;
@@ -44,6 +45,11 @@ public class AIGradingService : IAIGradingService
 
     public Task<AiScoreResult> GradeWritingAsync(int userId, int submissionId, string prompt, string essayText, CancellationToken cancellationToken = default)
     {
+        if (!HasMinimumWritingContent(essayText))
+        {
+            return Task.FromResult(BuildInvalidWritingResult(essayText));
+        }
+
         var chatRequest = new AiChatRequest
         {
             Temperature = 0.1,
@@ -83,35 +89,14 @@ public class AIGradingService : IAIGradingService
                 }
             };
         }
-        else if (!string.IsNullOrWhiteSpace(audioUrl))
-        {
-            var audioBytes = await DownloadAudioAsync(audioUrl, cancellationToken);
-            var base64Audio = Convert.ToBase64String(audioBytes);
-            var format = InferAudioFormat(audioObjectKey, audioUrl);
-
-            chatRequest.Messages = new List<AiChatMessage>
-            {
-                new()
-                {
-                    Role = "user",
-                    Content = new object[]
-                    {
-                        new { type = "text", text = prompt },
-                        new
-                        {
-                            type = "image_url",
-                            image_url = new
-                            {
-                                url = $"data:audio/{format};base64,{base64Audio}"
-                            }
-                        }
-                    }
-                }
-            };
-        }
         else
         {
-            throw new ArgumentException("Either transcript or audioUrl must be provided.");
+            return BuildInvalidSpeakingAudioResult();
+        }
+
+        if (!HasMinimumEnglishWords(transcript))
+        {
+            return BuildInvalidSpeakingAudioResult();
         }
 
         return await SendChatRequestWithFallbackAsync(userId, submissionId, "speaking", "speaking_grading", chatRequest, cancellationToken);
@@ -139,6 +124,7 @@ public class AIGradingService : IAIGradingService
 
         AiProviderResponse primaryResult = null!;
         Exception? primaryException = null;
+        var primaryMalformedResponse = false;
 
         try
         {
@@ -171,12 +157,37 @@ public class AIGradingService : IAIGradingService
             }
             catch (Exception ex)
             {
-                var snippet = primaryResult.Content.Length > 200 ? primaryResult.Content[..200] : primaryResult.Content;
-                primaryException = new Exception($"JSON Parse Error: {ex.Message}. Raw snippet: {snippet}");
+                try
+                {
+                    var retryRequest = BuildJsonRetryRequest(request);
+                    var retryResult = await primaryProvider.SendChatRequestAsync(retryRequest, cancellationToken);
+                    if (retryResult.IsSuccess)
+                    {
+                        var retryParsedResult = ParseScoreResult(retryResult.Content);
+                        log.ProviderUsed = primaryProviderName;
+                        log.ModelUsed = retryRequest.Model ?? "default";
+                        log.FallbackUsed = false;
+                        log.Status = "success";
+                        log.InputTokens = retryResult.InputTokens;
+                        log.OutputTokens = retryResult.OutputTokens;
+                        log.ErrorMessage = "Primary JSON retry succeeded after parse failure.";
+                        await SaveLogAsync(log);
+                        return retryParsedResult;
+                    }
+
+                    primaryResult = retryResult;
+                    primaryException = new Exception($"JSON retry HTTP {retryResult.StatusCode}");
+                }
+                catch (Exception retryEx)
+                {
+                    var snippet = primaryResult.Content.Length > 200 ? primaryResult.Content[..200] : primaryResult.Content;
+                    primaryException = new Exception($"JSON Parse Error: {ex.Message}. Retry failed: {retryEx.Message}. Raw snippet: {snippet}");
+                    primaryMalformedResponse = true;
+                }
             }
         }
 
-        if (fallbackProvider != null && (primaryException != null && (primaryResult == null || CanFallback(primaryResult.StatusCode))))
+        if (fallbackProvider != null && (primaryException != null && (primaryResult == null || CanFallback(primaryResult.StatusCode) || primaryMalformedResponse)))
         {
             try
             {
@@ -186,7 +197,7 @@ public class AIGradingService : IAIGradingService
                     try
                     {
                         var parsedResult = ParseScoreResult(fallbackResult.Content);
-                        log.ProviderUsed = fallbackProviderName;
+                        log.ProviderUsed = fallbackProviderName ?? string.Empty;
                         log.ModelUsed = request.Model ?? "default";
                         log.FallbackUsed = true;
                         log.Status = "fallback_success";
@@ -203,7 +214,7 @@ public class AIGradingService : IAIGradingService
                     }
                 }
                 
-                log.ProviderUsed = fallbackProviderName;
+                log.ProviderUsed = fallbackProviderName ?? string.Empty;
                 log.FallbackUsed = true;
                 log.Status = "fallback_failed";
                 log.ErrorMessage = $"Primary: {primaryException.Message} | Fallback HTTP {fallbackResult.StatusCode}";
@@ -212,7 +223,7 @@ public class AIGradingService : IAIGradingService
             }
             catch (Exception ex)
             {
-                log.ProviderUsed = fallbackProviderName;
+                log.ProviderUsed = fallbackProviderName ?? string.Empty;
                 log.FallbackUsed = true;
                 log.Status = "fallback_failed";
                 log.ErrorMessage = $"Primary: {primaryException.Message} | Fallback Error: {ex.Message}";
@@ -289,6 +300,149 @@ public class AIGradingService : IAIGradingService
         {
             _logger.LogError(ex, "Failed to save AI usage log.");
         }
+    }
+
+    private static AiChatRequest BuildJsonRetryRequest(AiChatRequest original)
+    {
+        var retry = new AiChatRequest
+        {
+            Model = original.Model,
+            Temperature = 0,
+            MaxTokens = original.MaxTokens,
+            ResponseFormat = original.ResponseFormat,
+            Messages = original.Messages
+                .Select(message => new AiChatMessage
+                {
+                    Role = message.Role,
+                    Content = message.Content
+                })
+                .ToList()
+        };
+
+        retry.Messages.Add(new AiChatMessage
+        {
+            Role = "user",
+            Content = "Retry once. Return ONLY valid JSON that matches the requested schema. Do not include markdown or explanatory text."
+        });
+
+        return retry;
+    }
+
+    private static bool HasMinimumEnglishWords(string? transcript)
+    {
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            return false;
+        }
+
+        return Regex.Matches(transcript, @"\b[A-Za-z][A-Za-z']+\b").Count >= 3;
+    }
+
+    private static bool HasMinimumWritingContent(string? essayText)
+    {
+        if (string.IsNullOrWhiteSpace(essayText))
+        {
+            return false;
+        }
+
+        return Regex.Matches(essayText, @"\b[A-Za-z][A-Za-z']+\b").Count >= 10;
+    }
+
+    private static AiScoreResult BuildInvalidWritingResult(string? essayText)
+    {
+        const string message = "Không đủ nội dung bài viết để chấm. Vui lòng viết bài đầy đủ theo yêu cầu đề.";
+        var feedbackJson = JsonSerializer.Serialize(new
+        {
+            taskFulfillment = 0,
+            grammar = 0,
+            vocabulary = 0,
+            organization = 0,
+            criteriaExplanations = new
+            {
+                taskFulfillment = message,
+                grammar = message,
+                vocabulary = message,
+                organization = message
+            },
+            feedback = new[] { message },
+            summary = message,
+            strengths = Array.Empty<string>(),
+            weaknesses = new[] { "Bài viết rỗng, quá ngắn hoặc không có đủ từ tiếng Anh rõ ràng." },
+            review = new
+            {
+                scoreExplanation = message,
+                mainReasonsForLostPoints = new[] { "Không có đủ nội dung thật để đánh giá theo rubric Writing." },
+                howToImprove = new[] { "Viết đầy đủ câu trả lời theo đề, tối thiểu nhiều câu tiếng Anh rõ ràng." }
+            },
+            mistakes = Array.Empty<object>(),
+            betterAnswer = string.Empty,
+            improvedVersion = string.Empty,
+            nextPracticeSuggestions = new[] { "Đọc kỹ đề và viết lại bài hoàn chỉnh trước khi nộp." }
+        }, JsonOptions);
+
+        return new AiScoreResult
+        {
+            Score = 0,
+            Feedback = message,
+            FeedbackJson = feedbackJson,
+            TaskFulfillment = 0,
+            TaskResponse = 0,
+            TaskAchievement = 0,
+            Grammar = 0,
+            Vocabulary = 0,
+            Organization = 0,
+            FeedbackPoints = new List<string> { message }
+        };
+    }
+
+    private static AiScoreResult BuildInvalidSpeakingAudioResult()
+    {
+        const string message = "Không đủ dữ liệu giọng nói để chấm. Vui lòng ghi âm rõ hơn.";
+        var feedbackJson = JsonSerializer.Serialize(new
+        {
+            fluencyIdeaDevelopment = 0,
+            pronunciation = 0,
+            vocabulary = 0,
+            grammar = 0,
+            contentCoherence = 0,
+            criteriaExplanations = new
+            {
+                fluencyIdeaDevelopment = message,
+                pronunciation = message,
+                vocabulary = message,
+                grammar = message,
+                contentCoherence = message
+            },
+            feedback = new[] { message },
+            transcript = string.Empty,
+            summary = message,
+            strengths = Array.Empty<string>(),
+            weaknesses = new[] { "Bản ghi âm quá ngắn hoặc không có đủ từ tiếng Anh rõ ràng." },
+            review = new
+            {
+                scoreExplanation = message,
+                mainReasonsForLostPoints = new[] { "Không có đủ dữ liệu giọng nói để đánh giá." },
+                howToImprove = new[] { "Ghi âm lại trong môi trường yên tĩnh và nói tối thiểu vài câu tiếng Anh rõ ràng." }
+            },
+            timestampFeedback = Array.Empty<object>(),
+            betterAnswer = string.Empty,
+            weaknessTags = new[] { "Thiếu dữ liệu ghi âm" },
+            nextPracticeSuggestions = new[] { "Kiểm tra microphone và ghi âm lại câu trả lời đầy đủ." }
+        }, JsonOptions);
+
+        return new AiScoreResult
+        {
+            Score = 0,
+            Feedback = message,
+            Transcript = string.Empty,
+            FeedbackJson = feedbackJson,
+            FluencyIdeaDevelopment = 0,
+            Pronunciation = 0,
+            Vocabulary = 0,
+            Grammar = 0,
+            ContentCoherence = 0,
+            FeedbackPoints = new List<string> { message }
+        };
     }
 
 
@@ -652,9 +806,11 @@ public class AIGradingService : IAIGradingService
 
         Speaking task: {speaking_prompt}
 
-        First transcribe the attached student audio. Then evaluate the transcript strictly based on the official VSTEP Speaking rubric. Score each of the 5 criteria independently on a scale of 0-10 in increments of 0.5.
+        Evaluate the provided student transcript strictly based on the official VSTEP Speaking rubric. The transcript was produced by an external speech-to-text system, so minor transcription uncertainty may exist. Score each of the 5 criteria independently on a scale of 0-10 in increments of 0.5.
         Do not calculate the final overall score. The backend will calculate it from the criteria.
-        The transcript is auto-generated by you from the audio, so minor transcription uncertainty may exist. Score based on meaning, pronunciation evidence, fluency, and linguistic quality.
+        Score based on meaning, fluency, linguistic quality, and any pronunciation evidence available in the transcript.
+        
+        CRITICAL INSTRUCTION: If the transcript is empty, noise-like, or contains fewer than 3 intelligible English words, you MUST score 0 for all criteria and provide feedback stating that the answer is missing, silent, or too short to grade. DO NOT hallucinate a response or grade it normally!
 
         CRITERION 1 — fluencyIdeaDevelopment
         Evaluate:
