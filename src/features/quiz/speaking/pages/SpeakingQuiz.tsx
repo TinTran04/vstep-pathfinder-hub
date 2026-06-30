@@ -37,6 +37,12 @@ interface ApiFeedbackState {
   status: string;
 }
 
+interface UploadedSpeakingRecording {
+  audioObjectKey: string;
+  audioUrl: string;
+  submissionId: number;
+}
+
 type FeedbackState = SpeakingFeedback & { source: "mock" } | ApiFeedbackState;
 
 function toAttemptSpeakingFeedback(feedbacks: Record<number, FeedbackState>): Record<number, SpeakingFeedbackResult> {
@@ -124,6 +130,9 @@ const SpeakingQuiz = () => {
   const [recordingBlobs, setRecordingBlobs] = useState<Record<number, Blob>>({});
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const uploadedRecordingsRef = useRef<Record<number, UploadedSpeakingRecording>>({});
+  const gradingInProgressRef = useRef(false);
+  const finishInProgressRef = useRef(false);
   const [playingBack, setPlayingBack] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -330,6 +339,7 @@ const SpeakingQuiz = () => {
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
       const url = URL.createObjectURL(blob);
       const partId = parts[currentPart].id;
+      delete uploadedRecordingsRef.current[partId];
       setRecordings(prev => ({ ...prev, [partId]: url }));
       setRecordingBlobs(prev => ({ ...prev, [partId]: blob }));
     };
@@ -345,6 +355,7 @@ const SpeakingQuiz = () => {
 
   const reRecord = () => {
     const partId = parts[currentPart].id;
+    delete uploadedRecordingsRef.current[partId];
     setRecordings(prev => { const n = { ...prev }; delete n[partId]; return n; });
     setRecordingBlobs(prev => { const n = { ...prev }; delete n[partId]; return n; });
   };
@@ -361,17 +372,39 @@ const SpeakingQuiz = () => {
   // ── API mode: upload + submit one recording ──────────────────
   const uploadAndSubmitRecording = async (
     partId: number,
-    blob: Blob
-  ): Promise<{ submissionId: number; audioUrl: string } | null> => {
+    blob: Blob,
+    forceResubmit = false
+  ): Promise<UploadedSpeakingRecording | null> => {
     const part = parts.find(p => p.id === partId);
     const examId = (part as SpeakingPart & { examId?: number })?.examId;
     if (!examId) {
       toast.error(`Không tìm thấy examId cho Part ${partId}.`);
       return null;
     }
+    const cached = uploadedRecordingsRef.current[partId];
+    if (cached && !forceResubmit) {
+      return cached;
+    }
+
     try {
-      const { submissionId, audioUrl } = await speakingApiService.uploadAndSubmit(examId, blob, "audio/webm");
-      return { submissionId, audioUrl };
+      if (cached && forceResubmit) {
+        const submission = await speakingApiService.submit(
+          examId,
+          cached.audioObjectKey,
+          cached.audioUrl
+        );
+        const retried = {
+          audioObjectKey: cached.audioObjectKey,
+          audioUrl: cached.audioUrl,
+          submissionId: submission.speakingSubmissionId,
+        };
+        uploadedRecordingsRef.current[partId] = retried;
+        return retried;
+      }
+
+      const uploaded = await speakingApiService.uploadAndSubmit(examId, blob, "audio/webm");
+      uploadedRecordingsRef.current[partId] = uploaded;
+      return uploaded;
     } catch (err) {
       console.error(`[SpeakingQuiz] Upload/submit failed for part ${partId}`, err);
       toast.error(`Không tải được file ghi âm Part ${partId}. Vui lòng kiểm tra kết nối hoặc thử ghi âm lại.`);
@@ -415,6 +448,8 @@ const SpeakingQuiz = () => {
 
   // ── AI Feedback (practice mode) ──────────────────────────────
   const generateAIFeedback = async () => {
+    if (gradingInProgressRef.current) return;
+    gradingInProgressRef.current = true;
     setAiLoading(true);
     setPollingStatus("Đang gửi bài...");
     try {
@@ -423,8 +458,10 @@ const SpeakingQuiz = () => {
         const newFeedbacks: Record<number, FeedbackState> = {};
         for (const [partIdStr, blob] of Object.entries(recordingBlobs)) {
           const partId = Number(partIdStr);
+          const previousFeedback = aiFeedback[partId];
+          const shouldRetry = previousFeedback?.source === "api" && previousFeedback.status === "failed";
           setPollingStatus(`Đang tải lên Part ${partId}...`);
-          const result = await uploadAndSubmitRecording(partId, blob);
+          const result = await uploadAndSubmitRecording(partId, blob, shouldRetry);
           if (result) {
             setPollingStatus(`Đang chờ AI chấm Part ${partId}...`);
             const graded: SpeakingResultResponse = await speakingApiService.pollUntilGraded(
@@ -477,6 +514,7 @@ const SpeakingQuiz = () => {
     } finally {
       setAiLoading(false);
       setPollingStatus("");
+      gradingInProgressRef.current = false;
     }
   };
 
@@ -500,6 +538,9 @@ const SpeakingQuiz = () => {
 
   // ── handleFinish (mock test) ──────────────────────────────────
   const handleFinish = async () => {
+    if (finishInProgressRef.current) return;
+    finishInProgressRef.current = true;
+
     if (isMockSession) {
       setAiLoading(true);
       setPollingStatus("Đang nộp bài thi...");
@@ -543,6 +584,7 @@ const SpeakingQuiz = () => {
       } finally {
         setAiLoading(false);
         setPollingStatus("");
+        finishInProgressRef.current = false;
       }
     } else {
       // Practice mode: just save & go to submitted screen
@@ -567,6 +609,7 @@ const SpeakingQuiz = () => {
         }
       }
       setSubmitted(true);
+      finishInProgressRef.current = false;
     }
   };
 
@@ -757,6 +800,7 @@ const SpeakingQuiz = () => {
                       setSubmitted(false);
                       setRecordings({});
                       setRecordingBlobs({});
+                      uploadedRecordingsRef.current = {};
                       setAiFeedback({});
                       setCurrentPart(0);
                       setTimeLeft(totalTime);
