@@ -9,7 +9,7 @@ Core capabilities:
 - User CRUD with role and subscription plan relationships.
 - Exam management and Reading/Listening DOCX import.
 - Reading and Listening practice.
-- Writing and Speaking submission with OpenRouter AI grading.
+- Writing and Speaking submission with provider-based AI grading and speech-to-text for Speaking.
 - Personal Dictionary with PostgreSQL cache for dictionary and translation data.
 - Subscription payment through payOS.
 - Supabase PostgreSQL, Supabase Storage, and Cloudflare R2.
@@ -66,6 +66,7 @@ Forbidden:
 ```txt
 Controller -> DbContext
 Controller -> Repository
+BusinessLogicLayer service -> ApplicationDbContext
 DataAccessLayer -> BusinessLogicLayer
 DataAccessLayer -> VAIApplication
 BusinessLogicLayer -> VAIApplication
@@ -87,7 +88,8 @@ Controllers must call only BLL service interfaces. Controllers must not contain 
 - HttpClient for external APIs
 - Cloudflare R2 for audio upload via presigned URL
 - Supabase Storage for static/light assets
-- OpenRouter for Writing/Speaking AI grading
+- Gemini/OpenRouter provider chain for Writing/Speaking AI grading
+- Deepgram speech-to-text for Speaking
 - payOS for subscription payments
 - PostgreSQL-backed cache for Personal Dictionary
 
@@ -140,6 +142,8 @@ Important entities:
 - `DictionaryEntry`
 - `UserVocabulary`
 - `PaymentTransaction`
+- `UserRewardLedger`
+- `AiUsageLog`
 
 Roles:
 
@@ -188,6 +192,8 @@ Rules:
 - Do not load entire tables into memory before filtering.
 - Add pagination for list endpoints.
 - Use tracked repository methods for update/delete flows.
+- Aggregate/admin dashboard queries must live in dedicated DAL repositories and return DAL projections.
+- Do not use an oversized page such as `PageSize = 1000` as a replacement for a targeted repository query.
 
 Example:
 
@@ -287,6 +293,7 @@ OTP:
 - Store OTP hash only.
 - Use BCrypt verify.
 - Do not store plain OTP.
+- Never write plaintext OTP values to console, structured logs, exception messages, or telemetry.
 
 ## 11. Exam and Practice Rules
 
@@ -342,30 +349,41 @@ Cloudflare R2 is for:
 - Listening audio
 
 Rules:
-- Client uploads large audio directly to R2 through presigned URL.
-- Backend generates upload URLs only.
-- Backend should not receive large audio file bodies.
+- Listening audio is uploaded directly to R2 through a presigned PUT URL.
+- Speaking audio currently uses the authenticated backend proxy endpoint `POST /api/speaking-practice/{examId:int}/upload`; storage access remains encapsulated behind `IR2StorageService`.
+- Do not add another upload path for the same workflow. FE must reuse the returned `AudioObjectKey`/URL when retrying submission or grading.
 - R2 CORS must allow the frontend origin and PUT method.
 
-## 14. OpenRouter AI Grading Rules
+## 14. AI Grading and Speech-to-Text Rules
 
-OpenRouter is used for Writing and Speaking grading.
+Writing and Speaking grading use `IAIGradingService`, which selects the configured `IAIProvider`. Speaking audio is transcribed through `ISpeechToTextService` before text grading.
 
 Configuration:
 
 ```env
+AI_PRIMARY_PROVIDER=GEMINI
+AI_FALLBACK_PROVIDER=OPENROUTER
+STT_PRIMARY_PROVIDER=DEEPGRAM
+SPEAKING_USE_STT=true
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash-lite
 OPENROUTER_API_KEY=
-OPENROUTER_MODEL=google/gemini-flash-1.5
-OPENROUTER_BASE_URL=https://openrouter.ai/
+OPENROUTER_MODEL=google/gemini-2.5-flash
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_SITE_URL=
 OPENROUTER_APP_NAME=VAIApplication
 OPENROUTER_MAX_AUDIO_BYTES=15728640
+DEEPGRAM_API_KEY=
+DEEPGRAM_MODEL=nova-3
+DEEPGRAM_BASE_URL=https://api.deepgram.com
 ```
 
 Rules:
-- Use `IOpenRouterGradingService`.
+- New grading flows use `IAIGradingService`; provider-specific HTTP belongs in `IAIProvider` implementations.
+- Speaking transcription uses `ISpeechToTextService`; provider-specific STT HTTP belongs in the STT implementation.
+- `IOpenRouterGradingService` is legacy compatibility code and must not be used for new grading flows.
 - Use `HttpClient`.
-- Do not call OpenRouter from controllers.
+- Do not call AI or STT providers from controllers.
 - Do not hardcode API keys.
 - Output must be valid JSON and parsed server-side.
 - Store final score in `Score`.
@@ -381,10 +399,10 @@ Writing:
 - Prefer rubric JSON output.
 
 Speaking:
-- Client uploads one final compressed audio file to R2.
-- Backend may download the audio and send base64 audio to OpenRouter.
-- Do not call AI once per speaking question unless explicitly required.
-- Enforce `OPENROUTER_MAX_AUDIO_BYTES`.
+- Persist one final compressed audio object per Speaking part/submission.
+- Download the stored object through `IR2StorageService`, transcribe it, then send only the transcript and prompt to the grading provider.
+- Make at most one grading call per persisted Speaking submission, excluding the documented JSON-repair retry/fallback path.
+- Retry grading with the existing audio object; do not upload the same recording again.
 
 ## 15. Personal Dictionary Rules
 
@@ -538,14 +556,14 @@ Always prefer:
 - pagination
 - `AsNoTracking()` for reads
 - cache hits over external calls
-- one AI call per final Writing/Speaking submission
+- one AI call per final Writing/Speaking submission, excluding provider fallback/JSON-repair retry
 - direct-to-storage upload for large files
 
 Avoid:
 - loading huge graphs with `Include`
 - returning unnecessary fields
 - calling AI repeatedly for small subparts
-- streaming large audio through backend unless needed for AI grading
+- loading broad result sets with an oversized page and filtering them in BLL
 
 ## 21. Swagger Rules
 
@@ -585,9 +603,9 @@ Do not:
 - use `DateTime.Now`
 - trust payment amount from client
 - trust webhook without signature verification
-- upload large audio through backend when R2 presigned upload is available
-- call OpenRouter from controllers
-- change AI/payment/storage providers without explicit request
+- create duplicate R2 objects when retrying the same Speaking submission
+- call AI or STT providers from controllers
+- change AI/payment/storage providers without updating configuration mappings, `.env.example`, DI registration, and this guide
 
 ## 24. Verification Checklist
 
@@ -613,3 +631,5 @@ Also verify:
 - routes use int IDs
 - controllers stay thin
 - DTOs are used for all API responses
+- no plaintext OTP appears in logs or source logging statements
+- BLL services access persistence only through repositories/`IUnitOfWork`

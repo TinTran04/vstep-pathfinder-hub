@@ -1,4 +1,5 @@
 using DataAccessLayer.Context;
+using DataAccessLayer.Core.Projections;
 using DataAccessLayer.Entities;
 using DataAccessLayer.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -65,37 +66,73 @@ public class ExamAttemptRepository : IExamAttemptRepository
         _context.ExamAttempts.Update(attempt);
     }
 
-    public async Task<(List<ExamAttempt> Items, int TotalCount)> GetHistoryPagedAsync(int userId, int page, int pageSize, string? status = null, string? mode = null)
+    public async Task<(List<ExamAttemptHistoryProjection> Items, int TotalCount)> GetHistoryPagedAsync(
+        int userId,
+        int page,
+        int pageSize,
+        string? status = null,
+        string? mode = null)
     {
-        var query = _context.ExamAttempts
-            .Include(a => a.Exam)
-            .Where(a => a.UserId == userId && !a.IsDeleted);
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize is < 1 or > 100 ? 10 : pageSize;
 
-        if (!string.IsNullOrEmpty(status))
+        var query = _context.ExamAttempts
+            .AsNoTracking()
+            .Where(attempt => attempt.UserId == userId && !attempt.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(status))
         {
-            query = query.Where(a => a.Status == status);
+            query = query.Where(attempt => attempt.Status == status);
         }
 
-        // We can't query JSON dynamically in EF Core perfectly for mode without raw SQL, 
-        // so we fetch the data and filter in memory if mode is requested, 
-        // OR we can just fetch and filter. Since mode is requested rarely, let's filter after if needed.
-        // Wait, "mode" is stored in DraftStateJson._meta.mode OR we can just return all and let FE filter, 
-        // but the spec says "Có thể hỗ trợ filter optional mode". I will filter it in memory if mode is provided.
-        // Actually, let's just implement basic pagination first.
-        
-        if (!string.IsNullOrEmpty(mode))
+        if (!string.IsNullOrWhiteSpace(mode))
         {
-            // Simple string matching for JSON mode property
-            query = query.Where(a => a.DraftStateJson != null && a.DraftStateJson.Contains($"\"mode\":\"{mode}\""));
+            query = query.Where(attempt =>
+                attempt.DraftStateJson != null &&
+                attempt.DraftStateJson.Contains($"\"mode\":\"{mode}\""));
         }
 
         var totalCount = await query.CountAsync();
         var items = await query
-            .OrderByDescending(a => a.UpdatedAt ?? a.StartedAt)
+            .OrderByDescending(attempt => attempt.UpdatedAt ?? attempt.StartedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(attempt => new ExamAttemptHistoryProjection
+            {
+                AttemptId = attempt.AttemptId,
+                ExamId = attempt.ExamId,
+                ExamTitle = attempt.Exam != null ? attempt.Exam.Title : null,
+                SkillType = attempt.SkillType,
+                Status = attempt.Status,
+                StartedAt = attempt.StartedAt,
+                SubmittedAt = attempt.SubmittedAt,
+                CompletedAt = attempt.CompletedAt,
+                UpdatedAt = attempt.UpdatedAt,
+                ExpiresAt = attempt.ExpiresAt,
+                Score = attempt.Score,
+                CurrentSkill = attempt.CurrentSkill,
+                DraftStateJson = attempt.DraftStateJson
+            })
             .ToListAsync();
 
         return (items, totalCount);
+    }
+
+    public Task<List<CompletedAttemptSelectionProjection>> GetCompletedSelectionsAsync(int userId)
+    {
+        return _context.ExamAttempts
+            .AsNoTracking()
+            .Where(attempt =>
+                attempt.UserId == userId &&
+                !attempt.IsDeleted &&
+                (attempt.Status == "submitted" ||
+                 attempt.Status == "scored" ||
+                 attempt.Status == "completed"))
+            .Select(attempt => new CompletedAttemptSelectionProjection
+            {
+                ExamId = attempt.ExamId,
+                DraftStateJson = attempt.DraftStateJson
+            })
+            .ToListAsync();
     }
 }

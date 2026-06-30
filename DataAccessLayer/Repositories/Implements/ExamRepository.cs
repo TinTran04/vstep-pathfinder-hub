@@ -65,6 +65,18 @@ public class ExamRepository : IExamRepository
 
     public Task<Exam?> GetByIdAsync(int examId, bool includeDeleted = false)
     {
+        var query = _context.Exams.AsNoTracking();
+
+        if (!includeDeleted)
+        {
+            query = query.Where(exam => !exam.IsDeleted);
+        }
+
+        return query.FirstOrDefaultAsync(exam => exam.ExamId == examId);
+    }
+
+    public Task<Exam?> GetTrackedByIdAsync(int examId, bool includeDeleted = false)
+    {
         var query = _context.Exams.AsQueryable();
 
         if (!includeDeleted)
@@ -96,10 +108,25 @@ public class ExamRepository : IExamRepository
     public Task<ExamSection?> GetSectionByIdAsync(int sectionId)
     {
         return _context.ExamSections
+            .AsNoTracking()
+            .FirstOrDefaultAsync(section => section.SectionId == sectionId && !section.IsDeleted);
+    }
+
+    public Task<ExamSection?> GetTrackedSectionByIdAsync(int sectionId)
+    {
+        return _context.ExamSections
             .FirstOrDefaultAsync(section => section.SectionId == sectionId && !section.IsDeleted);
     }
 
     public Task<ExamQuestion?> GetQuestionByIdAsync(int questionId)
+    {
+        return _context.ExamQuestions
+            .AsNoTracking()
+            .Include(question => question.Options)
+            .FirstOrDefaultAsync(question => question.QuestionId == questionId && !question.IsDeleted);
+    }
+
+    public Task<ExamQuestion?> GetTrackedQuestionByIdAsync(int questionId)
     {
         return _context.ExamQuestions
             .Include(question => question.Options)
@@ -118,6 +145,61 @@ public class ExamRepository : IExamRepository
             .Include(question => question.Options)
             .OrderBy(question => question.DisplayOrder)
             .ToListAsync();
+    }
+
+    public Task<List<Exam>> GetPublishedGroupMembersAsync(string groupName)
+    {
+        var groupMarker = $"group:{groupName}";
+        return _context.Exams
+            .AsNoTracking()
+            .Where(exam =>
+                !exam.IsDeleted &&
+                exam.IsPublished &&
+                exam.SkillType != "mock_test" &&
+                exam.Description.Contains(groupMarker))
+            .Select(exam => new Exam
+            {
+                ExamId = exam.ExamId,
+                SkillType = exam.SkillType
+            })
+            .ToListAsync();
+    }
+
+    public async Task<int?> GetRandomPublishedPracticeExamIdAsync(
+        string skillType,
+        IReadOnlyCollection<int> excludedExamIds)
+    {
+        var query = _context.Exams
+            .AsNoTracking()
+            .Where(exam =>
+                !exam.IsDeleted &&
+                exam.IsPublished &&
+                exam.SkillType == skillType &&
+                !exam.Description.Contains("mode:mock_test"));
+
+        var excludedIds = excludedExamIds.Count == 0 ? Array.Empty<int>() : excludedExamIds.ToArray();
+        var preferredQuery = excludedIds.Length == 0
+            ? query
+            : query.Where(exam => !excludedIds.Contains(exam.ExamId));
+
+        var count = await preferredQuery.CountAsync();
+        if (count == 0 && excludedIds.Length > 0)
+        {
+            preferredQuery = query;
+            count = await preferredQuery.CountAsync();
+        }
+
+        if (count == 0)
+        {
+            return null;
+        }
+
+        var offset = Random.Shared.Next(count);
+        return await preferredQuery
+            .OrderBy(exam => exam.ExamId)
+            .Skip(offset)
+            .Select(exam => (int?)exam.ExamId)
+            .FirstOrDefaultAsync();
     }
 
     public Task AddAsync(Exam exam)

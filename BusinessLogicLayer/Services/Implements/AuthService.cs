@@ -69,18 +69,16 @@ public class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync();
         user = await GetUserByEmailOrThrowAsync(user.Email);
         
-        Console.WriteLine($"[OTP] Generated OTP for {user.Email}: {otp}");
-
         _ = Task.Run(async () =>
         {
             try
             {
                 await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otp);
-                Console.WriteLine($"[OTP] Email sent to {user.Email}");
+                _logger.LogInformation("Verification OTP email sent successfully.");
             }
             catch (Exception exception)
             {
-                Console.WriteLine($"[OTP] Failed to send email to {user.Email}: {exception.Message}");
+                _logger.LogError(exception, "Failed to send verification OTP email.");
             }
         });
 
@@ -215,8 +213,6 @@ public class AuthService : IAuthService
         var otp = SetEmailOtp(user);
         await _unitOfWork.SaveChangesAsync();
         
-        Console.WriteLine($"[OTP] Generated OTP for {user.Email}: {otp}");
-
         _ = Task.Run(async () =>
         {
             try
@@ -225,7 +221,7 @@ public class AuthService : IAuthService
             }
             catch (Exception exception)
             {
-                Console.WriteLine($"[OTP] Failed to send email to {user.Email}: {exception.Message}");
+                _logger.LogError(exception, "Failed to resend verification OTP email.");
             }
         });
     }
@@ -286,8 +282,6 @@ public class AuthService : IAuthService
          _unitOfWork.Users.Update(user);
          await _unitOfWork.SaveChangesAsync();
 
-         Console.WriteLine($"[Forgot Password OTP] Generated OTP for {user.Email}: {otp}");
-
          _ = Task.Run(async () =>
          {
              try
@@ -296,7 +290,7 @@ public class AuthService : IAuthService
              }
              catch (Exception exception)
              {
-                 Console.WriteLine($"[Forgot Password OTP] Failed to send email to {user.Email}: {exception.Message}");
+                 _logger.LogError(exception, "Failed to send password reset OTP email.");
              }
          });
      }

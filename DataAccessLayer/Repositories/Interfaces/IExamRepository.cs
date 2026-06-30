@@ -9,13 +9,23 @@ public interface IExamRepository
 
     Task<Exam?> GetByIdAsync(int examId, bool includeDeleted = false);
 
+    Task<Exam?> GetTrackedByIdAsync(int examId, bool includeDeleted = false);
+
     Task<Exam?> GetDetailByIdAsync(int examId, bool includeUnpublished = false);
 
     Task<ExamSection?> GetSectionByIdAsync(int sectionId);
 
+    Task<ExamSection?> GetTrackedSectionByIdAsync(int sectionId);
+
     Task<ExamQuestion?> GetQuestionByIdAsync(int questionId);
 
+    Task<ExamQuestion?> GetTrackedQuestionByIdAsync(int questionId);
+
     Task<List<ExamQuestion>> GetQuestionsForScoringAsync(int examId);
+
+    Task<List<Exam>> GetPublishedGroupMembersAsync(string groupName);
+
+    Task<int?> GetRandomPublishedPracticeExamIdAsync(string skillType, IReadOnlyCollection<int> excludedExamIds);
 
     Task AddAsync(Exam exam);
 

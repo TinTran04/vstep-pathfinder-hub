@@ -266,7 +266,7 @@ public class ExamService : IExamService
 
     private async Task<Exam> GetExistingExamAsync(int examId)
     {
-        var exam = await _unitOfWork.Exams.GetByIdAsync(examId);
+        var exam = await _unitOfWork.Exams.GetTrackedByIdAsync(examId);
 
         if (exam is null)
         {
@@ -278,7 +278,7 @@ public class ExamService : IExamService
 
     private async Task<ExamSection> GetExistingSectionAsync(int sectionId)
     {
-        var section = await _unitOfWork.Exams.GetSectionByIdAsync(sectionId);
+        var section = await _unitOfWork.Exams.GetTrackedSectionByIdAsync(sectionId);
 
         if (section is null)
         {
@@ -290,7 +290,7 @@ public class ExamService : IExamService
 
     private async Task<ExamQuestion> GetExistingQuestionAsync(int questionId)
     {
-        var question = await _unitOfWork.Exams.GetQuestionByIdAsync(questionId);
+        var question = await _unitOfWork.Exams.GetTrackedQuestionByIdAsync(questionId);
 
         if (question is null)
         {

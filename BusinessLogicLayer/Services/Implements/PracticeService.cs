@@ -41,8 +41,7 @@ public class PracticeService : IPracticeService
             if (groupMatch.Success)
             {
                 var groupName = groupMatch.Groups[1].Value;
-                var allExams = await _unitOfWork.Exams.GetPagedAsync(new DataAccessLayer.Core.Parameters.ExamQueryParameters { Page = 1, PageSize = 1000, IsPublished = true });
-                var groupExams = allExams.Exams.Where(e => (e.Description ?? "").Contains($"group:{groupName}") && e.SkillType != "mock_test").ToList();
+                var groupExams = await _unitOfWork.Exams.GetPublishedGroupMembersAsync(groupName);
 
                 var listening = groupExams.FirstOrDefault(e => e.SkillType == "listening");
                 var reading = groupExams.FirstOrDefault(e => e.SkillType == "reading");
@@ -991,74 +990,49 @@ public class PracticeService : IPracticeService
 
     public async Task<StartRandomMockTestResponse> StartRandomMockTestAsync(int userId)
     {
-        // 1. Fetch 4 random published exams (one for each skill, non-mock_test)
-        var query = new DataAccessLayer.Core.Parameters.ExamQueryParameters { Page = 1, PageSize = 1000, IsPublished = true };
-        var pagedExams = await _unitOfWork.Exams.GetPagedAsync(query);
-        var allExams = pagedExams.Exams;
-        var eligibleExams = allExams
-            .Where(e => e.IsPublished && !e.IsDeleted && !(e.Description ?? "").Contains("mode:mock_test"))
-            .ToList();
+        var completedSelections = await _unitOfWork.ExamAttempts.GetCompletedSelectionsAsync(userId);
 
-        // Separate by skill
-        var listeningExams = eligibleExams.Where(e => e.SkillType == "listening").ToList();
-        var readingExams = eligibleExams.Where(e => e.SkillType == "reading").ToList();
-        var writingExams = eligibleExams.Where(e => e.SkillType == "writing").ToList();
-        var speakingExams = eligibleExams.Where(e => e.SkillType == "speaking").ToList();
-
-        if (!listeningExams.Any() || !readingExams.Any() || !writingExams.Any() || !speakingExams.Any())
-        {
-            throw new InvalidOperationException("Hiện chưa đủ đề published cho đủ 4 kỹ năng để tạo bài thi ngẫu nhiên.");
-        }
-
-        // 2. Fetch user's completed attempts to prioritize new exams
-        var userHistory = await _unitOfWork.ExamAttempts.GetHistoryPagedAsync(userId, 1, 1000);
         var completedExamIds = new HashSet<int>();
-        foreach (var a in userHistory.Items)
+        foreach (var selection in completedSelections)
         {
-            if (a.Status == "submitted" || a.Status == "scored" || a.Status == "completed")
+            completedExamIds.Add(selection.ExamId);
+            if (!string.IsNullOrEmpty(selection.DraftStateJson))
             {
-                completedExamIds.Add(a.ExamId);
-                if (!string.IsNullOrEmpty(a.DraftStateJson))
+                try
                 {
-                    try
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(selection.DraftStateJson);
+                    var mode = node?["_meta"]?["mode"]?.ToString();
+                    if (mode == "random_mock_test")
                     {
-                        var node = System.Text.Json.Nodes.JsonNode.Parse(a.DraftStateJson);
-                        var mode = node?["_meta"]?["mode"]?.ToString();
-                        if (mode == "random_mock_test")
+                        var selected = node?["_meta"]?["selectedExamIds"];
+                        if (selected != null)
                         {
-                            var selected = node?["_meta"]?["selectedExamIds"];
-                            if (selected != null)
-                            {
-                                completedExamIds.Add(selected["listening"]?.GetValue<int>() ?? 0);
-                                completedExamIds.Add(selected["reading"]?.GetValue<int>() ?? 0);
-                                completedExamIds.Add(selected["writing"]?.GetValue<int>() ?? 0);
-                                completedExamIds.Add(selected["speaking"]?.GetValue<int>() ?? 0);
-                            }
+                            AddPositiveId(completedExamIds, selected["listening"]?.GetValue<int>());
+                            AddPositiveId(completedExamIds, selected["reading"]?.GetValue<int>());
+                            AddPositiveId(completedExamIds, selected["writing"]?.GetValue<int>());
+                            AddPositiveId(completedExamIds, selected["speaking"]?.GetValue<int>());
                         }
                     }
-                    catch { }
                 }
+                catch (System.Text.Json.JsonException) { }
             }
         }
 
-        var random = new Random();
-        int GetRandomExam(List<Exam> exams)
-        {
-            var uncompleted = exams.Where(e => !completedExamIds.Contains(e.ExamId)).ToList();
-            if (uncompleted.Any()) return uncompleted[random.Next(uncompleted.Count)].ExamId;
-            return exams[random.Next(exams.Count)].ExamId;
-        }
+        var listeningId = await _unitOfWork.Exams.GetRandomPublishedPracticeExamIdAsync("listening", completedExamIds);
+        var readingId = await _unitOfWork.Exams.GetRandomPublishedPracticeExamIdAsync("reading", completedExamIds);
+        var writingId = await _unitOfWork.Exams.GetRandomPublishedPracticeExamIdAsync("writing", completedExamIds);
+        var speakingId = await _unitOfWork.Exams.GetRandomPublishedPracticeExamIdAsync("speaking", completedExamIds);
 
-        var listeningId = GetRandomExam(listeningExams);
-        var readingId = GetRandomExam(readingExams);
-        var writingId = GetRandomExam(writingExams);
-        var speakingId = GetRandomExam(speakingExams);
+        if (!listeningId.HasValue || !readingId.HasValue || !writingId.HasValue || !speakingId.HasValue)
+        {
+            throw new InvalidOperationException("Hiện chưa đủ đề published cho đủ 4 kỹ năng để tạo bài thi ngẫu nhiên.");
+        }
 
         // 2. Create ExamAttempt
         var attempt = new ExamAttempt
         {
             UserId = userId,
-            ExamId = listeningId, // Primary FK to satisfy DB
+            ExamId = listeningId.Value,
             SkillType = "mock_test",
             Status = "in_progress",
             StartedAt = DateTime.UtcNow,
@@ -1071,10 +1045,10 @@ public class PracticeService : IPracticeService
 
         var selectedExamIds = new Dictionary<string, int>
         {
-            { "listening", listeningId },
-            { "reading", readingId },
-            { "writing", writingId },
-            { "speaking", speakingId }
+            { "listening", listeningId.Value },
+            { "reading", readingId.Value },
+            { "writing", writingId.Value },
+            { "speaking", speakingId.Value }
         };
 
         var skillDurations = new Dictionary<string, int>
@@ -1135,7 +1109,7 @@ public class PracticeService : IPracticeService
                 catch { }
             }
 
-            var title = isRandom ? $"Random Mock Test - {attempt.StartedAt.ToLocalTime():dd/MM/yyyy}" : attempt.Exam?.Title ?? $"Attempt #{attempt.AttemptId}";
+            var title = isRandom ? $"Random Mock Test - {attempt.StartedAt.ToLocalTime():dd/MM/yyyy}" : attempt.ExamTitle ?? $"Attempt #{attempt.AttemptId}";
             
             var skillScores = new Dictionary<string, decimal?>();
             
@@ -1367,6 +1341,14 @@ public class PracticeService : IPracticeService
             ".flac" => "audio/flac",
             _ => "audio/webm"
         };
+    }
+
+    private static void AddPositiveId(ISet<int> ids, int? value)
+    {
+        if (value is > 0)
+        {
+            ids.Add(value.Value);
+        }
     }
 
     private static void SetInvalidSpeakingAudioResult(SpeakingSubmission submission, string? transcript)

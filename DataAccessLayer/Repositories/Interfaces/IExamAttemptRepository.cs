@@ -1,4 +1,5 @@
 using DataAccessLayer.Entities;
+using DataAccessLayer.Core.Projections;
 
 namespace DataAccessLayer.Repositories.Interfaces;
 
@@ -18,5 +19,7 @@ public interface IExamAttemptRepository
 
     void Update(ExamAttempt attempt);
 
-    Task<(List<ExamAttempt> Items, int TotalCount)> GetHistoryPagedAsync(int userId, int page, int pageSize, string? status = null, string? mode = null);
+    Task<(List<ExamAttemptHistoryProjection> Items, int TotalCount)> GetHistoryPagedAsync(int userId, int page, int pageSize, string? status = null, string? mode = null);
+
+    Task<List<CompletedAttemptSelectionProjection>> GetCompletedSelectionsAsync(int userId);
 }

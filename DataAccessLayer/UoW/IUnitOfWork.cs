@@ -32,6 +32,8 @@ public interface IUnitOfWork
 
     IAiUsageLogRepository AiUsageLogs { get; }
 
+    IAdminStatsRepository AdminStats { get; }
+
     Task<int> SaveChangesAsync();
 
     Task ExecuteInTransactionAsync(Func<Task> operation);

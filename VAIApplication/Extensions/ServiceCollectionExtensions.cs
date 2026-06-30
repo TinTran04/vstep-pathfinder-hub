@@ -42,6 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<IUserRewardLedgerRepository, UserRewardLedgerRepository>();
         services.AddScoped<IAiUsageLogRepository, AiUsageLogRepository>();
+        services.AddScoped<IAdminStatsRepository, AdminStatsRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddHttpClient<IEmailService, EmailService>((provider, client) =>
         {

@@ -1,190 +1,123 @@
 using BusinessLogicLayer.DTOs.Admin;
 using BusinessLogicLayer.Services.Interfaces;
-using DataAccessLayer.Context;
-using Microsoft.EntityFrameworkCore;
+using DataAccessLayer.Core.Projections;
+using DataAccessLayer.UoW;
 
 namespace BusinessLogicLayer.Services.Implements;
 
 public class AdminStatsService : IAdminStatsService
 {
-    private readonly ApplicationDbContext _dbContext;
+    private const int FreePlanId = 1;
+    private const int WeeklyPlanId = 2;
+    private const int MonthlyPlanId = 3;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public AdminStatsService(ApplicationDbContext dbContext)
+    public AdminStatsService(IUnitOfWork unitOfWork)
     {
-        _dbContext = dbContext;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<AdminStatsResponse> GetDashboardStatsAsync()
     {
-        var now = DateTime.UtcNow;
-        var startOfToday = now.Date;
-        var startOfThisMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var startOfLastMonth = startOfThisMonth.AddMonths(-1);
+        var nowUtc = DateTime.UtcNow;
+        var snapshot = await _unitOfWork.AdminStats.GetDashboardSnapshotAsync(nowUtc);
+        var startOfToday = nowUtc.Date;
+        var startOfThisMonth = new DateTime(nowUtc.Year, nowUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var totalRevenue = await _dbContext.PaymentTransactions
-            .Where(p => p.Status == "paid" || p.Status == "PAID")
-            .SumAsync(p => p.Amount);
+        var monthlyGrowth = snapshot.LastMonthUsers > 0
+            ? (snapshot.ThisMonthUsers - snapshot.LastMonthUsers) / (decimal)snapshot.LastMonthUsers * 100
+            : snapshot.ThisMonthUsers > 0 ? 100 : 0;
 
-        var thisMonthUsers = await _dbContext.Users
-            .Where(u => u.CreatedAt >= startOfThisMonth)
-            .CountAsync();
-
-        var lastMonthUsers = await _dbContext.Users
-            .Where(u => u.CreatedAt >= startOfLastMonth && u.CreatedAt < startOfThisMonth)
-            .CountAsync();
-
-        decimal monthlyGrowth = 0;
-        if (lastMonthUsers > 0)
-        {
-            monthlyGrowth = (thisMonthUsers - lastMonthUsers) / (decimal)lastMonthUsers * 100;
-        }
-        else if (thisMonthUsers > 0)
-        {
-            monthlyGrowth = 100;
-        }
-
-        var weeklyData = new List<int>();
-        var usageData = new List<UsageDataPoint>();
-        for (int i = 6; i >= 0; i--)
-        {
-            var date = startOfToday.AddDays(-i);
-            var nextDate = date.AddDays(1);
-
-            var activeUsers = await _dbContext.ExamAttempts
-                .Where(a => a.StartedAt >= date && a.StartedAt < nextDate)
-                .Select(a => a.UserId)
-                .Distinct()
-                .CountAsync();
-
-            var examsTaken = await _dbContext.ExamAttempts
-                .Where(a => a.StartedAt >= date && a.StartedAt < nextDate)
-                .CountAsync();
-
-            weeklyData.Add(examsTaken);
-            usageData.Add(new UsageDataPoint
+        var usageData = Enumerable.Range(0, 7)
+            .Select(offset => startOfToday.AddDays(offset - 6))
+            .Select(date =>
             {
-                Name = date.ToString("dd/MM"),
-                Users = activeUsers,
-                Exams = examsTaken
-            });
-        }
-
-        var monthlyUsageData = new List<MonthlyUsagePoint>();
-        var subscriptionPurchaseData = new List<SubscriptionPurchasePoint>();
-        for (int i = 5; i >= 0; i--)
-        {
-            var startOfMonth = startOfThisMonth.AddMonths(-i);
-            var endOfMonth = startOfMonth.AddMonths(1);
-            var monthName = startOfMonth.ToString("MMM");
-
-            var usersCreated = await _dbContext.Users
-                .Where(u => u.CreatedAt >= startOfMonth && u.CreatedAt < endOfMonth)
-                .CountAsync();
-
-            monthlyUsageData.Add(new MonthlyUsagePoint
-            {
-                Name = monthName,
-                Users = usersCreated
-            });
-
-            var basic = await _dbContext.PaymentTransactions
-                .Where(p => (p.Status == "paid" || p.Status == "PAID") && p.SubscriptionPlanId == 2 && p.CreatedAt >= startOfMonth && p.CreatedAt < endOfMonth)
-                .CountAsync();
-            var pro = await _dbContext.PaymentTransactions
-                .Where(p => (p.Status == "paid" || p.Status == "PAID") && p.SubscriptionPlanId == 3 && p.CreatedAt >= startOfMonth && p.CreatedAt < endOfMonth)
-                .CountAsync();
-
-            subscriptionPurchaseData.Add(new SubscriptionPurchasePoint
-            {
-                Month = monthName,
-                Free = 0,
-                Weekly = basic,
-                Monthly = pro
-            });
-        }
-
-        var planDistData = new List<PlanDistPoint>
-        {
-            new PlanDistPoint { Name = "Free", Value = await _dbContext.Users.Where(u => u.SubscriptionPlanId == 1).CountAsync(), Fill = "#ef4444" },
-            new PlanDistPoint { Name = "Weekly", Value = await _dbContext.Users.Where(u => u.SubscriptionPlanId == 2).CountAsync(), Fill = "#f59e0b" },
-            new PlanDistPoint { Name = "Monthly", Value = await _dbContext.Users.Where(u => u.SubscriptionPlanId == 3).CountAsync(), Fill = "#10b981" }
-        };
-
-        var recentActivities = new List<ActivityItem>();
-        
-        var recentAttempts = await _dbContext.ExamAttempts
-            .Include(a => a.User)
-            .Include(a => a.Exam)
-            .Where(a => a.Status == "scored" || a.Status == "completed")
-            .OrderByDescending(a => a.CompletedAt)
-            .Take(10)
-            .ToListAsync();
-            
-        foreach(var a in recentAttempts)
-        {
-            recentActivities.Add(new ActivityItem
-            {
-                Text = $"{a.User?.FullName ?? "User"} hoàn thành bài thi {a.Exam?.Title ?? "Exam"} — {a.Score}/10",
-                Type = "exam",
-                Time = GetRelativeTime(a.CompletedAt ?? a.UpdatedAt ?? DateTime.UtcNow),
-                CreatedAt = a.CompletedAt ?? a.UpdatedAt ?? DateTime.UtcNow
-            });
-        }
-
-        var recentPayments = await _dbContext.PaymentTransactions
-            .Include(p => p.User)
-            .Include(p => p.SubscriptionPlan)
-            .Where(p => p.Status == "paid" || p.Status == "PAID")
-            .OrderByDescending(p => p.CreatedAt)
-            .Take(10)
-            .ToListAsync();
-
-        foreach(var p in recentPayments)
-        {
-            recentActivities.Add(new ActivityItem
-            {
-                Text = $"{p.User?.FullName ?? "User"} đăng ký {p.SubscriptionPlan?.Name ?? "gói"}",
-                Type = "payment",
-                Time = GetRelativeTime(p.CreatedAt),
-                CreatedAt = p.CreatedAt
-            });
-        }
-        
-        var recentUsers = await _dbContext.Users
-            .OrderByDescending(u => u.CreatedAt)
-            .Take(10)
-            .ToListAsync();
-            
-        foreach(var u in recentUsers)
-        {
-            recentActivities.Add(new ActivityItem
-            {
-                Text = $"{u.FullName} đăng ký tài khoản mới",
-                Type = "user",
-                Time = GetRelativeTime(u.CreatedAt),
-                CreatedAt = u.CreatedAt
-            });
-        }
-
-        recentActivities = recentActivities
-            .OrderByDescending(a => a.CreatedAt)
-            .Take(10)
+                var value = snapshot.DailyUsage.FirstOrDefault(item => item.Date.Date == date);
+                return new UsageDataPoint
+                {
+                    Name = date.ToString("dd/MM"),
+                    Users = value?.Users ?? 0,
+                    Exams = value?.Exams ?? 0
+                };
+            })
             .ToList();
+
+        var monthStarts = Enumerable.Range(0, 6)
+            .Select(offset => startOfThisMonth.AddMonths(offset - 5))
+            .ToList();
+
+        var monthlyUsage = monthStarts.Select(month => new MonthlyUsagePoint
+        {
+            Name = month.ToString("MMM"),
+            Users = snapshot.MonthlyUsers
+                .FirstOrDefault(item => item.Year == month.Year && item.Month == month.Month)?.Users ?? 0
+        }).ToList();
+
+        var subscriptionPurchases = monthStarts.Select(month => new SubscriptionPurchasePoint
+        {
+            Month = month.ToString("MMM"),
+            Free = 0,
+            Weekly = GetPurchaseCount(snapshot.MonthlyPurchases, month, WeeklyPlanId),
+            Monthly = GetPurchaseCount(snapshot.MonthlyPurchases, month, MonthlyPlanId)
+        }).ToList();
 
         return new AdminStatsResponse
         {
             UsageData = usageData,
-            MonthlyUsageData = monthlyUsageData,
-            SubscriptionPurchaseData = subscriptionPurchaseData,
-            PlanDistData = planDistData.Where(p => p.Value > 0).ToList(),
-            TotalRevenue = totalRevenue,
+            MonthlyUsageData = monthlyUsage,
+            SubscriptionPurchaseData = subscriptionPurchases,
+            PlanDistData = snapshot.PlanDistribution
+                .Where(item => item.Count > 0)
+                .Select(MapPlanDistribution)
+                .ToList(),
+            TotalRevenue = snapshot.TotalRevenue,
             MonthlyGrowth = Math.Round(monthlyGrowth, 1),
-            RecentActivities = recentActivities,
-            WeeklyData = weeklyData
+            RecentActivities = snapshot.RecentActivities.Select(MapActivity).ToList(),
+            WeeklyData = usageData.Select(item => item.Exams).ToList()
         };
     }
 
-    private string GetRelativeTime(DateTime dateTime)
+    private static int GetPurchaseCount(
+        IEnumerable<AdminMonthlyPurchaseProjection> purchases,
+        DateTime month,
+        int planId)
+    {
+        return purchases.FirstOrDefault(item =>
+            item.Year == month.Year &&
+            item.Month == month.Month &&
+            item.SubscriptionPlanId == planId)?.Count ?? 0;
+    }
+
+    private static PlanDistPoint MapPlanDistribution(AdminPlanDistributionProjection item)
+    {
+        return item.SubscriptionPlanId switch
+        {
+            FreePlanId => new PlanDistPoint { Name = "Free", Value = item.Count, Fill = "#ef4444" },
+            WeeklyPlanId => new PlanDistPoint { Name = "Weekly", Value = item.Count, Fill = "#f59e0b" },
+            MonthlyPlanId => new PlanDistPoint { Name = "Monthly", Value = item.Count, Fill = "#10b981" },
+            _ => new PlanDistPoint { Name = $"Plan {item.SubscriptionPlanId}", Value = item.Count, Fill = "#64748b" }
+        };
+    }
+
+    private static ActivityItem MapActivity(AdminActivityProjection activity)
+    {
+        var text = activity.Type switch
+        {
+            "exam" => $"{activity.UserName} hoàn thành bài thi {activity.Subject ?? "Exam"} - {activity.Score}/10",
+            "payment" => $"{activity.UserName} đăng ký {activity.Subject ?? "gói"}",
+            _ => $"{activity.UserName} đăng ký tài khoản mới"
+        };
+
+        return new ActivityItem
+        {
+            Text = text,
+            Type = activity.Type,
+            Time = GetRelativeTime(activity.CreatedAt),
+            CreatedAt = activity.CreatedAt
+        };
+    }
+
+    private static string GetRelativeTime(DateTime dateTime)
     {
         var span = DateTime.UtcNow - dateTime;
         if (span.TotalMinutes < 1) return "Vừa xong";
