@@ -179,7 +179,13 @@ const Admin = () => {
 
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [userForm, setUserForm] = useState({ name: "", email: "", role: "student" as "admin" | "student", status: "active" as "active" | "inactive", plan: "Miễn phí" });
+  const [userForm, setUserForm] = useState({
+    name: "",
+    email: "",
+    role: "student" as "admin" | "student",
+    status: "active" as "active" | "inactive",
+    subscriptionPlanId: 1,
+  });
 
   // User detail view
   const [viewUser, setViewUser] = useState<User | null>(null);
@@ -277,8 +283,29 @@ const Admin = () => {
 
 
   // User CRUD
-  const openAddUser = () => { setEditUser(null); setUserForm({ name: "", email: "", role: "student", status: "active", plan: "Miễn phí" }); setUserDialog(true); };
-  const openEditUser = (u: User) => { setEditUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, status: u.status, plan: u.plan }); setUserDialog(true); };
+  const openAddUser = () => {
+    setEditUser(null);
+    const freePlan = plans.find(plan => plan.price === 0);
+    setUserForm({
+      name: "",
+      email: "",
+      role: "student",
+      status: "active",
+      subscriptionPlanId: Number(freePlan?.id ?? 1),
+    });
+    setUserDialog(true);
+  };
+  const openEditUser = (u: User) => {
+    setEditUser(u);
+    setUserForm({
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      subscriptionPlanId: u.subscriptionPlanId ?? 1,
+    });
+    setUserDialog(true);
+  };
   
   const saveUser = async () => {
     if (!userForm.name || !userForm.email) { toast.error("Vui lòng điền đầy đủ"); return; }
@@ -928,7 +955,7 @@ const Admin = () => {
   const filteredUsers = users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(searchUser.toLowerCase()) || u.email.toLowerCase().includes(searchUser.toLowerCase());
     const matchesRole = filterUserRole === "all" || u.role === filterUserRole;
-    const matchesPlan = filterUserPlan === "all" || u.plan === filterUserPlan;
+    const matchesPlan = filterUserPlan === "all" || String(u.subscriptionPlanId) === filterUserPlan;
     const matchesStatus = filterUserStatus === "all" || u.status === filterUserStatus;
     return matchesSearch && matchesRole && matchesPlan && matchesStatus;
   });
@@ -2077,13 +2104,13 @@ const Admin = () => {
                       </SelectContent>
                     </Select>
                     <Select value={filterUserPlan} onValueChange={setFilterUserPlan}>
-                      <SelectTrigger className="h-9 w-[110px] text-xs">
+                      <SelectTrigger className="h-9 w-[140px] text-xs">
                         <SelectValue placeholder="Gói" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Tất cả gói</SelectItem>
                         {plans.map(p => (
-                          <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -2660,12 +2687,20 @@ const Admin = () => {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Gói sử dụng</Label>
-              <Select value={userForm.plan} onValueChange={v => setUserForm(p => ({ ...p, plan: v }))}>
+              <Select
+                value={String(userForm.subscriptionPlanId)}
+                onValueChange={value => setUserForm(current => ({
+                  ...current,
+                  subscriptionPlanId: Number(value),
+                }))}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Miễn phí">Miễn phí (Free)</SelectItem>
-                  <SelectItem value="Gói Tuần">Gói Tuần (Premium)</SelectItem>
-                  <SelectItem value="Gói Tháng">Gói Tháng (Premium)</SelectItem>
+                  {plans.map(plan => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name}{plan.isActive === false ? " (Đã ẩn)" : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

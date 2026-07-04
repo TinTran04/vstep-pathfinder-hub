@@ -77,6 +77,10 @@ export const attemptsApiService = {
     }
   },
 
+  async getAttemptProgress(attemptId: string | number): Promise<any> {
+    return apiClient.get<any>(`/attempts/${attemptId}/progress`);
+  },
+
   async autosaveMockTest(attemptId: string, currentSkill: string, draftStateJson: string): Promise<void> {
     await apiClient.patch(`/attempts/${attemptId}/autosave`, {
       currentSkill,

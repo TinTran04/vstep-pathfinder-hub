@@ -7,6 +7,7 @@ export interface User {
   status: "active" | "inactive";
   createdAt: string;
   examsCompleted: number;
+  subscriptionPlanId?: number;
   plan: string;
   lastActive: string;
   points: number;

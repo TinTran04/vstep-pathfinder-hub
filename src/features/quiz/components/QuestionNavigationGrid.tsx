@@ -1,6 +1,4 @@
 import React, { useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { Check } from "lucide-react";
 
 interface QuestionNavigationGridProps {
   questionCount: number;
@@ -15,91 +13,80 @@ export const QuestionNavigationGrid: React.FC<QuestionNavigationGridProps> = ({
   questionStatuses = {},
   onQuestionSelect,
 }) => {
-  // For Reading: group by 10 (passages). For others: single grid
   const groupedQuestions = useMemo(() => {
     if (questionCount === 40) {
-      // Reading - 4 passages x 10 questions
       return [
         { label: "Passage 1", start: 1, end: 10 },
         { label: "Passage 2", start: 11, end: 20 },
         { label: "Passage 3", start: 21, end: 30 },
         { label: "Passage 4", start: 31, end: 40 },
       ];
-    } else if (questionCount === 35) {
-      // Listening - 3 parts (8 + 12 + 15 = 35)
+    }
+    if (questionCount === 35) {
       return [
         { label: "Part 1", start: 1, end: 8 },
         { label: "Part 2", start: 9, end: 20 },
         { label: "Part 3", start: 21, end: 35 },
       ];
-    } else if (questionCount === 2) {
-      // Writing - 2 tasks
-      return [{ label: "Task 1", start: 1, end: 1 }, { label: "Task 2", start: 2, end: 2 }];
-    } else if (questionCount === 3) {
-      // Speaking - 3 parts
+    }
+    if (questionCount === 2) {
+      return [
+        { label: "Task 1", start: 1, end: 1 },
+        { label: "Task 2", start: 2, end: 2 },
+      ];
+    }
+    if (questionCount === 3) {
       return [
         { label: "Part 1", start: 1, end: 1 },
         { label: "Part 2", start: 2, end: 2 },
         { label: "Part 3", start: 3, end: 3 },
       ];
     }
-    return [{ label: "Questions", start: 1, end: questionCount }];
+    return [{ label: "Câu hỏi", start: 1, end: questionCount }];
   }, [questionCount]);
 
-  const renderQuestionGroup = (label: string, start: number, end: number) => {
-    const questions = [];
-    for (let i = start; i <= end; i++) {
-      const status = questionStatuses[i] || "unanswered";
-      const isAnswered = status === "answered";
-      const isCurrent = currentQuestion === i;
-
-      questions.push(
-        <Button
-          key={i}
-          onClick={() => onQuestionSelect?.(i)}
-          className={`
-            w-10 h-10 p-0 text-sm font-semibold rounded-sm
-            transition-all duration-150
-            ${
-              isCurrent
-                ? "border-4 border-blue-900 bg-white text-blue-900"
-                : isAnswered
-                ? "bg-blue-900 text-white hover:bg-blue-800"
-                : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-            }
-          `}
-        >
-          {isAnswered ? (
-            <Check className="w-4 h-4" />
-          ) : (
-            i
-          )}
-        </Button>
-      );
-    }
-
-    return (
-      <div key={label} className="mb-4">
-        {/* Section Header */}
-        {questionCount >= 35 && (
-          <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">
-            {label}
-          </h4>
-        )}
-
-        {/* Question Grid */}
-        <div className="grid grid-cols-5 gap-1">
-          {questions}
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div className="space-y-3">
-      {groupedQuestions.map(({ label, start, end }) =>
-        renderQuestionGroup(label, start, end)
-      )}
+    <div className="space-y-5">
+      {groupedQuestions.map(({ label, start, end }) => (
+        <section key={label} aria-label={label}>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-muted-foreground">{label}</h3>
+            <span className="text-[10px] text-muted-foreground">{start}-{end}</span>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: end - start + 1 }, (_, offset) => start + offset).map(questionNumber => {
+              const status = questionStatuses[questionNumber] || "unanswered";
+              const isCurrent = currentQuestion === questionNumber;
+              const isAnswered = status === "answered";
+              const isReviewing = status === "reviewing";
+
+              return (
+                <button
+                  key={questionNumber}
+                  type="button"
+                  onClick={() => onQuestionSelect?.(questionNumber)}
+                  aria-label={`Câu ${questionNumber}: ${isAnswered ? "đã làm" : isReviewing ? "đánh dấu xem lại" : "chưa làm"}`}
+                  aria-current={isCurrent ? "step" : undefined}
+                  className={`relative flex aspect-square min-h-9 w-full items-center justify-center rounded-md border text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                    isCurrent
+                      ? "border-primary bg-background text-primary ring-2 ring-primary/20"
+                      : isAnswered
+                        ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                        : isReviewing
+                          ? "border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                          : "border-border bg-muted/60 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                  }`}
+                >
+                  {questionNumber}
+                  {isAnswered && !isCurrent && (
+                    <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-primary-foreground/90" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 };

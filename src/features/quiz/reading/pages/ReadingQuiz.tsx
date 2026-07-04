@@ -72,7 +72,6 @@ const ReadingQuiz = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
 
   const passageScrollRef = useRef<HTMLDivElement>(null);
@@ -204,15 +203,15 @@ const ReadingQuiz = () => {
   useEffect(() => {
     if (!isMockSession || !practiceData?.attemptId) return;
     const timer = setInterval(() => {
-      attemptsApiService.getInProgressAttempt().then(res => {
+      attemptsApiService.getAttemptProgress(practiceData.attemptId).then(res => {
         if (res && res.remainingSeconds >= 0) {
-          setServerTimeRemaining(res.remainingSeconds);
+          setTimeLeft(res.remainingSeconds);
           if (res.remainingSeconds <= 0 && !submitted) {
             doSubmit();
           }
         }
       }).catch(err => console.error("Failed to fetch remaining time", err));
-    }, 1000);
+    }, 30000);
     return () => clearInterval(timer);
   }, [isMockSession, practiceData?.attemptId, submitted]);
 
@@ -458,10 +457,10 @@ const ReadingQuiz = () => {
       <>
         <VstepMockLayout
           skillName="Reading / Kỹ năng Đọc"
-          remainingSeconds={serverTimeRemaining}
+          remainingSeconds={timeLeft}
           questionCount={totalQ}
           answeredCount={answeredCount}
-          currentQuestion={sectionOffset}
+          currentQuestion={sectionOffset + 1}
           isLastSkill={false}
           onExit={handleExitMockTest}
           onNext={doSubmit}
@@ -483,12 +482,12 @@ const ReadingQuiz = () => {
         questionStatuses={questionStatuses}
         attemptId={String(practiceData.attemptId)}
       >
-        <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
+        <div className="mx-auto grid min-h-full w-full max-w-[1400px] overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-2">
           {/* Left: Passage text */}
-          <div className="w-1/2 border-r border-border">
+          <div className="min-w-0 border-b border-border lg:border-b-0 lg:border-r">
             <div ref={passageScrollRef}>
-              <ScrollArea className="h-[calc(100vh-140px)]">
-                <div className="p-6">
+              <ScrollArea className="h-[38vh] min-h-[260px] lg:h-[calc(100dvh-230px)]">
+                <div className="p-4 sm:p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <BookOpen size={20} className="text-primary" />
                     <h2 className="text-lg font-bold text-foreground">{section?.title || `Đoạn văn ${currentSection + 1}`}</h2>
@@ -509,10 +508,10 @@ const ReadingQuiz = () => {
           </div>
 
           {/* Right: Questions */}
-          <div className="w-1/2">
+          <div className="min-w-0">
             <div ref={questionsScrollRef}>
-              <ScrollArea className="h-[calc(100vh-140px)]">
-                <div className="p-6 space-y-6">
+              <ScrollArea className="h-[52vh] min-h-[360px] lg:h-[calc(100dvh-230px)]">
+                <div className="space-y-6 p-4 sm:p-6">
                   <h3 className="font-semibold text-foreground">
                     Câu hỏi – {section?.title || `Bài ${currentSection + 1}`}
                   </h3>

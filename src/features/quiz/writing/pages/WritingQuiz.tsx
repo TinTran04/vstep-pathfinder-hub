@@ -126,7 +126,6 @@ const WritingQuiz = () => {
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
   const [showSample, setShowSample] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
 
   // ── Feedback state ──
@@ -280,15 +279,15 @@ const WritingQuiz = () => {
   useEffect(() => {
     if (!isMockSession || !attemptId) return;
     const timer = setInterval(() => {
-      attemptsApiService.getInProgressAttempt().then(res => {
+      attemptsApiService.getAttemptProgress(attemptId).then(res => {
         if (res && res.remainingSeconds >= 0) {
-          setServerTimeRemaining(res.remainingSeconds);
+          setTimeLeft(res.remainingSeconds);
           if (res.remainingSeconds <= 0 && !submitted) {
             setSubmitted(true);
           }
         }
       }).catch(err => console.error("Failed to fetch remaining time", err));
-    }, 1000);
+    }, 30000);
     return () => clearInterval(timer);
   }, [isMockSession, attemptId, submitted]);
 
@@ -696,7 +695,7 @@ const WritingQuiz = () => {
       <>
         <VstepMockLayout
           skillName="Writing / Kỹ năng Viết"
-          remainingSeconds={serverTimeRemaining}
+          remainingSeconds={timeLeft}
           questionCount={tasks.length}
           answeredCount={Object.values(questionStatuses).filter(s => s === "answered").length}
           currentQuestion={currentTask + 1}
@@ -707,12 +706,12 @@ const WritingQuiz = () => {
           questionStatuses={questionStatuses}
           attemptId={attemptId}
         >
-          <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
+          <div className="mx-auto grid min-h-full w-full max-w-[1400px] overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
           {/* Left: Prompt */}
-          <div className="w-1/2 border-r border-border">
+          <div className="min-w-0 border-b border-border lg:border-b-0 lg:border-r">
             <VocabularyContextMenu source="writing">
-              <ScrollArea className="h-[calc(100vh-64px)]">
-                <div className="p-6 space-y-6">
+              <ScrollArea className="h-[34vh] min-h-[240px] lg:h-[calc(100dvh-230px)]">
+                <div className="space-y-5 p-4 sm:p-6">
                   <div className="flex items-center gap-2">
                     <FileText size={20} className="text-primary" />
                     <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
@@ -739,8 +738,8 @@ const WritingQuiz = () => {
           </div>
 
           {/* Right: Editor */}
-          <div className="w-1/2 flex flex-col">
-            <div className="flex-1 p-6 flex flex-col">
+          <div className="flex min-w-0 flex-col">
+            <div className="flex flex-1 flex-col p-4 sm:p-6">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Type size={18} className="text-primary" />
@@ -749,7 +748,7 @@ const WritingQuiz = () => {
                 <span className="text-xs text-muted-foreground">{task.title}</span>
               </div>
               <Textarea
-                className="flex-1 min-h-[400px] resize-none text-sm leading-relaxed rounded-xl"
+                className="min-h-[420px] flex-1 resize-none rounded-lg text-sm leading-relaxed lg:min-h-0"
                 placeholder="Bắt đầu viết bài của bạn tại đây..."
                 value={currentText}
                 onChange={e => setWritings(p => ({ ...p, [task.id]: e.target.value }))}

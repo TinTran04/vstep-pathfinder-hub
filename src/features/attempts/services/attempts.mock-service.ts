@@ -266,6 +266,10 @@ export const attemptsMockService = {
     return null;
   },
 
+  async getAttemptProgress(_attemptId: string | number): Promise<any> {
+    return null;
+  },
+
   async autosaveMockTest(attemptId: string, currentSkill: string, draftStateJson: string): Promise<void> {
     // No-op
   },

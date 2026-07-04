@@ -115,7 +115,6 @@ const SpeakingQuiz = () => {
   const [submitted, setSubmitted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [mockTransition, setMockTransition] = useState(false);
-  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
 
   // ── Camera & Mic ──
@@ -254,15 +253,15 @@ const SpeakingQuiz = () => {
   useEffect(() => {
     if (!isMockSession || !attemptId) return;
     const timer = setInterval(() => {
-      attemptsApiService.getInProgressAttempt().then(res => {
+      attemptsApiService.getAttemptProgress(attemptId).then(res => {
         if (res && res.remainingSeconds >= 0) {
-          setServerTimeRemaining(res.remainingSeconds);
+          setTimeLeft(res.remainingSeconds);
           if (res.remainingSeconds <= 0 && !submitted) {
             setSubmitted(true);
           }
         }
       }).catch(err => console.error("Failed to fetch remaining time", err));
-    }, 1000);
+    }, 30000);
     return () => clearInterval(timer);
   }, [isMockSession, attemptId, submitted]);
 
@@ -827,7 +826,7 @@ const SpeakingQuiz = () => {
       <>
         <VstepMockLayout
           skillName="Speaking / Kỹ năng Nói"
-          remainingSeconds={serverTimeRemaining}
+          remainingSeconds={timeLeft}
           questionCount={parts.length}
           answeredCount={Object.values(questionStatuses).filter(s => s === "answered").length}
           currentQuestion={currentPart + 1}
@@ -838,12 +837,12 @@ const SpeakingQuiz = () => {
           questionStatuses={questionStatuses}
           attemptId={attemptId}
         >
-          <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
+          <div className="mx-auto grid min-h-full w-full max-w-[1400px] overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
           {/* Left: Prompt */}
-          <div className="w-1/2 border-r border-border">
+          <div className="min-w-0 border-b border-border lg:border-b-0 lg:border-r">
             <VocabularyContextMenu source="speaking">
-              <ScrollArea className="h-[calc(100vh-64px)]">
-                <div className="p-6 space-y-6">
+              <ScrollArea className="h-[30vh] min-h-[220px] lg:h-[calc(100dvh-230px)]">
+                <div className="space-y-5 p-4 sm:p-6">
                   <div>
                     <h2 className="text-lg font-bold text-foreground">{part.title}</h2>
                     <Badge variant="outline" className="mt-2 text-xs">⏱ {part.duration}</Badge>
@@ -860,9 +859,9 @@ const SpeakingQuiz = () => {
           </div>
 
           {/* Right: Camera & Recording */}
-          <div className="w-1/2 flex flex-col p-6 space-y-4">
+          <div className="flex min-w-0 flex-col space-y-4 p-4 sm:p-6">
             {/* Video area */}
-            <div className="relative flex-1 bg-muted rounded-2xl overflow-hidden flex items-center justify-center min-h-[300px]">
+            <div className="relative flex min-h-[280px] flex-1 items-center justify-center overflow-hidden rounded-lg bg-muted sm:min-h-[360px]">
               <video ref={videoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${cameraOn ? "" : "hidden"}`} />
               {!cameraOn && (
                 <div className="text-center text-muted-foreground">
@@ -878,7 +877,7 @@ const SpeakingQuiz = () => {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <Button size="icon" variant={cameraOn ? "default" : "outline"} onClick={toggleCamera} className="rounded-full w-12 h-12">
                 {cameraOn ? <Video size={20} /> : <VideoOff size={20} />}
               </Button>

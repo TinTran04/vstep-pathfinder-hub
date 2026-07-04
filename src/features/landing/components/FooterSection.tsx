@@ -1,4 +1,4 @@
-import { Mail } from "lucide-react";
+import { Facebook, FileText, Mail } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
 const FooterSection = () => {
@@ -34,6 +34,28 @@ const FooterSection = () => {
               <li className="flex items-center gap-2">
                 <Mail size={16} className="shrink-0" />
                 vstepup.official@gmail.com
+              </li>
+              <li>
+                <a
+                  href="https://forms.gle/8LGwzsdghBf26s7L6"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 hover:text-primary-foreground transition-colors"
+                >
+                  <FileText size={16} className="shrink-0" />
+                  Gửi phản hồi
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.facebook.com/vstepupofficial/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 hover:text-primary-foreground transition-colors"
+                >
+                  <Facebook size={16} className="shrink-0" />
+                  Facebook VStepUp
+                </a>
               </li>
             </ul>
           </div>

@@ -74,7 +74,6 @@ const ListeningQuiz = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [durationUsed, setDurationUsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [serverTimeRemaining, setServerTimeRemaining] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
 
   // ── Audio simulation ──────────────────────────────────────
@@ -109,11 +108,9 @@ const ListeningQuiz = () => {
 
     const syncTimer = setInterval(async () => {
       try {
-        const progress = await attemptsApiService.getInProgressAttempt();
+        const progress = await attemptsApiService.getAttemptProgress(practiceData.attemptId);
         if (progress && progress.remainingSeconds !== undefined) {
           const remaining = Math.max(0, progress.remainingSeconds);
-          setServerTimeRemaining(remaining);
-          // Sync client timer too
           setTimeLeft(remaining);
           if (remaining <= 0) {
             handleAutoSubmit();
@@ -122,7 +119,7 @@ const ListeningQuiz = () => {
       } catch (error) {
         console.error("Failed to sync server time:", error);
       }
-    }, 1000);
+    }, 30000);
 
     return () => clearInterval(syncTimer);
   }, [isMockSession, practiceData?.attemptId, submitted]);
@@ -493,10 +490,10 @@ const ListeningQuiz = () => {
       <>
         <VstepMockLayout
           skillName="Listening / Kỹ năng Nghe"
-          remainingSeconds={serverTimeRemaining || timeLeft}
+          remainingSeconds={timeLeft}
           questionCount={totalQ}
           answeredCount={answeredCount}
-          currentQuestion={undefined}
+          currentQuestion={sectionOffset + 1}
           isLastSkill={false}
           onExit={() => setShowExitDialog(true)}
           onNext={handleSubmit}
@@ -507,7 +504,7 @@ const ListeningQuiz = () => {
           attemptId={practiceData.attemptId}
         >
           {/* Main content area */}
-          <div className="flex-1 flex flex-col px-6 py-4 space-y-4">
+          <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col space-y-4">
             {/* Exam title */}
             <div className="text-center">
               <h2 className="text-lg font-semibold text-foreground">{exam.title}</h2>
@@ -527,10 +524,10 @@ const ListeningQuiz = () => {
                       setAudioProgress(0);
                       setIsPlaying(false);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    className={`rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
                       i === currentSection
-                        ? "bg-blue-900 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
                     }`}
                   >
                     {sec.title || `Phần ${i + 1}`}
@@ -559,14 +556,14 @@ const ListeningQuiz = () => {
                       return (
                         <div
                           key={q.questionId}
-                          className={`rounded-lg border p-3 transition-colors ${
+                          className={`rounded-lg border p-3 transition-colors sm:p-4 ${
                             answers[q.questionId] !== undefined
-                              ? "border-blue-200 bg-blue-50"
-                              : "border-gray-200 bg-white"
+                              ? "border-primary/40 bg-primary/5"
+                              : "border-border bg-card"
                           }`}
                         >
                           <h4 className="text-xs font-semibold text-foreground mb-2">
-                            <span className="text-blue-900 mr-1">Câu {globalIdx}.</span>
+                            <span className="mr-1 text-primary">Câu {globalIdx}.</span>
                             {q.questionText}
                           </h4>
                           <RadioGroup
@@ -581,8 +578,8 @@ const ListeningQuiz = () => {
                                 key={opt.optionId}
                                 className={`flex items-center gap-2 p-2 rounded text-xs cursor-pointer transition-all ${
                                   answers[q.questionId] === opt.label
-                                    ? "bg-blue-100 border border-blue-300"
-                                    : "hover:bg-gray-50"
+                                    ? "border border-primary/30 bg-primary/10"
+                                    : "hover:bg-muted/60"
                                 }`}
                               >
                                 <RadioGroupItem
@@ -623,7 +620,7 @@ const ListeningQuiz = () => {
                       <div className="flex-1">
                         <Progress value={(audioProgress / audioDuration) * 100} className="h-1" />
                       </div>
-                      <span className="text-xs text-gray-600 w-10 text-right">
+                      <span className="w-10 text-right text-xs text-muted-foreground">
                         {formatTime(audioDuration)}
                       </span>
                       <div className="flex items-center gap-1 ml-2">
@@ -639,7 +636,7 @@ const ListeningQuiz = () => {
                         )}
                         <Button
                           size="icon"
-                          className="h-8 w-8 bg-blue-900 text-white hover:bg-blue-800"
+                          className="h-8 w-8"
                           onClick={() => setIsPlaying(!isPlaying)}
                           disabled={
                             !perms.canReplayListeningAudio &&

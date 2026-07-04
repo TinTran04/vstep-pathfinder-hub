@@ -74,6 +74,14 @@ interface SubscriptionPlanPayload {
   isActive: boolean;
 }
 
+interface AdminUserPayload {
+  name: string;
+  email: string;
+  role: "admin" | "student";
+  status: "active" | "inactive";
+  subscriptionPlanId: number;
+}
+
 export interface ListeningAudioUploadUrlRequest {
   examId?: number | null;
   contentType: string;
@@ -115,14 +123,6 @@ function getDurationMinutes(skillType: string): number {
 
 // --- Mappers ---
 function toUser(u: BEUserResponse): User {
-  let planName = "Miễn phí";
-  const plan = u.subscriptionPlan?.toLowerCase().trim();
-  if (plan === "weekly" || plan === "gói tuần") {
-    planName = "Gói Tuần";
-  } else if (plan === "monthly" || plan === "gói tháng") {
-    planName = "Gói Tháng";
-  }
-
   return {
     id: u.userId.toString(),
     name: u.fullName,
@@ -131,7 +131,8 @@ function toUser(u: BEUserResponse): User {
     status: u.emailConfirmed ? "active" : "inactive",
     createdAt: u.createdAt ? u.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
     examsCompleted: 0,
-    plan: planName,
+    subscriptionPlanId: u.subscriptionPlanId,
+    plan: getPlanDisplayName(u.subscriptionPlan),
     lastActive: "Vừa xong",
     points: 0,
     streak: 0,
@@ -271,14 +272,8 @@ export const adminService = {
   },
 
   // User CRUD
-  async createUser(payload: Omit<User, "id" | "createdAt" | "examsCompleted" | "lastActive" | "points" | "streak">): Promise<User> {
+  async createUser(payload: AdminUserPayload): Promise<User> {
     const roleId = payload.role === "admin" ? 1 : 3;
-    let subscriptionPlanId = 1;
-    if (payload.plan === "Gói Tuần") {
-      subscriptionPlanId = 2;
-    } else if (payload.plan === "Gói Tháng") {
-      subscriptionPlanId = 3;
-    }
     const emailConfirmed = payload.status === "active";
 
     const bePayload = {
@@ -286,7 +281,7 @@ export const adminService = {
       email: payload.email,
       password: "Password123!",
       roleId,
-      subscriptionPlanId,
+      subscriptionPlanId: payload.subscriptionPlanId,
       emailConfirmed,
     };
     
@@ -294,20 +289,14 @@ export const adminService = {
     return toUser(res);
   },
 
-  async updateUser(userId: string, payload: Partial<User>): Promise<User> {
+  async updateUser(userId: string, payload: AdminUserPayload): Promise<User> {
     const roleId = payload.role === "admin" ? 1 : 3;
-    let subscriptionPlanId = 1;
-    if (payload.plan === "Gói Tuần") {
-      subscriptionPlanId = 2;
-    } else if (payload.plan === "Gói Tháng") {
-      subscriptionPlanId = 3;
-    }
     const emailConfirmed = payload.status === "active";
 
     const bePayload = {
       fullName: payload.name,
       roleId,
-      subscriptionPlanId,
+      subscriptionPlanId: payload.subscriptionPlanId,
       emailConfirmed,
     };
 
