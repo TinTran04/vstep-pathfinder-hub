@@ -15,6 +15,8 @@ public interface IPracticeService
 
     Task<InProgressAttemptResponse?> GetInProgressAttemptAsync(int userId);
 
+    Task<AttemptProgressResponse> GetAttemptProgressAsync(int userId, int attemptId);
+
     Task AutosaveAttemptAsync(int userId, int attemptId, AutosaveRequest request);
 
     Task<SubmitPracticeResponse> SubmitMockTestAsync(int userId, int attemptId, SubmitMockTestRequest request);

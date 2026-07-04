@@ -82,6 +82,25 @@ public class ExamAttemptsController : ControllerBase
     }
 
     /// <summary>
+    /// Lấy trạng thái và thời gian còn lại của attempt mà không tải lại toàn bộ đề thi.
+    /// </summary>
+    [HttpGet("{attemptId:int}/progress")]
+    [ProducesResponseType(typeof(ApiResponse<AttemptProgressResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetProgress(int attemptId)
+    {
+        try
+        {
+            var response = await _practiceService.GetAttemptProgressAsync(GetUserId(), attemptId);
+            return Ok(ApiResponse<AttemptProgressResponse>.Ok(response, "Get attempt progress successfully."));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.Fail(ex.Message));
+        }
+    }
+
+    /// <summary>
     /// Autosave trang thai lam bai dang do.
     /// </summary>
     [HttpPatch("{attemptId:int}/autosave")]

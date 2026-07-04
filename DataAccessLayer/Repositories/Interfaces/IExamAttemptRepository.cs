@@ -7,6 +7,10 @@ public interface IExamAttemptRepository
 {
     Task<ExamAttempt?> GetByIdAsync(int attemptId);
 
+    Task<ExamAttempt?> GetTrackedForUpdateAsync(int attemptId, int userId);
+
+    Task<ExamAttemptProgressProjection?> GetProgressAsync(int attemptId, int userId);
+
     Task<ExamAttempt?> GetResultByIdAsync(int attemptId);
 
     Task<ExamAttempt?> GetInProgressAttemptAsync(int userId);
