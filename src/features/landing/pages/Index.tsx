@@ -9,6 +9,7 @@ import DashboardSection from "@/features/landing/components/DashboardSection";
 import TestimonialSection from "@/features/landing/components/TestimonialSection";
 import PricingSection from "@/features/landing/components/PricingSection";
 import FooterSection from "@/features/landing/components/FooterSection";
+import BlogSection from "@/features/landing/components/BlogSection";
 
 const Index = () => {
   return (
@@ -23,6 +24,7 @@ const Index = () => {
       <DashboardSection />
       <TestimonialSection />
       <PricingSection />
+      <BlogSection />
       <FooterSection />
     </div>
   );

@@ -31,8 +31,9 @@ import logoImg from "@/assets/logo.png";
 
 import { User, Exam, PricePlan } from "../mocks/admin.mock";
 import { adminService } from "../services/admin.service";
+import AdminBlogPanel from "../components/blog/AdminBlogPanel";
 
-type Tab = "dashboard" | "users" | "exams" | "pricing";
+type Tab = "dashboard" | "users" | "exams" | "pricing" | "blog";
 type AdminSkill = "Listening" | "Reading" | "Writing" | "Speaking";
 
 const ADMIN_SKILLS: AdminSkill[] = ["Listening", "Reading", "Writing", "Speaking"];
@@ -54,6 +55,7 @@ const sidebarItems = [
   { title: "Tài khoản", value: "users" as Tab, icon: Users, color: "text-purple-500" },
   { title: "Đề thi", value: "exams" as Tab, icon: FileText, color: "text-emerald-500" },
   { title: "Quản lí giá", value: "pricing" as Tab, icon: DollarSign, color: "text-rose-500" },
+  { title: "Blog", value: "blog" as Tab, icon: BookOpen, color: "text-orange-500" },
 ];
 
 const skillIcons: Record<string, typeof Headphones> = {
@@ -2580,6 +2582,9 @@ const Admin = () => {
                 </div>
               </div>
             )}
+
+            {/* === BLOG === */}
+            {activeTab === "blog" && <AdminBlogPanel />}
 
             {/* === SAMPLE ANSWERS === */}
           </main>

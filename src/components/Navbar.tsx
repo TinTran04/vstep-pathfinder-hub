@@ -17,6 +17,7 @@ const navLinks: NavLink[] = [
   { label: "Trang chủ", href: "#" },
   { label: "Giới thiệu VSTEP", href: "#vstep-overview" },
   { label: "Practice", href: "/quiz", isRoute: true },
+  { label: "Blog", href: "/blog", isRoute: true },
   { label: "Bảng giá", href: "#pricing" },
 ];
 
