@@ -34,6 +34,8 @@ public interface IUnitOfWork
 
     IAdminStatsRepository AdminStats { get; }
 
+    IBlogPostRepository BlogPosts { get; }
+
     Task<int> SaveChangesAsync();
 
     Task ExecuteInTransactionAsync(Func<Task> operation);

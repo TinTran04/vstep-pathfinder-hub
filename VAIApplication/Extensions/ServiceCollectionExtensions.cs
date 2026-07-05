@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRewardLedgerRepository, UserRewardLedgerRepository>();
         services.AddScoped<IAiUsageLogRepository, AiUsageLogRepository>();
         services.AddScoped<IAdminStatsRepository, AdminStatsRepository>();
+        services.AddScoped<IBlogPostRepository, BlogPostRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddHttpClient<IEmailService, EmailService>((provider, client) =>
         {
@@ -70,6 +71,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRewardService, RewardService>();
         services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
         services.AddScoped<IUserAvatarService, UserAvatarService>();
+        services.AddScoped<IBlogPostService, BlogPostService>();
 
         services.AddHttpClient<IDictionaryApiService, DictionaryApiService>(client =>
         {

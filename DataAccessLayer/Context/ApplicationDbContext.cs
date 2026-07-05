@@ -44,12 +44,14 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<AiUsageLog> AiUsageLogs => Set<AiUsageLog>();
 
+    public DbSet<BlogPost> BlogPosts => Set<BlogPost>();
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTime.UtcNow;
 
         foreach (var entry in ChangeTracker.Entries()
-            .Where(entry => entry.Entity is User or Role or SubscriptionPlan or Exam or ExamSection or ExamQuestion or ExamAttempt or WritingSubmission or SpeakingSubmission or PaymentTransaction))
+            .Where(entry => entry.Entity is User or Role or SubscriptionPlan or Exam or ExamSection or ExamQuestion or ExamAttempt or WritingSubmission or SpeakingSubmission or PaymentTransaction or BlogPost))
         {
             if (entry.State == EntityState.Added)
             {
@@ -878,6 +880,78 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(log => log.UserId);
             entity.HasIndex(log => log.SubmissionId);
             entity.HasQueryFilter(log => log.User != null && !log.User.IsDeleted);
+        });
+
+        modelBuilder.Entity<BlogPost>(entity =>
+        {
+            entity.ToTable("BlogPosts");
+
+            entity.HasKey(post => post.BlogPostId);
+
+            entity.Property(post => post.BlogPostId)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(post => post.Title)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(post => post.Slug)
+                .HasMaxLength(220)
+                .IsRequired();
+
+            entity.Property(post => post.Excerpt)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(post => post.ContentMarkdown)
+                .IsRequired();
+
+            entity.Property(post => post.CoverImageUrl)
+                .HasMaxLength(1000);
+
+            entity.Property(post => post.Category)
+                .HasMaxLength(100);
+
+            entity.Property(post => post.Tags)
+                .HasMaxLength(500);
+
+            entity.Property(post => post.AuthorName)
+                .HasMaxLength(150);
+
+            entity.Property(post => post.Status)
+                .HasDefaultValue(BlogPostStatus.Draft)
+                .IsRequired();
+
+            entity.Property(post => post.IsFeatured)
+                .HasDefaultValue(false);
+
+            entity.Property(post => post.ReadTimeMinutes)
+                .HasDefaultValue(0);
+
+            entity.Property(post => post.SeoTitle)
+                .HasMaxLength(200);
+
+            entity.Property(post => post.SeoDescription)
+                .HasMaxLength(300);
+
+            entity.Property(post => post.CreatedAt)
+                .IsRequired();
+
+            entity.Property(post => post.UpdatedAt)
+                .IsRequired();
+
+            entity.Property(post => post.IsDeleted)
+                .HasDefaultValue(false);
+
+            entity.HasIndex(post => post.Slug)
+                .IsUnique();
+
+            entity.HasIndex(post => post.Status);
+            entity.HasIndex(post => post.PublishedAt);
+            entity.HasIndex(post => post.Category);
+            entity.HasIndex(post => post.IsFeatured);
+
+            entity.HasQueryFilter(post => !post.IsDeleted);
         });
     }
 }
