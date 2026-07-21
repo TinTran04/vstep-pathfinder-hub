@@ -9,16 +9,40 @@ export interface AdminStats {
   usageData: any[];
   monthlyUsageData: any[];
   subscriptionPurchaseData: any[];
+  monthlyRevenueData: { month: string; year: number; monthNumber: number; revenue: number }[];
   planDistData: any[];
+  skillExamCounts: { skill: string; count: number }[];
+  topStudents: { userId: number; fullName: string; subscriptionPlan: string; completedAttempts: number }[];
   totalRevenue: number;
   monthlyGrowth: number;
   userGrowth: number;
   activeStudents: number;
+  totalStudents: number;
+  totalAdmins: number;
+  weeklyPlanStudents: number;
+  monthlyPlanStudents: number;
+  totalExams: number;
+  activeExams: number;
+  draftExams: number;
+  todayAttempts: number;
+  yesterdayAttempts: number;
   recentActivities: any[];
   weeklyData: number[];
 }
 
 let plansList = [...initialPlans];
+
+const buildQueryString = (query?: Record<string, string | number | boolean | null | undefined>): string => {
+  if (!query) return "";
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  });
+  const value = params.toString();
+  return value ? `?${value}` : "";
+};
 
 // --- BE DTO Types ---
 interface BEUserResponse {
@@ -30,11 +54,29 @@ interface BEUserResponse {
   subscriptionPlanId: number;
   subscriptionPlan: string;
   emailConfirmed: boolean;
+  examsCompleted?: number;
   createdAt: string;
 }
 
 interface BEPagedResponse<T> {
   items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminUserQuery {
+  pageNumber?: number;
+  pageSize?: number;
+  search?: string;
+  roleId?: number;
+  subscriptionPlanId?: number;
+  emailConfirmed?: boolean;
+}
+
+export interface AdminPagedUsers {
+  items: User[];
   totalCount: number;
   page: number;
   pageSize: number;
@@ -132,7 +174,7 @@ function toUser(u: BEUserResponse): User {
     role: u.role === "admin" ? "admin" : "student",
     status: u.emailConfirmed ? "active" : "inactive",
     createdAt: u.createdAt ? u.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
-    examsCompleted: 0,
+    examsCompleted: u.examsCompleted ?? 0,
     subscriptionPlanId: u.subscriptionPlanId,
     plan: getPlanDisplayName(u.subscriptionPlan),
     lastActive: "Vừa xong",
@@ -249,9 +291,15 @@ function toSubscriptionPlanPayload(plan: Partial<PricePlan>): SubscriptionPlanPa
 }
 
 export const adminService = {
-  async getUsers(): Promise<User[]> {
-    const res = await apiClient.get<BEPagedResponse<BEUserResponse>>("/users?pageSize=100");
-    return (res.items ?? []).map(toUser);
+  async getUsers(query?: AdminUserQuery): Promise<AdminPagedUsers> {
+    const res = await apiClient.get<BEPagedResponse<BEUserResponse>>(`/users${buildQueryString(query)}`);
+    return {
+      items: (res.items ?? []).map(toUser),
+      totalCount: res.totalCount ?? 0,
+      page: res.page ?? query?.pageNumber ?? 1,
+      pageSize: res.pageSize ?? query?.pageSize ?? 15,
+      totalPages: res.totalPages ?? 0,
+    };
   },
 
   async getExams(): Promise<Exam[]> {

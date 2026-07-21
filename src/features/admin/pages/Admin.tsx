@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, DollarSign, Plus, Trash2, Edit2, Search,
   Save, Clock, TrendingUp, BookOpen, Activity, ArrowUpRight, BarChart3,
-  LogOut, ChevronUp, ChevronDown, Eye, MoreHorizontal, CalendarDays,
+  LogOut, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, MoreHorizontal, CalendarDays,
   GraduationCap, Headphones, BookOpenCheck, Mic, PenTool, X, Upload,
   FileAudio, Image, ArrowLeft, Flame, Star, Crown, CreditCard, Shield,
 } from "lucide-react";
@@ -12,6 +12,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
@@ -44,10 +54,18 @@ export interface AdminStats {
   monthlyUsageData: { name: string; users: number }[];
   subscriptionPurchaseData: { month: string; free: number; weekly: number; monthly: number }[];
   planDistData: { name: string; value: number; fill: string }[];
+  skillExamCounts: { skill: string; count: number }[];
+  topStudents: { userId: number; fullName: string; subscriptionPlan: string; completedAttempts: number }[];
   totalRevenue: number;
   monthlyGrowth: number;
   userGrowth: number;
   activeStudents: number;
+  totalStudents: number;
+  totalExams: number;
+  activeExams: number;
+  draftExams: number;
+  todayAttempts: number;
+  yesterdayAttempts: number;
   recentActivities: { text: string; time: string; type: "exam" | "add" | "payment" | "user" }[];
   weeklyData: number[];
 }
@@ -58,6 +76,30 @@ const formatVnd = (value: number) =>
     currency: "VND",
     maximumFractionDigits: 0,
   }).format(value);
+
+const getPlanTone = (subscriptionPlanId?: number) => {
+  if (subscriptionPlanId === 3) {
+    return {
+      badge: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
+      dot: "bg-emerald-500",
+      option: "text-emerald-700 dark:text-emerald-300",
+    };
+  }
+
+  if (subscriptionPlanId === 2) {
+    return {
+      badge: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300",
+      dot: "bg-amber-500",
+      option: "text-amber-700 dark:text-amber-300",
+    };
+  }
+
+  return {
+    badge: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300",
+    dot: "bg-slate-400",
+    option: "text-slate-600 dark:text-slate-300",
+  };
+};
 
 const sidebarItems = [
   { title: "Tổng quan", value: "dashboard" as Tab, icon: LayoutDashboard, color: "text-blue-500" },
@@ -88,6 +130,7 @@ const LISTENING_AUDIO_TYPES = new Set([
   "audio/x-m4a",
 ]);
 const LISTENING_AUDIO_EXTENSIONS = new Set(["mp3", "wav", "webm", "ogg", "m4a"]);
+const USER_PAGE_SIZE = 15;
 
 const getFileExtension = (file: File) => file.name.split(".").pop()?.toLowerCase() ?? "";
 
@@ -105,6 +148,11 @@ const Admin = () => {
   const [plans, setPlans] = useState<PricePlan[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showRevenueHistory, setShowRevenueHistory] = useState(false);
+  const [userPage, setUserPage] = useState(1);
+  const [userTotalCount, setUserTotalCount] = useState(0);
+  const [userTotalPages, setUserTotalPages] = useState(0);
+  const [userReloadKey, setUserReloadKey] = useState(0);
 
   useEffect(() => {
     if (isInitialising) return;
@@ -117,13 +165,15 @@ const Admin = () => {
 
     let isMounted = true;
     Promise.all([
-      adminService.getUsers(),
+      adminService.getUsers({ pageNumber: 1, pageSize: USER_PAGE_SIZE }),
       adminService.getExams(),
       adminService.getPricePlans(),
       adminService.getAdminStats(),
     ]).then(([fetchedUsers, fetchedExams, fetchedPlans, fetchedStats]) => {
       if (isMounted) {
-        setUsers(fetchedUsers);
+        setUsers(fetchedUsers.items);
+        setUserTotalCount(fetchedUsers.totalCount);
+        setUserTotalPages(fetchedUsers.totalPages);
         setExams(fetchedExams);
         setPlans(fetchedPlans);
         setStats(fetchedStats);
@@ -150,6 +200,36 @@ const Admin = () => {
   const [filterUserPlan, setFilterUserPlan] = useState("all");
   const [filterUserStatus, setFilterUserStatus] = useState("all");
 
+  useEffect(() => {
+    setUserPage(1);
+  }, [searchUser, filterUserRole, filterUserPlan, filterUserStatus]);
+
+  useEffect(() => {
+    if (isInitialising || !isLoggedIn || user?.role !== "admin") return;
+
+    let isMounted = true;
+    adminService.getUsers({
+      pageNumber: userPage,
+      pageSize: USER_PAGE_SIZE,
+      search: searchUser.trim() || undefined,
+      roleId: filterUserRole === "admin" ? 1 : filterUserRole === "student" ? 3 : undefined,
+      subscriptionPlanId: filterUserPlan === "all" ? undefined : Number(filterUserPlan),
+      emailConfirmed: filterUserStatus === "active" ? true : filterUserStatus === "inactive" ? false : undefined,
+    }).then((response) => {
+      if (!isMounted) return;
+      setUsers(response.items);
+      setUserTotalCount(response.totalCount);
+      setUserTotalPages(response.totalPages);
+    }).catch((error) => {
+      console.error(error);
+      if (isMounted) toast.error("Không thể tải danh sách tài khoản. Vui lòng thử lại.");
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filterUserPlan, filterUserRole, filterUserStatus, isInitialising, isLoggedIn, searchUser, user, userPage, userReloadKey]);
+
   // Filter states for Exams
   const [filterExamSkill, setFilterExamSkill] = useState("all");
   const [filterExamDifficulty, setFilterExamDifficulty] = useState("all");
@@ -157,6 +237,8 @@ const Admin = () => {
 
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
   const [userForm, setUserForm] = useState({
     name: "",
     email: "",
@@ -289,16 +371,19 @@ const Admin = () => {
     if (!userForm.name || !userForm.email) { toast.error("Vui lòng điền đầy đủ"); return; }
     if (editUser) {
       try {
-        const updated = await adminService.updateUser(editUser.id, userForm);
-        setUsers(p => p.map(u => u.id === editUser.id ? updated : u));
+        await adminService.updateUser(editUser.id, userForm);
+        setUserReloadKey(value => value + 1);
+        adminService.getAdminStats().then(setStats).catch(() => undefined);
         toast.success("Cập nhật thành công");
       } catch (err) {
         toast.error("Có lỗi xảy ra");
       }
     } else {
       try {
-        const created = await adminService.createUser(userForm);
-        setUsers(p => [...p, created]);
+        await adminService.createUser(userForm);
+        setUserPage(1);
+        setUserReloadKey(value => value + 1);
+        adminService.getAdminStats().then(setStats).catch(() => undefined);
         toast.success("Thêm thành công");
       } catch (err) {
         toast.error("Có lỗi xảy ra");
@@ -307,13 +392,22 @@ const Admin = () => {
     setUserDialog(false);
   };
   
-  const deleteUser = async (id: string) => {
+  const deleteUser = async () => {
+    if (!deleteUserTarget) return;
+    setDeletingUser(true);
     try {
-      await adminService.deleteUser(id);
-      setUsers(p => p.filter(u => u.id !== id));
+      await adminService.deleteUser(deleteUserTarget.id);
+      if (users.length === 1 && userPage > 1) {
+        setUserPage(page => Math.max(1, page - 1));
+      }
+      setUserReloadKey(value => value + 1);
+      adminService.getAdminStats().then(setStats).catch(() => undefined);
       toast.success("Xóa thành công");
+      setDeleteUserTarget(null);
     } catch (err) {
       toast.error("Có lỗi xảy ra");
+    } finally {
+      setDeletingUser(false);
     }
   };
 
@@ -930,13 +1024,7 @@ const Admin = () => {
     }
   };
 
-  const filteredUsers = users.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(searchUser.toLowerCase()) || u.email.toLowerCase().includes(searchUser.toLowerCase());
-    const matchesRole = filterUserRole === "all" || u.role === filterUserRole;
-    const matchesPlan = filterUserPlan === "all" || String(u.subscriptionPlanId) === filterUserPlan;
-    const matchesStatus = filterUserStatus === "all" || u.status === filterUserStatus;
-    return matchesSearch && matchesRole && matchesPlan && matchesStatus;
-  });
+  const filteredUsers = users;
 
   const filteredExams = exams.filter(e => {
     const matchesSearch = e.title.toLowerCase().includes(searchExam.toLowerCase()) || e.skill.toLowerCase().includes(searchExam.toLowerCase());
@@ -1002,21 +1090,37 @@ const Admin = () => {
 
 
 
-  const totalStudents = users.filter(u => u.role === "student").length;
+  const fallbackTotalStudents = users.filter(u => u.role === "student").length;
   const fallbackActiveStudents = users.filter(u => u.role === "student" && u.status === "active").length;
+  const totalStudents = stats?.totalStudents ?? fallbackTotalStudents;
   const activeStudents = stats?.activeStudents ?? fallbackActiveStudents;
-  const totalExams = exams.length;
-  const activeExams = exams.filter(e => e.status === "active").length;
+  const fallbackTotalExams = exams.length;
+  const fallbackActiveExams = exams.filter(e => e.status === "active").length;
+  const fallbackDraftExams = exams.filter(e => e.status === "draft").length;
+  const totalExams = stats?.totalExams ?? fallbackTotalExams;
+  const activeExams = stats?.activeExams ?? fallbackActiveExams;
+  const draftExams = stats?.draftExams ?? fallbackDraftExams;
 
   const usageData = stats?.usageData || [];
   const planDistData = stats?.planDistData || [];
   const subscriptionPurchaseData = stats?.subscriptionPurchaseData || [];
   const weeklyData = stats?.weeklyData || [];
   const recentActivities = stats?.recentActivities || [];
+  const topStudents = stats?.topStudents || [];
   const totalRevenue = stats?.totalRevenue || 0;
+  const monthlyRevenueData = stats?.monthlyRevenueData || [];
+  const todayAttempts = stats?.todayAttempts ?? weeklyData[weeklyData.length - 1] ?? 0;
+  const yesterdayAttempts = stats?.yesterdayAttempts ?? weeklyData[weeklyData.length - 2] ?? 0;
+  const totalAdmins = stats?.totalAdmins ?? users.filter(u => u.role === "admin").length;
+  const weeklyPlanStudents = stats?.weeklyPlanStudents ?? users.filter(u => u.role === "student" && u.subscriptionPlanId === 2).length;
+  const monthlyPlanStudents = stats?.monthlyPlanStudents ?? users.filter(u => u.role === "student" && u.subscriptionPlanId === 3).length;
+
+  const getSkillExamCount = (skill: string) =>
+    stats?.skillExamCounts?.find(item => item.skill.toLowerCase() === skill.toLowerCase())?.count
+    ?? exams.filter(e => e.skill === skill).length;
 
   const skillDistribution = ["Listening", "Reading", "Writing", "Speaking"].map(s => ({
-    skill: s, count: exams.filter(e => e.skill === s).length,
+    skill: s, count: getSkillExamCount(s),
     Icon: skillIcons[s], color: skillColors[s],
   }));
 
@@ -1617,7 +1721,7 @@ const Admin = () => {
               </div>
               {activeTab === "dashboard" && (
                 <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-full hidden md:inline-flex items-center gap-1">
-                  Xin chào, {user?.name || "Admin"}! 👋 Hôm nay có <span className="font-extrabold">{exams.filter(e => e.status === "draft").length}</span> đề nháp cần duyệt.
+                  Xin chào, {user?.name || "Admin"}! 👋 Hôm nay có <span className="font-extrabold">{draftExams}</span> đề nháp cần duyệt.
                 </span>
               )}
             </div>
@@ -1635,7 +1739,7 @@ const Admin = () => {
               <div className="space-y-6 max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-xl font-bold text-foreground">Xin chào, Admin 👋</h2>
+                    <h2 className="text-xl font-bold text-foreground">Xin chào, {user?.name || "Admin"} 👋</h2>
                     <p className="text-sm text-muted-foreground">Tổng quan hoạt động hệ thống hôm nay</p>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1645,12 +1749,11 @@ const Admin = () => {
                 </div>
 
                 {/* Stats cards with stagger animation */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid gap-4 md:grid-cols-3">
                   {[
-                    { label: "Tổng học viên", value: totalStudents, sub: `${activeStudents} đang hoạt động`, icon: Users, color: "from-blue-500 to-indigo-600", accent: "bg-blue-600", glow: "hover:shadow-blue-500/10", spark: "M5,15 L15,10 L25,18 L35,8 L45,12 L55,5" },
-                    { label: "Đề thi", value: totalExams, sub: `${activeExams} đang active`, icon: FileText, color: "from-emerald-500 to-teal-600", accent: "bg-emerald-600", glow: "hover:shadow-emerald-500/10", spark: "M5,12 L15,15 L25,10 L35,14 L45,6 L55,3" },
-                    { label: "Doanh thu tháng", value: formatVnd(totalRevenue), sub: "tháng này", icon: DollarSign, color: "from-amber-500 to-orange-600", accent: "bg-amber-600", glow: "hover:shadow-amber-500/10", spark: "M5,18 L15,14 L25,15 L35,10 L45,8 L55,4" },
-                    { label: "Lượt thi hôm nay", value: weeklyData[weeklyData.length - 1] ?? 0, sub: "so với hôm qua", icon: Activity, color: "from-purple-500 to-violet-600", accent: "bg-purple-600", glow: "hover:shadow-purple-500/10", spark: "M5,16 L15,8 L25,12 L35,15 L45,6 L55,2" },
+                    { key: "students", label: "Tổng học viên", value: totalStudents, icon: Users, color: "from-blue-500 to-indigo-600", accent: "bg-blue-600", glow: "hover:shadow-blue-500/10", spark: "M5,15 L15,10 L25,18 L35,8 L45,12 L55,5" },
+                    { key: "exams", label: "Đề thi", value: totalExams, icon: FileText, color: "from-emerald-500 to-teal-600", accent: "bg-emerald-600", glow: "hover:shadow-emerald-500/10", spark: "M5,12 L15,15 L25,10 L35,14 L45,6 L55,3" },
+                    { key: "revenue", label: "Doanh thu tháng", value: formatVnd(totalRevenue), icon: DollarSign, color: "from-amber-500 to-orange-600", accent: "bg-amber-600", glow: "hover:shadow-amber-500/10", spark: "M5,18 L15,14 L25,15 L35,10 L45,8 L55,4" },
                   ].map((stat, i) => (
                     <Card key={stat.label} className={`border border-border/80 overflow-hidden relative group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${stat.glow}`} style={{ animationDelay: `${i * 100}ms` }}>
                       <CardContent className="p-5 relative">
@@ -1666,41 +1769,46 @@ const Admin = () => {
                           </div>
                         </div>
                         <p className="text-2xl font-extrabold text-foreground tracking-tight leading-none">{stat.value}</p>
-                        <div className="flex items-center justify-between mt-2">
+                        <div className="mt-2 flex items-center justify-between">
                           <p className="text-[11px] text-muted-foreground font-medium">{stat.label}</p>
-                          <p className="text-[10px] text-muted-foreground/80">{stat.sub}</p>
+                          {stat.key === "revenue" && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                              onClick={() => setShowRevenueHistory(value => !value)}
+                            >
+                              Các tháng
+                              {showRevenueHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </Button>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
 
-                {/* Thống kê nhanh row - NEW */}
-                <div className="bg-muted/30 dark:bg-muted/10 border border-border/80 rounded-2xl p-4 flex flex-wrap items-center justify-around gap-4 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Học viên đang hoạt động</p>
-                      <p className="text-base font-extrabold text-foreground">{activeStudents} <span className="text-xs font-normal text-muted-foreground">người</span></p>
-                    </div>
-                  </div>
-                  <Separator orientation="vertical" className="h-8 hidden md:block" />
-                  <div className="flex items-center gap-3">
-                    <Activity size={18} className="text-indigo-500" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Lượt thi hôm nay</p>
-                      <p className="text-base font-extrabold text-foreground">{weeklyData[weeklyData.length - 1] ?? 0} <span className="text-xs font-normal text-muted-foreground">lượt</span></p>
-                    </div>
-                  </div>
-                  <Separator orientation="vertical" className="h-8 hidden md:block" />
-                  <div className="flex items-center gap-3">
-                    <Plus size={18} className="text-emerald-500" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Đề nháp cần duyệt</p>
-                      <p className="text-base font-extrabold text-foreground">{exams.filter(e => e.status === "draft").length} <span className="text-xs font-normal text-muted-foreground">đề nháp</span></p>
-                    </div>
-                  </div>
-                </div>
+                {showRevenueHistory && (
+                  <Card className="border-border bg-card shadow-sm">
+                    <CardContent className="p-5">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-foreground">Doanh thu các tháng gần đây</h3>
+                          <p className="text-xs text-muted-foreground">Dữ liệu tính theo giao dịch đã thanh toán.</p>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {monthlyRevenueData.slice().reverse().map((item) => (
+                          <div key={`${item.year}-${item.monthNumber}`} className="rounded-lg border border-border bg-muted/20 p-3">
+                            <p className="text-[11px] font-semibold text-muted-foreground">Tháng {item.month}</p>
+                            <p className="mt-1 text-base font-extrabold text-foreground">{formatVnd(item.revenue)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Đề thi theo kỹ năng - NEW Section */}
                 <div className="space-y-3">
@@ -1708,39 +1816,31 @@ const Admin = () => {
                     <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                       <BookOpen size={16} className="text-primary" /> Đề thi theo kỹ năng
                     </h3>
-                    <span className="text-xs text-muted-foreground">Target: 20 đề mỗi kỹ năng</span>
                   </div>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {[
-                      { name: "Listening", desc: "Đề thi nghe 3 phần", icon: Headphones, count: exams.filter(e => e.skill === "Listening").length, target: 20, color: "from-blue-500 to-cyan-500", bg: "bg-blue-500/10 text-blue-600", btn: "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20" },
-                      { name: "Reading", desc: "Bài đọc 4 Passage", icon: BookOpenCheck, count: exams.filter(e => e.skill === "Reading").length, target: 20, color: "from-emerald-500 to-teal-500", bg: "bg-emerald-500/10 text-emerald-600", btn: "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20" },
-                      { name: "Writing", desc: "Thư/Email & Essay", icon: PenTool, count: exams.filter(e => e.skill === "Writing").length, target: 20, color: "from-amber-500 to-orange-500", bg: "bg-amber-500/10 text-amber-600", btn: "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20" },
-                      { name: "Speaking", desc: "Phỏng vấn & Thảo luận", icon: Mic, count: exams.filter(e => e.skill === "Speaking").length, target: 20, color: "from-purple-500 to-fuchsia-500", bg: "bg-purple-500/10 text-purple-600", btn: "text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/20" },
-                    ].map((s) => {
-                      const pct = Math.min(Math.round((s.count / s.target) * 100), 100);
-                      return (
-                        <Card key={s.name} className="border border-border/80 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-                          <CardContent className="p-4 flex flex-col justify-between h-full space-y-3">
-                            <div className="flex items-start justify-between">
-                              <div className="space-y-0.5">
-                                <p className="text-sm font-bold text-foreground">{s.name}</p>
-                                <p className="text-[10px] text-muted-foreground leading-normal">{s.desc}</p>
-                              </div>
-                              <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}>
-                                <s.icon size={16} />
+                      { name: "Listening", desc: "Đề thi nghe", icon: Headphones, count: getSkillExamCount("Listening"), bg: "bg-blue-500/10 text-blue-600" },
+                      { name: "Reading", desc: "Bài đọc", icon: BookOpenCheck, count: getSkillExamCount("Reading"), bg: "bg-emerald-500/10 text-emerald-600" },
+                      { name: "Writing", desc: "Thư/Email & Essay", icon: PenTool, count: getSkillExamCount("Writing"), bg: "bg-amber-500/10 text-amber-600" },
+                      { name: "Speaking", desc: "Phỏng vấn & Thảo luận", icon: Mic, count: getSkillExamCount("Speaking"), bg: "bg-purple-500/10 text-purple-600" },
+                    ].map((s) => (
+                      <Card key={s.name} className="border border-border/80 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-foreground">{s.name}</p>
+                              <p className="text-[10px] text-muted-foreground leading-normal">{s.desc}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <p className="text-2xl font-black text-foreground">{s.count}</p>
+                              <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}>
+                                <s.icon size={17} />
                               </div>
                             </div>
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between text-[10px] text-muted-foreground font-semibold">
-                                <span>Tiến độ target</span>
-                                <span>{s.count}/{s.target} ({pct}%)</span>
-                              </div>
-                              <Progress value={pct} className="h-1.5" />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 </div>
 
@@ -1893,7 +1993,7 @@ const Admin = () => {
                               <span className="text-[10px] font-semibold text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">{val}</span>
                               <div
                                 className={`w-full rounded-md transition-all duration-500 hover:scale-105 ${isToday ? "gradient-primary shadow-md" : "bg-primary/15 hover:bg-primary/30"}`}
-                                style={{ height: `${(val / maxWeekly) * 100}%`, minHeight: 8, animationDelay: `${i * 80}ms` }}
+                                style={{ height: `${maxWeekly > 0 ? (val / maxWeekly) * 100 : 0}%`, minHeight: 8, animationDelay: `${i * 80}ms` }}
                               />
                               <span className={`text-[10px] ${isToday ? "font-bold text-primary" : "text-muted-foreground"}`}>{days[i]}</span>
                             </div>
@@ -1974,21 +2074,25 @@ const Admin = () => {
                     </CardHeader>
                     <CardContent className="px-5 pb-5">
                       <div className="space-y-2">
-                        {users.filter(u => u.role === "student").sort((a, b) => b.examsCompleted - a.examsCompleted).slice(0, 5).map((u, i) => (
-                          <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/40 transition-all duration-200 cursor-pointer hover:translate-x-1" onClick={() => setViewUser(u)}>
+                        {topStudents.length > 0 ? topStudents.map((student, i) => (
+                          <div key={student.userId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/40 transition-all duration-200 hover:translate-x-1">
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
                               i === 0 ? "bg-amber-500/15 text-amber-600" : i === 1 ? "bg-gray-300/30 text-gray-600" : i === 2 ? "bg-orange-500/15 text-orange-600" : "bg-muted text-muted-foreground"
                             }`}>{i + 1}</span>
                             <Avatar className="h-7 w-7">
-                              <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">{u.name.split(" ").pop()?.[0]}</AvatarFallback>
+                              <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">{student.fullName.split(" ").pop()?.[0]}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-foreground truncate">{u.name}</p>
-                              <p className="text-[10px] text-muted-foreground">{u.plan}</p>
+                              <p className="text-xs font-medium text-foreground truncate">{student.fullName}</p>
+                              <p className="text-[10px] text-muted-foreground">{student.subscriptionPlan}</p>
                             </div>
-                            <Badge variant="secondary" className="text-[10px] shrink-0">{u.examsCompleted} bài</Badge>
+                            <Badge variant="secondary" className="text-[10px] shrink-0">{student.completedAttempts} bài</Badge>
                           </div>
-                        ))}
+                        )) : (
+                          <div className="py-8 text-center text-xs text-muted-foreground">
+                            Chưa có dữ liệu học viên hoàn thành bài thi.
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -2002,7 +2106,7 @@ const Admin = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-bold text-foreground">Quản lí tài khoản</h2>
-                    <p className="text-xs text-muted-foreground">{users.length} tài khoản • {activeStudents} đang hoạt động</p>
+                    <p className="text-xs text-muted-foreground">{userTotalCount} tài khoản trong danh sách hiện tại</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <div className="relative flex-1 sm:w-48">
@@ -2026,7 +2130,12 @@ const Admin = () => {
                       <SelectContent>
                         <SelectItem value="all">Tất cả gói</SelectItem>
                         {plans.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          <SelectItem key={p.id} value={p.id}>
+                            <span className={`flex items-center gap-2 ${getPlanTone(Number(p.id)).option}`}>
+                              <span className={`h-2 w-2 rounded-full ${getPlanTone(Number(p.id)).dot}`} />
+                              {p.name}
+                            </span>
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -2045,11 +2154,32 @@ const Admin = () => {
                     </Button>
                   </div>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    { label: "Học viên", value: totalStudents, icon: GraduationCap, color: "text-blue-600 bg-blue-500/10" },
+                    { label: "Admin", value: totalAdmins, icon: Shield, color: "text-purple-600 bg-purple-500/10" },
+                    { label: "Gói tuần", value: weeklyPlanStudents, icon: Crown, color: "text-amber-600 bg-amber-500/10" },
+                    { label: "Gói tháng", value: monthlyPlanStudents, icon: CreditCard, color: "text-emerald-600 bg-emerald-500/10" },
+                  ].map((item) => (
+                    <Card key={item.label} className="border-border">
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{item.label}</p>
+                          <p className="mt-1 text-2xl font-black text-foreground">{item.value}</p>
+                        </div>
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${item.color}`}>
+                          <item.icon size={18} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
                 <Card className="border-border overflow-hidden">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/30">
+                          <TableHead className="w-16 text-xs font-semibold">STT</TableHead>
                           <TableHead className="text-xs font-semibold">Người dùng</TableHead>
                           <TableHead className="text-xs font-semibold">Gói</TableHead>
                           <TableHead className="text-xs font-semibold">Vai trò</TableHead>
@@ -2060,8 +2190,11 @@ const Admin = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredUsers.map(u => (
+                        {filteredUsers.map((u, index) => (
                           <TableRow key={u.id} className="hover:bg-muted/20 cursor-pointer transition-colors" onClick={() => setViewUser(u)}>
+                            <TableCell className="text-xs font-semibold text-muted-foreground">
+                              {(userPage - 1) * USER_PAGE_SIZE + index + 1}
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2.5">
                                 <Avatar className="h-8 w-8">
@@ -2074,7 +2207,7 @@ const Admin = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-[10px]">
+                              <Badge variant="outline" className={`text-[10px] ${getPlanTone(u.subscriptionPlanId).badge}`}>
                                 {u.plan}
                               </Badge>
                             </TableCell>
@@ -2095,18 +2228,62 @@ const Admin = () => {
                               <div className="flex items-center justify-end gap-0.5">
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setViewUser(u)}><Eye size={13} /></Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditUser(u)}><Edit2 size={13} /></Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteUser(u.id)}><Trash2 size={13} /></Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteUserTarget(u)}><Trash2 size={13} /></Button>
                               </div>
                             </TableCell>
                           </TableRow>
                         ))}
                         {filteredUsers.length === 0 && (
-                          <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Không tìm thấy kết quả</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">Không tìm thấy kết quả</TableCell></TableRow>
                         )}
                       </TableBody>
                     </Table>
                   </div>
                 </Card>
+                {userTotalPages > 1 && (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Hiển thị {(userPage - 1) * USER_PAGE_SIZE + 1}-{Math.min(userPage * USER_PAGE_SIZE, userTotalCount)} / {userTotalCount} tài khoản
+                    </p>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={userPage <= 1}
+                        onClick={() => setUserPage(page => Math.max(1, page - 1))}
+                      >
+                        <ChevronLeft size={14} /> Trước
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: userTotalPages }, (_, index) => index + 1)
+                          .filter(page => page === 1 || page === userTotalPages || Math.abs(page - userPage) <= 1)
+                          .map((page, index, pages) => (
+                            <Fragment key={page}>
+                              {index > 0 && page - pages[index - 1] > 1 && (
+                                <span className="px-1 text-xs text-muted-foreground">...</span>
+                              )}
+                              <Button
+                                variant={page === userPage ? "default" : "outline"}
+                                size="sm"
+                                className="h-8 min-w-8 px-2"
+                                onClick={() => setUserPage(page)}
+                              >
+                                {page}
+                              </Button>
+                            </Fragment>
+                          ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={userPage >= userTotalPages}
+                        onClick={() => setUserPage(page => Math.min(userTotalPages, page + 1))}
+                      >
+                        Sau <ChevronRight size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2896,6 +3073,30 @@ const Admin = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={Boolean(deleteUserTarget)} onOpenChange={(open) => !open && !deletingUser && setDeleteUserTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa tài khoản?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tài khoản “{deleteUserTarget?.name}” sẽ bị xóa khỏi danh sách quản trị. Hành động này không thể hoàn tác từ giao diện.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingUser}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingUser}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteUser();
+              }}
+            >
+              {deletingUser ? "Đang xóa..." : "Xóa tài khoản"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
 
     </SidebarProvider>
