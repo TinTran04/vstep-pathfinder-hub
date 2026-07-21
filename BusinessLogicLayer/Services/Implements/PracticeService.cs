@@ -413,8 +413,8 @@ public class PracticeService : IPracticeService
 
     public async Task AutosaveAttemptAsync(int userId, int attemptId, AutosaveRequest request)
     {
-        var attempt = await _unitOfWork.ExamAttempts.GetByIdAsync(attemptId);
-        if (attempt is null || attempt.UserId != userId)
+        var attempt = await _unitOfWork.ExamAttempts.GetTrackedForUpdateAsync(attemptId, userId);
+        if (attempt is null)
         {
             throw new KeyNotFoundException("Attempt not found.");
         }
@@ -439,8 +439,27 @@ public class PracticeService : IPracticeService
         attempt.LastAutosavedAt = request.ClientUpdatedAt ?? DateTime.UtcNow;
         attempt.UpdatedAt = DateTime.UtcNow;
 
-        _unitOfWork.ExamAttempts.Update(attempt);
         await _unitOfWork.SaveChangesAsync();
+    }
+
+    public async Task<AttemptProgressResponse> GetAttemptProgressAsync(int userId, int attemptId)
+    {
+        var progress = await _unitOfWork.ExamAttempts.GetProgressAsync(attemptId, userId);
+        if (progress is null)
+        {
+            throw new KeyNotFoundException("Attempt not found.");
+        }
+
+        var serverNow = DateTime.UtcNow;
+        return new AttemptProgressResponse
+        {
+            AttemptId = progress.AttemptId,
+            Status = progress.Status,
+            ServerNow = serverNow,
+            RemainingSeconds = progress.ExpiresAt.HasValue
+                ? (int)Math.Max(0, (progress.ExpiresAt.Value - serverNow).TotalSeconds)
+                : 0
+        };
     }
 
     public async Task<SubmitPracticeResponse> SubmitMockTestAsync(int userId, int attemptId, SubmitMockTestRequest request)

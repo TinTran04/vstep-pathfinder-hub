@@ -71,6 +71,31 @@ public class R2StorageService : IR2StorageService
         return Task.FromResult((uploadUrl, objectKey, safeContentType, expiresAt));
     }
 
+    public Task<(string UploadUrl, string ObjectKey, DateTime ExpiresAt)> CreateBlogCoverUploadUrlAsync(
+        string contentType,
+        string fileExtension)
+    {
+        EnsureConfigured();
+
+        var safeContentType = NormalizeBlogImageContentType(contentType);
+        var safeExtension = NormalizeBlogImageExtension(fileExtension, safeContentType);
+        var expiresAt = DateTime.UtcNow.AddMinutes(UploadUrlMinutes);
+        var objectId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        var objectKey = $"blog/covers/{DateTime.UtcNow:yyyy/MM}/{objectId}.{safeExtension}";
+
+        using var client = CreateClient();
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _settings.BucketName,
+            Key = objectKey,
+            Verb = HttpVerb.PUT,
+            Expires = expiresAt,
+            ContentType = safeContentType
+        };
+
+        return Task.FromResult((client.GetPreSignedURL(request), objectKey, expiresAt));
+    }
+
     public Task<string> CreateReadUrlAsync(string objectKey)
     {
         EnsureConfigured();
@@ -228,5 +253,43 @@ public class R2StorageService : IR2StorageService
             "audio/aiff" => "aiff",
             _ => "mp3"
         };
+    }
+
+    private static string NormalizeBlogImageContentType(string contentType)
+    {
+        return contentType.Trim().ToLowerInvariant() switch
+        {
+            "image/jpeg" => "image/jpeg",
+            "image/png" => "image/png",
+            "image/webp" => "image/webp",
+            _ => throw new InvalidOperationException("Only JPEG, PNG, and WebP cover images are supported.")
+        };
+    }
+
+    private static string NormalizeBlogImageExtension(string fileExtension, string contentType)
+    {
+        var extension = fileExtension.Trim().TrimStart('.').ToLowerInvariant();
+        var expectedExtension = contentType switch
+        {
+            "image/jpeg" => extension is "jpg" or "jpeg" ? extension : "jpg",
+            "image/png" => "png",
+            "image/webp" => "webp",
+            _ => throw new InvalidOperationException("Invalid blog cover image type.")
+        };
+
+        var isMatch = contentType switch
+        {
+            "image/jpeg" => extension is "jpg" or "jpeg",
+            "image/png" => extension == "png",
+            "image/webp" => extension == "webp",
+            _ => false
+        };
+
+        if (!isMatch)
+        {
+            throw new InvalidOperationException("Cover image extension does not match its content type.");
+        }
+
+        return expectedExtension;
     }
 }

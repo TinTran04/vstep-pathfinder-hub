@@ -15,6 +15,14 @@ public class InProgressAttemptResponse
     public ExamDetailResponse Exam { get; set; } = default!;
 }
 
+public class AttemptProgressResponse
+{
+    public int AttemptId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime ServerNow { get; set; }
+    public int RemainingSeconds { get; set; }
+}
+
 public class AutosaveRequest
 {
     public string? CurrentSkill { get; set; }

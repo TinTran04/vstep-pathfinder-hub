@@ -24,7 +24,8 @@ public class UnitOfWork : IUnitOfWork
         IDashboardRepository dashboard,
         IUserRewardLedgerRepository userRewardLedgers,
         IAiUsageLogRepository aiUsageLogs,
-        IAdminStatsRepository adminStats)
+        IAdminStatsRepository adminStats,
+        IBlogPostRepository blogPosts)
     {
         _context = context;
         Users = users;
@@ -42,6 +43,7 @@ public class UnitOfWork : IUnitOfWork
         UserRewardLedgers = userRewardLedgers;
         AiUsageLogs = aiUsageLogs;
         AdminStats = adminStats;
+        BlogPosts = blogPosts;
     }
 
     public IUserRepository Users { get; }
@@ -73,6 +75,8 @@ public class UnitOfWork : IUnitOfWork
     public IAiUsageLogRepository AiUsageLogs { get; }
 
     public IAdminStatsRepository AdminStats { get; }
+
+    public IBlogPostRepository BlogPosts { get; }
 
     public Task<int> SaveChangesAsync()
     {

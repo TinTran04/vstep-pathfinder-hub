@@ -23,6 +23,31 @@ public class ExamAttemptRepository : IExamAttemptRepository
             .FirstOrDefaultAsync(attempt => attempt.AttemptId == attemptId && !attempt.IsDeleted);
     }
 
+    public Task<ExamAttempt?> GetTrackedForUpdateAsync(int attemptId, int userId)
+    {
+        return _context.ExamAttempts.FirstOrDefaultAsync(attempt =>
+            attempt.AttemptId == attemptId &&
+            attempt.UserId == userId &&
+            !attempt.IsDeleted);
+    }
+
+    public Task<ExamAttemptProgressProjection?> GetProgressAsync(int attemptId, int userId)
+    {
+        return _context.ExamAttempts
+            .AsNoTracking()
+            .Where(attempt =>
+                attempt.AttemptId == attemptId &&
+                attempt.UserId == userId &&
+                !attempt.IsDeleted)
+            .Select(attempt => new ExamAttemptProgressProjection
+            {
+                AttemptId = attempt.AttemptId,
+                Status = attempt.Status,
+                ExpiresAt = attempt.ExpiresAt
+            })
+            .FirstOrDefaultAsync();
+    }
+
     public Task<ExamAttempt?> GetResultByIdAsync(int attemptId)
     {
         return _context.ExamAttempts
