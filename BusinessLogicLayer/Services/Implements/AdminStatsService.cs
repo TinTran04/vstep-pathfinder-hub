@@ -24,7 +24,11 @@ public class AdminStatsService : IAdminStatsService
         var startOfToday = nowUtc.Date;
         var startOfThisMonth = new DateTime(nowUtc.Year, nowUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var monthlyGrowth = snapshot.LastMonthUsers > 0
+        var monthlyGrowth = snapshot.LastMonthRevenue > 0
+            ? (snapshot.ThisMonthRevenue - snapshot.LastMonthRevenue) / snapshot.LastMonthRevenue * 100
+            : snapshot.ThisMonthRevenue > 0 ? 100 : 0;
+
+        var userGrowth = snapshot.LastMonthUsers > 0
             ? (snapshot.ThisMonthUsers - snapshot.LastMonthUsers) / (decimal)snapshot.LastMonthUsers * 100
             : snapshot.ThisMonthUsers > 0 ? 100 : 0;
 
@@ -70,8 +74,10 @@ public class AdminStatsService : IAdminStatsService
                 .Where(item => item.Count > 0)
                 .Select(MapPlanDistribution)
                 .ToList(),
-            TotalRevenue = snapshot.TotalRevenue,
+            TotalRevenue = snapshot.ThisMonthRevenue,
             MonthlyGrowth = Math.Round(monthlyGrowth, 1),
+            UserGrowth = Math.Round(userGrowth, 1),
+            ActiveStudents = snapshot.ActiveStudents,
             RecentActivities = snapshot.RecentActivities.Select(MapActivity).ToList(),
             WeeklyData = usageData.Select(item => item.Exams).ToList()
         };

@@ -30,6 +30,21 @@ public class AdminStatsRepository : IAdminStatsRepository
             .Where(payment => payment.Status == PaidStatus || payment.Status == "PAID")
             .SumAsync(payment => (decimal?)payment.Amount) ?? 0;
 
+        var thisMonthRevenue = await _context.PaymentTransactions
+            .AsNoTracking()
+            .Where(payment =>
+                (payment.Status == PaidStatus || payment.Status == "PAID") &&
+                payment.CreatedAt >= startOfThisMonth)
+            .SumAsync(payment => (decimal?)payment.Amount) ?? 0;
+
+        var lastMonthRevenue = await _context.PaymentTransactions
+            .AsNoTracking()
+            .Where(payment =>
+                (payment.Status == PaidStatus || payment.Status == "PAID") &&
+                payment.CreatedAt >= startOfLastMonth &&
+                payment.CreatedAt < startOfThisMonth)
+            .SumAsync(payment => (decimal?)payment.Amount) ?? 0;
+
         var monthCounts = await _context.Users
             .AsNoTracking()
             .Where(user => user.CreatedAt >= startOfLastMonth)
@@ -53,6 +68,19 @@ public class AdminStatsRepository : IAdminStatsRepository
                 Exams = group.Count()
             })
             .ToListAsync();
+
+        var activeStudents = await _context.ExamAttempts
+            .AsNoTracking()
+            .Where(attempt =>
+                !attempt.IsDeleted &&
+                attempt.StartedAt >= dailyFrom &&
+                attempt.StartedAt < dailyTo &&
+                attempt.User != null &&
+                attempt.User.RoleId == 3 &&
+                !attempt.User.IsDeleted)
+            .Select(attempt => attempt.UserId)
+            .Distinct()
+            .CountAsync();
 
         var monthlyUsers = await _context.Users
             .AsNoTracking()
@@ -140,8 +168,11 @@ public class AdminStatsRepository : IAdminStatsRepository
         return new AdminStatsSnapshotProjection
         {
             TotalRevenue = totalRevenue,
+            ThisMonthRevenue = thisMonthRevenue,
+            LastMonthRevenue = lastMonthRevenue,
             ThisMonthUsers = GetMonthCount(monthCounts, startOfThisMonth),
             LastMonthUsers = GetMonthCount(monthCounts, startOfLastMonth),
+            ActiveStudents = activeStudents,
             DailyUsage = dailyUsage,
             MonthlyUsers = monthlyUsers,
             MonthlyPurchases = monthlyPurchases,

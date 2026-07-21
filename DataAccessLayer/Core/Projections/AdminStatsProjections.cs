@@ -4,9 +4,15 @@ public class AdminStatsSnapshotProjection
 {
     public decimal TotalRevenue { get; set; }
 
+    public decimal ThisMonthRevenue { get; set; }
+
+    public decimal LastMonthRevenue { get; set; }
+
     public int ThisMonthUsers { get; set; }
 
     public int LastMonthUsers { get; set; }
+
+    public int ActiveStudents { get; set; }
 
     public List<AdminDailyUsageProjection> DailyUsage { get; set; } = new();
 

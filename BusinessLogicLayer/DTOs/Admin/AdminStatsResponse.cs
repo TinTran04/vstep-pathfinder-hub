@@ -10,6 +10,8 @@ public class AdminStatsResponse
     public List<PlanDistPoint> PlanDistData { get; set; } = new();
     public decimal TotalRevenue { get; set; }
     public decimal MonthlyGrowth { get; set; }
+    public decimal UserGrowth { get; set; }
+    public int ActiveStudents { get; set; }
     public List<ActivityItem> RecentActivities { get; set; } = new();
     public List<int> WeeklyData { get; set; } = new();
 }
