@@ -12,6 +12,8 @@ export interface AdminStats {
   planDistData: any[];
   totalRevenue: number;
   monthlyGrowth: number;
+  userGrowth: number;
+  activeStudents: number;
   recentActivities: any[];
   weeklyData: number[];
 }

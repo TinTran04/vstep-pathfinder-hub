@@ -13,10 +13,14 @@ import type { BlogPostListItem, PagedResponse } from "../types";
 const PAGE_SIZE = 9;
 
 const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === "object" && "message" in error) {
-    return String(error.message);
+  if (error && typeof error === "object" && "status" in error && Number((error as { status?: number }).status) === 404) {
+    return "Nội dung Blog đang được cập nhật. Vui lòng quay lại sau.";
   }
-  return "Không thể tải bài viết. Vui lòng thử lại.";
+
+  if (error && typeof error === "object" && "message" in error) {
+    return "Không thể tải danh sách bài viết. Vui lòng thử lại sau.";
+  }
+  return "Không thể tải danh sách bài viết. Vui lòng thử lại sau.";
 };
 
 const BlogListSkeleton = () => (
@@ -134,7 +138,7 @@ const BlogList = () => {
             ) : error ? (
               <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card px-6 text-center">
                 <AlertCircle className="mb-3 text-destructive" size={34} />
-                <h3 className="font-semibold text-foreground">Không thể tải Journal</h3>
+                <h3 className="font-semibold text-foreground">Chưa thể tải bài viết</h3>
                 <p className="mt-2 max-w-md text-sm text-muted-foreground">{error}</p>
                 <Button className="mt-5 gap-2" onClick={() => setReloadKey((value) => value + 1)}>
                   <RefreshCw size={16} /> Thử lại

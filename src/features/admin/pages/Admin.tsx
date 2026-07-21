@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, DollarSign, Plus, Trash2, Edit2, Search,
   Save, Clock, TrendingUp, BookOpen, Activity, ArrowUpRight, BarChart3,
-  LogOut, Bell, ChevronUp, ChevronDown, Eye, MoreHorizontal, CalendarDays,
+  LogOut, ChevronUp, ChevronDown, Eye, MoreHorizontal, CalendarDays,
   GraduationCap, Headphones, BookOpenCheck, Mic, PenTool, X, Upload,
   FileAudio, Image, ArrowLeft, Flame, Star, Crown, CreditCard, Shield,
 } from "lucide-react";
@@ -46,9 +46,18 @@ export interface AdminStats {
   planDistData: { name: string; value: number; fill: string }[];
   totalRevenue: number;
   monthlyGrowth: number;
+  userGrowth: number;
+  activeStudents: number;
   recentActivities: { text: string; time: string; type: "exam" | "add" | "payment" | "user" }[];
   weeklyData: number[];
 }
+
+const formatVnd = (value: number) =>
+  new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value);
 
 const sidebarItems = [
   { title: "Tổng quan", value: "dashboard" as Tab, icon: LayoutDashboard, color: "text-blue-500" },
@@ -145,39 +154,6 @@ const Admin = () => {
   const [filterExamSkill, setFilterExamSkill] = useState("all");
   const [filterExamDifficulty, setFilterExamDifficulty] = useState("all");
   const [filterExamStatus, setFilterExamStatus] = useState("all");
-
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    {
-      id: "1",
-      title: "Đăng ký gói mới 💎",
-      message: "Học viên Nguyễn Văn A vừa nâng cấp thành công lên Gói Tháng.",
-      time: "5 phút trước",
-      read: false,
-    },
-    {
-      id: "2",
-      title: "Đề thi mới cần duyệt 📝",
-      message: "Giáo viên vừa tải lên bản nháp 'Đề thi Writing #2'.",
-      time: "25 phút trước",
-      read: false,
-    },
-    {
-      id: "3",
-      title: "Hoàn thành bài thi 🏆",
-      message: "Học viên Trần Thị B đã hoàn thành bài thi thử 'Đề thi Listening #1' với số điểm 28/35.",
-      time: "1 giờ trước",
-      read: true,
-    },
-    {
-      id: "4",
-      title: "Hệ thống bảo trì ⚙️",
-      message: "Lịch bảo trì định kỳ hệ thống cơ sở dữ liệu dự kiến diễn ra lúc 02:00 ngày mai.",
-      time: "1 ngày trước",
-      read: true,
-    },
-  ]);
-  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
@@ -1027,7 +1003,8 @@ const Admin = () => {
 
 
   const totalStudents = users.filter(u => u.role === "student").length;
-  const activeStudents = users.filter(u => u.role === "student" && u.status === "active").length;
+  const fallbackActiveStudents = users.filter(u => u.role === "student" && u.status === "active").length;
+  const activeStudents = stats?.activeStudents ?? fallbackActiveStudents;
   const totalExams = exams.length;
   const activeExams = exams.filter(e => e.status === "active").length;
 
@@ -1037,7 +1014,6 @@ const Admin = () => {
   const weeklyData = stats?.weeklyData || [];
   const recentActivities = stats?.recentActivities || [];
   const totalRevenue = stats?.totalRevenue || 0;
-  const monthlyGrowth = stats?.monthlyGrowth || 0;
 
   const skillDistribution = ["Listening", "Reading", "Writing", "Speaking"].map(s => ({
     skill: s, count: exams.filter(e => e.skill === s).length,
@@ -1647,65 +1623,6 @@ const Admin = () => {
             </div>
             
             <div className="ml-auto flex items-center gap-3">
-              
-              <div className="relative">
-                <Button 
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  variant="ghost" 
-                  size="icon" 
-                  className={`relative hover:bg-muted rounded-full transition-colors ${showNotifications ? "bg-muted text-primary" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  <Bell size={16} />
-                  {unreadNotificationsCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" />
-                  )}
-                </Button>
-                
-                {showNotifications && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
-                    <div className="absolute right-0 mt-2 w-80 bg-card text-card-foreground border border-border rounded-2xl shadow-xl z-50 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <div className="flex items-center justify-between pb-2 border-b border-border mb-2">
-                        <span className="font-bold text-xs text-foreground">Thông báo ({unreadNotificationsCount})</span>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 px-2 text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg"
-                          onClick={() => {
-                            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-                            toast.success("Đã đánh dấu tất cả là đã đọc");
-                          }}
-                        >
-                          Đánh dấu đã đọc
-                        </Button>
-                      </div>
-                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                        {notifications.map((n) => (
-                          <div 
-                            key={n.id} 
-                            onClick={() => {
-                              setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
-                            }}
-                            className={`p-2.5 rounded-xl text-[11px] hover:bg-muted/50 transition-colors cursor-pointer border border-transparent ${!n.read ? "bg-primary/5 border-primary/10" : ""}`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className={`font-bold ${!n.read ? "text-primary" : "text-foreground"}`}>{n.title}</span>
-                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1 shrink-0" />}
-                            </div>
-                            <p className="text-muted-foreground text-[10px] mt-1 leading-normal">{n.message}</p>
-                            <span className="text-[9px] text-muted-foreground/80 block mt-1.5">{n.time}</span>
-                          </div>
-                        ))}
-                        {notifications.length === 0 && (
-                          <div className="text-center py-6 text-xs text-muted-foreground">Không có thông báo mới</div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-              
-              <Separator orientation="vertical" className="h-6 hidden sm:block" />
               <Button variant="ghost" size="sm" asChild className="hidden sm:flex gap-1.5 text-muted-foreground hover:text-foreground">
                 <Link to="/"><LogOut size={14} /> Trang chủ</Link>
               </Button>
@@ -1730,10 +1647,10 @@ const Admin = () => {
                 {/* Stats cards with stagger animation */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
-                    { label: "Tổng học viên", value: totalStudents, sub: `${activeStudents} đang hoạt động`, icon: Users, trend: "+12%", up: true, color: "from-blue-500 to-indigo-600", accent: "bg-blue-600", glow: "hover:shadow-blue-500/10", spark: "M5,15 L15,10 L25,18 L35,8 L45,12 L55,5" },
-                    { label: "Đề thi", value: totalExams, sub: `${activeExams} đang active`, icon: FileText, trend: "+3", up: true, color: "from-emerald-500 to-teal-600", accent: "bg-emerald-600", glow: "hover:shadow-emerald-500/10", spark: "M5,12 L15,15 L25,10 L35,14 L45,6 L55,3" },
-                    { label: "Doanh thu tháng", value: `${(totalRevenue / 1e6).toFixed(1)}M`, sub: "VND", icon: DollarSign, trend: `+${monthlyGrowth}%`, up: true, color: "from-amber-500 to-orange-600", accent: "bg-amber-600", glow: "hover:shadow-amber-500/10", spark: "M5,18 L15,14 L25,15 L35,10 L45,8 L55,4" },
-                    { label: "Lượt thi hôm nay", value: weeklyData[weeklyData.length - 1] ?? 0, sub: "↑ so với hôm qua", icon: Activity, trend: "+5", up: true, color: "from-purple-500 to-violet-600", accent: "bg-purple-600", glow: "hover:shadow-purple-500/10", spark: "M5,16 L15,8 L25,12 L35,15 L45,6 L55,2" },
+                    { label: "Tổng học viên", value: totalStudents, sub: `${activeStudents} đang hoạt động`, icon: Users, color: "from-blue-500 to-indigo-600", accent: "bg-blue-600", glow: "hover:shadow-blue-500/10", spark: "M5,15 L15,10 L25,18 L35,8 L45,12 L55,5" },
+                    { label: "Đề thi", value: totalExams, sub: `${activeExams} đang active`, icon: FileText, color: "from-emerald-500 to-teal-600", accent: "bg-emerald-600", glow: "hover:shadow-emerald-500/10", spark: "M5,12 L15,15 L25,10 L35,14 L45,6 L55,3" },
+                    { label: "Doanh thu tháng", value: formatVnd(totalRevenue), sub: "tháng này", icon: DollarSign, color: "from-amber-500 to-orange-600", accent: "bg-amber-600", glow: "hover:shadow-amber-500/10", spark: "M5,18 L15,14 L25,15 L35,10 L45,8 L55,4" },
+                    { label: "Lượt thi hôm nay", value: weeklyData[weeklyData.length - 1] ?? 0, sub: "so với hôm qua", icon: Activity, color: "from-purple-500 to-violet-600", accent: "bg-purple-600", glow: "hover:shadow-purple-500/10", spark: "M5,16 L15,8 L25,12 L35,15 L45,6 L55,2" },
                   ].map((stat, i) => (
                     <Card key={stat.label} className={`border border-border/80 overflow-hidden relative group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${stat.glow}`} style={{ animationDelay: `${i * 100}ms` }}>
                       <CardContent className="p-5 relative">
@@ -1743,9 +1660,6 @@ const Admin = () => {
                             <stat.icon size={20} />
                           </div>
                           <div className="flex flex-col items-end gap-1.5">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 ${stat.up ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}>
-                              {stat.up ? <ChevronUp size={10} /> : <ChevronDown size={10} />}{stat.trend}
-                            </span>
                             <svg className="w-14 h-6 text-muted-foreground/30 group-hover:text-primary/40 transition-colors" viewBox="0 0 60 20" fill="none">
                               <path d={stat.spark} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>

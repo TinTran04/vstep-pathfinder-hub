@@ -44,9 +44,13 @@ const formatDate = (value: string | null) => value
   ? new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value))
   : "-";
 
-const getErrorMessage = (error: unknown) => error && typeof error === "object" && "message" in error
-  ? String(error.message)
-  : "Không thể tải dữ liệu Blog.";
+const getErrorMessage = (error: unknown) => {
+  if (error && typeof error === "object" && "status" in error && Number((error as { status?: number }).status) === 404) {
+    return "Nội dung Blog đang được cập nhật. Vui lòng thử lại sau.";
+  }
+
+  return "Không thể tải dữ liệu Blog. Vui lòng thử lại sau.";
+};
 
 interface ActionButtonProps {
   label: string;
@@ -237,7 +241,7 @@ const AdminBlogPanel = () => {
                   <TableCell><Skeleton className="ml-auto h-8 w-32" /></TableCell>
                 </TableRow>
               )) : error ? (
-                <TableRow><TableCell colSpan={8} className="h-56 text-center"><p className="text-sm font-medium text-foreground">Không thể tải danh sách bài viết</p><p className="mt-1 text-xs text-muted-foreground">{error}</p><Button variant="outline" size="sm" className="mt-4" onClick={refresh}>Thử lại</Button></TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="h-56 text-center"><p className="text-sm font-medium text-foreground">Chưa thể tải danh sách bài viết</p><p className="mt-1 text-xs text-muted-foreground">{error}</p><Button variant="outline" size="sm" className="mt-4" onClick={refresh}>Thử lại</Button></TableCell></TableRow>
               ) : result && result.items.length > 0 ? result.items.map((post) => {
                 const busy = actionId === post.blogPostId;
                 return (
