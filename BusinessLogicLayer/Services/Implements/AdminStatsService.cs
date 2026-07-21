@@ -65,19 +65,54 @@ public class AdminStatsService : IAdminStatsService
             Monthly = GetPurchaseCount(snapshot.MonthlyPurchases, month, MonthlyPlanId)
         }).ToList();
 
+        var monthlyRevenue = monthStarts.Select(month => new MonthlyRevenuePoint
+        {
+            Month = month.ToString("MM/yyyy"),
+            Year = month.Year,
+            MonthNumber = month.Month,
+            Revenue = snapshot.MonthlyRevenue
+                .FirstOrDefault(item => item.Year == month.Year && item.Month == month.Month)?.Revenue ?? 0
+        }).ToList();
+
         return new AdminStatsResponse
         {
             UsageData = usageData,
             MonthlyUsageData = monthlyUsage,
             SubscriptionPurchaseData = subscriptionPurchases,
+            MonthlyRevenueData = monthlyRevenue,
             PlanDistData = snapshot.PlanDistribution
                 .Where(item => item.Count > 0)
                 .Select(MapPlanDistribution)
+                .ToList(),
+            SkillExamCounts = snapshot.SkillExamCounts
+                .Select(item => new SkillExamCountPoint
+                {
+                    Skill = NormalizeSkillName(item.SkillType),
+                    Count = item.Count
+                })
+                .ToList(),
+            TopStudents = snapshot.TopStudents
+                .Select(item => new TopStudentPoint
+                {
+                    UserId = item.UserId,
+                    FullName = item.FullName,
+                    SubscriptionPlan = MapPlanName(item.SubscriptionPlan),
+                    CompletedAttempts = item.CompletedAttempts
+                })
                 .ToList(),
             TotalRevenue = snapshot.ThisMonthRevenue,
             MonthlyGrowth = Math.Round(monthlyGrowth, 1),
             UserGrowth = Math.Round(userGrowth, 1),
             ActiveStudents = snapshot.ActiveStudents,
+            TotalStudents = snapshot.TotalStudents,
+            TotalAdmins = snapshot.TotalAdmins,
+            WeeklyPlanStudents = snapshot.WeeklyPlanStudents,
+            MonthlyPlanStudents = snapshot.MonthlyPlanStudents,
+            TotalExams = snapshot.TotalExams,
+            ActiveExams = snapshot.ActiveExams,
+            DraftExams = snapshot.DraftExams,
+            TodayAttempts = snapshot.TodayAttempts,
+            YesterdayAttempts = snapshot.YesterdayAttempts,
             RecentActivities = snapshot.RecentActivities.Select(MapActivity).ToList(),
             WeeklyData = usageData.Select(item => item.Exams).ToList()
         };
@@ -102,6 +137,24 @@ public class AdminStatsService : IAdminStatsService
             WeeklyPlanId => new PlanDistPoint { Name = "Weekly", Value = item.Count, Fill = "#f59e0b" },
             MonthlyPlanId => new PlanDistPoint { Name = "Monthly", Value = item.Count, Fill = "#10b981" },
             _ => new PlanDistPoint { Name = $"Plan {item.SubscriptionPlanId}", Value = item.Count, Fill = "#64748b" }
+        };
+    }
+
+    private static string NormalizeSkillName(string skillType)
+    {
+        if (string.IsNullOrWhiteSpace(skillType)) return string.Empty;
+        return char.ToUpperInvariant(skillType[0]) + skillType[1..].ToLowerInvariant();
+    }
+
+    private static string MapPlanName(string planName)
+    {
+        var normalized = planName.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "weekly" => "Gói Tuần",
+            "monthly" => "Gói Tháng",
+            "free" => "Miễn phí",
+            _ => string.IsNullOrWhiteSpace(planName) ? "Miễn phí" : planName
         };
     }
 

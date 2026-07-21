@@ -65,6 +65,9 @@ public class UserRepository : IUserRepository
             .AsNoTracking()
             .Include(user => user.Role)
             .Include(user => user.SubscriptionPlan)
+            .Include(user => user.ExamAttempts.Where(attempt =>
+                !attempt.IsDeleted &&
+                (attempt.Status == "completed" || attempt.Status == "scored")))
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -94,7 +97,8 @@ public class UserRepository : IUserRepository
         var pageSize = query.PageSize is < 1 or > 100 ? 10 : query.PageSize;
         var totalCount = await usersQuery.CountAsync();
         var users = await usersQuery
-            .OrderByDescending(user => user.CreatedAt)
+            .OrderBy(user => user.SubscriptionPlanId == 3 ? 0 : user.SubscriptionPlanId == 2 ? 1 : 2)
+            .ThenByDescending(user => user.CreatedAt)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();

@@ -22,5 +22,7 @@ public class UserListItemResponse
 
     public bool EmailConfirmed { get; set; }
 
+    public int ExamsCompleted { get; set; }
+
     public DateTime CreatedAt { get; set; }
 }

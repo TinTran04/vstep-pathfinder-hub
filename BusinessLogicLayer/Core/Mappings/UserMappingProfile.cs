@@ -14,7 +14,8 @@ public class UserMappingProfile : Profile
 
         CreateMap<User, UserListItemResponse>()
             .ForMember(destination => destination.Role, options => options.MapFrom(source => source.Role.Name))
-            .ForMember(destination => destination.SubscriptionPlan, options => options.MapFrom(source => source.SubscriptionPlan.Name));
+            .ForMember(destination => destination.SubscriptionPlan, options => options.MapFrom(source => source.SubscriptionPlan.Name))
+            .ForMember(destination => destination.ExamsCompleted, options => options.MapFrom(source => source.ExamAttempts.Count));
 
         CreateMap<CreateUserRequest, User>()
             .ForMember(destination => destination.UserId, options => options.Ignore())

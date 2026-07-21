@@ -25,6 +25,78 @@ public class AdminStatsRepository : IAdminStatsRepository
         var monthlyFrom = startOfThisMonth.AddMonths(-5);
         var recentLimit = 10;
 
+        var totalStudents = await _context.Users
+            .AsNoTracking()
+            .Where(user => user.RoleId == 3 && !user.IsDeleted)
+            .CountAsync();
+
+        var totalAdmins = await _context.Users
+            .AsNoTracking()
+            .Where(user => user.RoleId == 1 && !user.IsDeleted)
+            .CountAsync();
+
+        var weeklyPlanStudents = await _context.Users
+            .AsNoTracking()
+            .Where(user => user.RoleId == 3 && !user.IsDeleted && user.SubscriptionPlanId == 2)
+            .CountAsync();
+
+        var monthlyPlanStudents = await _context.Users
+            .AsNoTracking()
+            .Where(user => user.RoleId == 3 && !user.IsDeleted && user.SubscriptionPlanId == 3)
+            .CountAsync();
+
+        var totalExams = await _context.Exams
+            .AsNoTracking()
+            .Where(exam => !exam.IsDeleted)
+            .CountAsync();
+
+        var activeExams = await _context.Exams
+            .AsNoTracking()
+            .Where(exam => !exam.IsDeleted && exam.IsPublished)
+            .CountAsync();
+
+        var draftExams = await _context.Exams
+            .AsNoTracking()
+            .Where(exam => !exam.IsDeleted && !exam.IsPublished)
+            .CountAsync();
+
+        var skillExamCounts = await _context.Exams
+            .AsNoTracking()
+            .Where(exam => !exam.IsDeleted)
+            .GroupBy(exam => exam.SkillType)
+            .Select(group => new AdminSkillExamCountProjection
+            {
+                SkillType = group.Key,
+                Count = group.Count()
+            })
+            .ToListAsync();
+
+        var topStudents = await _context.ExamAttempts
+            .AsNoTracking()
+            .Where(attempt =>
+                !attempt.IsDeleted &&
+                (attempt.Status == "completed" || attempt.Status == "scored") &&
+                attempt.User != null &&
+                attempt.User.RoleId == 3 &&
+                !attempt.User.IsDeleted)
+            .GroupBy(attempt => new
+            {
+                attempt.UserId,
+                attempt.User!.FullName,
+                SubscriptionPlan = attempt.User.SubscriptionPlan.Name
+            })
+            .Select(group => new AdminTopStudentProjection
+            {
+                UserId = group.Key.UserId,
+                FullName = group.Key.FullName,
+                SubscriptionPlan = group.Key.SubscriptionPlan,
+                CompletedAttempts = group.Count()
+            })
+            .OrderByDescending(student => student.CompletedAttempts)
+            .ThenBy(student => student.FullName)
+            .Take(5)
+            .ToListAsync();
+
         var totalRevenue = await _context.PaymentTransactions
             .AsNoTracking()
             .Where(payment => payment.Status == PaidStatus || payment.Status == "PAID")
@@ -47,7 +119,7 @@ public class AdminStatsRepository : IAdminStatsRepository
 
         var monthCounts = await _context.Users
             .AsNoTracking()
-            .Where(user => user.CreatedAt >= startOfLastMonth)
+            .Where(user => user.RoleId == 3 && !user.IsDeleted && user.CreatedAt >= startOfLastMonth)
             .GroupBy(user => new { user.CreatedAt.Year, user.CreatedAt.Month })
             .Select(group => new AdminMonthlyUserProjection
             {
@@ -59,7 +131,7 @@ public class AdminStatsRepository : IAdminStatsRepository
 
         var dailyUsage = await _context.ExamAttempts
             .AsNoTracking()
-            .Where(attempt => attempt.StartedAt >= dailyFrom && attempt.StartedAt < dailyTo)
+            .Where(attempt => !attempt.IsDeleted && attempt.StartedAt >= dailyFrom && attempt.StartedAt < dailyTo)
             .GroupBy(attempt => attempt.StartedAt.Date)
             .Select(group => new AdminDailyUsageProjection
             {
@@ -68,6 +140,9 @@ public class AdminStatsRepository : IAdminStatsRepository
                 Exams = group.Count()
             })
             .ToListAsync();
+
+        var todayAttempts = dailyUsage.FirstOrDefault(item => item.Date.Date == startOfToday)?.Exams ?? 0;
+        var yesterdayAttempts = dailyUsage.FirstOrDefault(item => item.Date.Date == startOfToday.AddDays(-1))?.Exams ?? 0;
 
         var activeStudents = await _context.ExamAttempts
             .AsNoTracking()
@@ -84,7 +159,7 @@ public class AdminStatsRepository : IAdminStatsRepository
 
         var monthlyUsers = await _context.Users
             .AsNoTracking()
-            .Where(user => user.CreatedAt >= monthlyFrom)
+            .Where(user => user.RoleId == 3 && !user.IsDeleted && user.CreatedAt >= monthlyFrom)
             .GroupBy(user => new { user.CreatedAt.Year, user.CreatedAt.Month })
             .Select(group => new AdminMonthlyUserProjection
             {
@@ -111,6 +186,24 @@ public class AdminStatsRepository : IAdminStatsRepository
                 Month = group.Key.Month,
                 SubscriptionPlanId = group.Key.SubscriptionPlanId,
                 Count = group.Count()
+            })
+            .ToListAsync();
+
+        var monthlyRevenue = await _context.PaymentTransactions
+            .AsNoTracking()
+            .Where(payment =>
+                (payment.Status == PaidStatus || payment.Status == "PAID") &&
+                payment.CreatedAt >= monthlyFrom)
+            .GroupBy(payment => new
+            {
+                payment.CreatedAt.Year,
+                payment.CreatedAt.Month
+            })
+            .Select(group => new AdminMonthlyRevenueProjection
+            {
+                Year = group.Key.Year,
+                Month = group.Key.Month,
+                Revenue = group.Sum(payment => payment.Amount)
             })
             .ToListAsync();
 
@@ -173,10 +266,22 @@ public class AdminStatsRepository : IAdminStatsRepository
             ThisMonthUsers = GetMonthCount(monthCounts, startOfThisMonth),
             LastMonthUsers = GetMonthCount(monthCounts, startOfLastMonth),
             ActiveStudents = activeStudents,
+            TotalStudents = totalStudents,
+            TotalAdmins = totalAdmins,
+            WeeklyPlanStudents = weeklyPlanStudents,
+            MonthlyPlanStudents = monthlyPlanStudents,
+            TotalExams = totalExams,
+            ActiveExams = activeExams,
+            DraftExams = draftExams,
+            TodayAttempts = todayAttempts,
+            YesterdayAttempts = yesterdayAttempts,
             DailyUsage = dailyUsage,
             MonthlyUsers = monthlyUsers,
             MonthlyPurchases = monthlyPurchases,
+            MonthlyRevenue = monthlyRevenue,
             PlanDistribution = planDistribution,
+            SkillExamCounts = skillExamCounts,
+            TopStudents = topStudents,
             RecentActivities = recentAttempts
                 .Concat(recentPayments)
                 .Concat(recentUsers)
