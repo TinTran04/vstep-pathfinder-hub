@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { attemptReviewApiService } from "../services/attempt-review.api-service";
 import type { AttemptReviewResponse, Skill } from "../types";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 
 const LEVEL_DESCRIPTIONS: Record<string, { badge: string; desc: string; color: string; bg: string; border: string }> = {
   C1: { badge: "C1 – Thành thạo", desc: "Bạn có khả năng sử dụng tiếng Anh linh hoạt, hiểu được các văn bản dài và giao tiếp tự nhiên trôi chảy.", color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30", border: "border-purple-200 dark:border-purple-900" },

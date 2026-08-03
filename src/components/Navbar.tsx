@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getAvatarSrc } from "@/features/auth/avatarCatalog";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 
 interface NavLink {
   label: string;

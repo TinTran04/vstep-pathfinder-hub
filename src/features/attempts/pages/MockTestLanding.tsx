@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarSrc } from "@/features/auth/avatarCatalog";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useEffect, useState } from "react";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 import { attemptsService } from "../services/attempts.service";
 import { examService } from "@/features/quiz/services/exam.service";
 import { toast } from "sonner";

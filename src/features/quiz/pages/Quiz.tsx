@@ -17,7 +17,7 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getAvatarSrc } from "@/features/auth/avatarCatalog";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 
 import { quizService } from "../services/quiz.service";
 import { examService, type ExamItem } from "../services/exam.service";

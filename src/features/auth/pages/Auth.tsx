@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { toast } from "sonner";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 
 type Screen = "login" | "register" | "otp" | "forgot_request" | "forgot_otp" | "forgot_password";
 

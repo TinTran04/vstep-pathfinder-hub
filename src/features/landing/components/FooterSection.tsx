@@ -1,5 +1,5 @@
 import { Facebook, FileText, Mail } from "lucide-react";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 
 const FooterSection = () => {
   return (

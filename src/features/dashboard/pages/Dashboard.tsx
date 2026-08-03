@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import VocabularyNotebook from "../components/VocabularyNotebook";
 import HistoryTab from "../components/HistoryTab";
 import { useNavigate, Link } from "react-router-dom";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 import {
   BarChart3, BookOpen, Clock, TrendingUp, ChevronRight,
   Headphones, BookOpenCheck, Pen, Mic, LogOut, Home, Settings, User,

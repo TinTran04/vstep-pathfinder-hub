@@ -11,7 +11,7 @@ import ListeningReview from "../components/review/ListeningReview";
 import ReadingReview from "../components/review/ReadingReview";
 import WritingReview from "../components/review/WritingReview";
 import SpeakingReview from "../components/review/SpeakingReview";
-import logoImg from "@/assets/logo.png";
+import logoImg from "@/assets/logo1.jpg";
 
 const skillConfig = [
   { key: "listening" as const, label: "Listening", icon: <Headphones size={16} />, color: "text-blue-600" },
